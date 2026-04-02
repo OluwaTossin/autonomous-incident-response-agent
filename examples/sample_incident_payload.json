@@ -1,0 +1,8 @@
+{
+  "alert_title": "HighCPU on payment-api",
+  "service_name": "payment-api",
+  "environment": "production",
+  "metric_summary": "CPU 94%, p99 latency 820ms, error rate 3.2%",
+  "logs": "WARN fraud-module timeout; metrics CPU 91-97%; autoscaler scaling 3->6 replicas",
+  "time_of_occurrence": "2026-04-10T14:05:00Z"
+}

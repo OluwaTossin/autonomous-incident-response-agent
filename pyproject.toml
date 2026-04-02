@@ -9,6 +9,9 @@ dependencies = [
     "faiss-cpu>=1.8.0",
     "numpy>=1.26.0",
     "python-dotenv>=1.0.0",
+    "langgraph>=1.1.4",
+    "langchain-openai>=1.1.12",
+    "langchain-core>=1.2.24",
 ]
 
 [project.optional-dependencies]
@@ -17,6 +20,7 @@ dev = ["pytest>=8.0.0", "ruff>=0.6.0"]
 [project.scripts]
 rag-build = "app.rag.cli:main_build"
 rag-query = "app.rag.cli:main_query"
+triage = "app.agent.cli:main"
 
 [build-system]
 requires = ["hatchling"]

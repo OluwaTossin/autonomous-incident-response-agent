@@ -11,6 +11,7 @@ This document is the single source of truth for build order, scope, and mileston
 | **1** | Done | `docs/decisions/problem-definition.md` |
 | **2** | **Done** | `data/incidents/`, `data/logs/`, `data/knowledge_base/`, `docs/runbooks/` — see Phase 2 inventory |
 | **3** | **Done** | `app/rag/` + FAISS; `uv run python -m app.rag.cli build-index` then `query "…"` returns runbook/log/incident hits |
+| **4** | **Done** | `app/agent/` LangGraph: normalize → RAG → LLM structured triage → decision rules → JSON; `uv run triage -f examples/sample_incident_payload.json` |
 
 ---
 
@@ -193,10 +194,10 @@ N8N_BASIC_AUTH_PASSWORD=
 
 ### Phase 4 — Reasoning agent (LangGraph)
 
-- [ ] Triage agent: interpret → retrieve → reason → structured output
-- [ ] **Output schema (JSON):** `incident_summary`, `severity` (LOW|MEDIUM|HIGH|CRITICAL), `likely_root_cause`, `recommended_actions[]`, `escalate`, `confidence`
-- [ ] **Nodes:** input normalisation → retrieval → analysis → decision → output formatter
-- **Deliverable:** Local Python script: incident payload → structured triage JSON
+- [x] Triage agent: interpret → retrieve → reason → structured output
+- [x] **Output schema (JSON):** `incident_summary`, `severity` (LOW|MEDIUM|HIGH|CRITICAL), `likely_root_cause`, `recommended_actions[]`, `escalate`, `confidence`
+- [x] **Nodes:** input normalisation → retrieval → analysis → decision → output formatter
+- **Deliverable:** Local CLI: incident JSON → structured triage JSON (`uv run triage -f examples/sample_incident_payload.json`)
 
 ### Phase 5 — API layer (FastAPI)
 
@@ -266,7 +267,7 @@ Use this as the default execution order:
 - [x] **Milestone 1** — Product problem and I/O definition
 - [x] **Milestone 2** — Runbooks, sample incidents, logs
 - [x] **Milestone 3** — RAG retrieval locally
-- [ ] **Milestone 4** — LangGraph triage agent locally
+- [x] **Milestone 4** — LangGraph triage agent locally
 - [ ] **Milestone 5** — FastAPI endpoints
 - [ ] **Milestone 6** — n8n escalation workflow
 - [ ] **Milestone 7** — Gradio UI
@@ -302,4 +303,4 @@ At completion you should be able to demonstrate:
 
 ---
 
-*Last updated: 2026-04-02 — Phases 1–3 complete (RAG CLI verified). Next: Phase 4 LangGraph agent. Update checkboxes as you complete milestones.*
+*Last updated: 2026-04-02 — Phases 1–4 complete (RAG + LangGraph triage CLI). Next: Phase 5 FastAPI. Update checkboxes as you complete milestones.*

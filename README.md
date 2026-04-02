@@ -14,6 +14,7 @@ AI-assisted incident triage: ingest alerts, retrieve runbooks and historical con
 | **1** — Problem definition | Done | [`docs/decisions/problem-definition.md`](docs/decisions/problem-definition.md) |
 | **2** — Knowledge & sample data | **Done** | Runbooks, incidents, logs, `data/knowledge_base/` (see `execution.md`) |
 | **3** — Local RAG | **Done** | `app/rag/` + FAISS; `uv run python -m app.rag.cli build-index` / `query "…"` |
+| **4** — LangGraph agent | **Done** | `app/agent/` + `uv run triage -f examples/sample_incident_payload.json` |
 
 Secrets live in **`.env`** at the repo root (copy from [`.env.example`](.env.example)). **`load_dotenv` only reads `.env`** — not `.env.example`. Never commit `.env` or put real keys in `.env.example`.
 
@@ -31,7 +32,8 @@ Secrets live in **`.env`** at the repo root (copy from [`.env.example`](.env.exa
 | [`data/logs/`](data/logs/) | Synthetic log bundles + [`sample-log.md`](data/logs/sample-log.md) |
 | [`data/knowledge_base/`](data/knowledge_base/) | Escalation, ownership, tiers, first-response notes |
 | [`data/README.md`](data/README.md) | Data layout and ingestion globs |
-| `app/` | *(Phase 3+)* API, agent, RAG |
+| `app/` | `app/rag/` (FAISS), `app/agent/` (LangGraph triage), `app/models/` |
+| [`examples/sample_incident_payload.json`](examples/sample_incident_payload.json) | Sample JSON for `triage` CLI |
 | `workflows/n8n/` | *(Phase 6+)* |
 | `infra/terraform/` | *(Phase 10+)* |
 
@@ -64,6 +66,15 @@ uv run python -m app.rag.cli query "High CPU on payment-api in production"
 uv run rag-build
 uv run rag-query "High CPU on payment-api in production"
 ```
+
+**Phase 4 — triage (needs `.env` + built RAG index + chat LLM):**
+
+```bash
+uv run python -m app.agent.cli -f examples/sample_incident_payload.json
+# or: uv run triage -f examples/sample_incident_payload.json
+```
+
+Set `LLM_MODEL` (default `gpt-4o-mini`) in `.env` if needed. Chat uses the same `OPENAI_API_KEY` / `OPENAI_API_BASE` as embeddings unless you split providers later.
 
 Refresh the lockfile after changing `pyproject.toml`:
 
