@@ -61,7 +61,7 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 ### Phase 6 — n8n execution layer
 
 - **Deliverable:** Run **n8n in Docker**; two **importable workflows** driven by **webhooks**; FastAPI **mock Jira** + **workflow event log** for automation glue.
-- **Docker:** [`docker-compose.n8n.yml`](docker-compose.n8n.yml) — `docker compose -f docker-compose.n8n.yml up -d` → UI at **http://localhost:5678**. Uses `host.docker.internal` + `TRIAGE_API_BASE` (default `http://host.docker.internal:8000`) to reach the API from the container.
+- **Docker:** [`docker-compose.n8n.yml`](docker-compose.n8n.yml) — `docker compose -f docker-compose.n8n.yml up -d` → UI at **http://localhost:5678**. Uses `host.docker.internal` + `TRIAGE_API_BASE` (default `http://host.docker.internal:8000`) to reach the API from the container. Set **`SLACK_WEBHOOK_URL`** in repo-root **`.env`** (gitignored); Compose injects it into n8n — never commit the real URL.
 - **Workflows (import JSON in n8n, then activate):**
   - **`incident-triage-escalation`** — `POST …/webhook/triage-escalation` with **flat triage JSON**; if `severity === CRITICAL`, posts to **`SLACK_WEBHOOK_URL`** and logs via **`POST /n8n/workflow-log`**.
   - **`incident-ticket-creation`** — `POST …/webhook/ticket-creation` with flat triage JSON; if `escalate === true`, **`POST /n8n/mock-jira/issue`** and returns a mock `MOCK-*` key.

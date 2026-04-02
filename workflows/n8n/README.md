@@ -6,7 +6,11 @@ Local **[n8n](https://n8n.io/)** workflows that react to **triage-shaped JSON** 
 
 1. **FastAPI** running on the host (default `http://127.0.0.1:8000`): `uv run serve-api`
 2. **Docker** (for n8n)
-3. Optional: **Slack Incoming Webhook** URL in `.env` as `SLACK_WEBHOOK_URL` (needed for the CRITICAL branch in `incident-triage-escalation`)
+3. Optional: **Slack Incoming Webhook** — in the **repository root** `.env` (same file as API keys; **gitignored**), set:
+   ```env
+   SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/PATH
+   ```
+   Do **not** put the real URL in `.env.example` or commit it. When you run `docker compose -f docker-compose.n8n.yml up` from the repo root, Compose injects that value into the n8n container as `$env.SLACK_WEBHOOK_URL`. After changing `.env`, recreate: `docker compose -f docker-compose.n8n.yml up -d --force-recreate`.
 
 ## Start n8n
 
