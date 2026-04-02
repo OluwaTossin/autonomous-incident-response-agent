@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import Body, FastAPI, HTTPException
 from pydantic import ValidationError
 
-from app.agent.graph import run_triage
+from app.agent.graph import run_triage_with_audit
 from app.agent.nodes import parse_incident_payload
 from app.api.audit import append_triage_jsonl
 
@@ -107,6 +107,11 @@ def post_triage(
 ) -> dict[str, Any]:
     """Run retrieval + LangGraph agent; return structured triage JSON."""
     _validate_incident_body(body)
-    result = run_triage(body)
-    append_triage_jsonl(body, result)
+    result, audit_meta = run_triage_with_audit(body)
+    append_triage_jsonl(
+        body,
+        result,
+        rag_context=audit_meta.get("rag_context"),
+        retrieval_hits=audit_meta.get("retrieval_hits"),
+    )
     return result

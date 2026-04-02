@@ -36,8 +36,28 @@ def build_triage_graph() -> StateGraph:
     return g
 
 
-def run_triage(incident: dict[str, Any]) -> dict[str, Any]:
-    """Run the graph; return the structured `result` dict (or error-shaped payload)."""
+def run_triage_with_audit(
+    incident: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """
+    Run the graph; return (triage_result, audit_metadata).
+
+    `audit_metadata` contains `rag_context` and `retrieval_hits` as seen after retrieval
+    (same text the LLM receives), for logging and RAG evaluation — not returned to API clients.
+    """
     graph = build_triage_graph().compile()
     final: TriageState = graph.invoke({"incident": incident})
-    return final.get("result") or {}
+    result = final.get("result") or {}
+    rag = final.get("rag_context")
+    hits = final.get("retrieval_hits")
+    meta: dict[str, Any] = {
+        "rag_context": rag if isinstance(rag, str) else "",
+        "retrieval_hits": hits if isinstance(hits, list) else [],
+    }
+    return result, meta
+
+
+def run_triage(incident: dict[str, Any]) -> dict[str, Any]:
+    """Run the graph; return the structured `result` dict (or error-shaped payload)."""
+    out, _ = run_triage_with_audit(incident)
+    return out

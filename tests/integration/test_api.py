@@ -69,7 +69,13 @@ def fake_triage() -> dict:
 
 
 def test_triage_calls_graph(fake_triage: dict) -> None:
-    with patch("app.api.main.run_triage", return_value=fake_triage) as m:
+    audit = {
+        "rag_context": "[1] score=0.5 type=log source=data/logs/a.log\nsnippet",
+        "retrieval_hits": [
+            {"score": 0.5, "source": "data/logs/a.log", "doc_type": "log", "chunk_index": 0},
+        ],
+    }
+    with patch("app.api.main.run_triage_with_audit", return_value=(fake_triage, audit)) as m:
         r = client.post(
             "/triage",
             json={"alert_title": "x", "service_name": "y"},

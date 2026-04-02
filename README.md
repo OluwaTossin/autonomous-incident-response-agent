@@ -30,6 +30,7 @@ Secrets live in **`.env`** at the repo root (copy from [`.env.example`](.env.exa
 | `execution.md` (local, gitignored) | Optional private build sequence and checklists |
 | [`docs/decisions/`](docs/decisions/) | ADRs / product definition |
 | [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md) | Accurate product classification + elite-system roadmap |
+| [`docs/decisions/triage-audit-validation.md`](docs/decisions/triage-audit-validation.md) | JSONL audit checks, leakage, eval roadmap |
 | [`docs/architecture/`](docs/architecture/) | **[Architecture diagram](docs/architecture/README.md)** (`architectural-diagram.png` at repo root) |
 | [`data/runbooks/`](data/runbooks/) | SRE-style procedural runbooks (`RB-*` IDs) |
 | [`data/incidents/`](data/incidents/) | Synthetic postmortem-style incidents (`INC-*`) |
@@ -98,7 +99,7 @@ curl -s -X POST http://127.0.0.1:8000/triage -H "Content-Type: application/json"
 
 OpenAPI: `http://127.0.0.1:8000/docs`
 
-Each successful `POST /triage` appends a line to **`data/logs/triage_outputs.jsonl`** (project root, UTF-8 JSONL: `timestamp`, `input`, `output`). That file is gitignored. Disable with `TRIAGE_AUDIT_DISABLE=1` or set `TRIAGE_AUDIT_JSONL` to a custom path (see `.env.example`).
+Each successful `POST /triage` appends one JSONL line: `timestamp`, `input`, `output`, **`retrieved_context`** (same RAG text the model sees), **`top_k_sources`** (ranked retrieval metadata for debugging). File: **`data/logs/triage_outputs.jsonl`** (gitignored). Env: `TRIAGE_AUDIT_DISABLE`, `TRIAGE_AUDIT_JSONL`, `TRIAGE_AUDIT_MAX_RAG_CHARS` (see `.env.example`). **Validation checklist:** [`docs/decisions/triage-audit-validation.md`](docs/decisions/triage-audit-validation.md) (multi-line inspect, schema, leakage, future `expected_severity` eval).
 
 If `POST /triage` returns `{"detail":"Not Found"}`, something else is bound to that port or an old server is running. Check with `curl -s http://127.0.0.1:8000/` — you should see `service: autonomous-incident-response-agent` and `triage: POST /triage`. Then restart: `uv run serve-api` (or `uvicorn app.api.main:app` from the repo root).
 

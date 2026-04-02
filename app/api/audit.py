@@ -23,17 +23,65 @@ def triage_audit_path() -> Path:
     return root / "data" / "logs" / "triage_outputs.jsonl"
 
 
-def append_triage_jsonl(payload: dict[str, Any], result: dict[str, Any]) -> None:
-    """Append one JSON line: timestamp, input, output. Never raises to callers."""
+def top_k_sources_from_hits(hits: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """Stable summary for audit / eval (sorted by score descending)."""
+    if not hits:
+        return []
+    rows: list[dict[str, Any]] = []
+    for h in hits:
+        if not isinstance(h, dict):
+            continue
+        try:
+            score = float(h.get("score", 0.0))
+        except (TypeError, ValueError):
+            score = 0.0
+        rows.append(
+            {
+                "source": str(h.get("source") or ""),
+                "doc_type": str(h.get("doc_type") or ""),
+                "score": round(score, 6),
+                "chunk_index": h.get("chunk_index"),
+            }
+        )
+    rows.sort(key=lambda r: (-r["score"], r["source"]))
+    return rows
+
+
+def _truncated_rag_context(text: str) -> str:
+    raw = os.environ.get("TRIAGE_AUDIT_MAX_RAG_CHARS", "200000").strip()
+    try:
+        max_c = int(raw)
+    except ValueError:
+        max_c = 200_000
+    if max_c <= 0 or len(text) <= max_c:
+        return text
+    return text[:max_c] + "\n…[truncated: TRIAGE_AUDIT_MAX_RAG_CHARS]"
+
+
+def append_triage_jsonl(
+    payload: dict[str, Any],
+    result: dict[str, Any],
+    *,
+    rag_context: str | None = None,
+    retrieval_hits: list[dict[str, Any]] | None = None,
+) -> None:
+    """
+    Append one JSON line: timestamp, input, output, retrieved_context, top_k_sources.
+
+    Never raises to callers. Does not log API keys (only request body you send — scrub payloads).
+    """
     if os.environ.get("TRIAGE_AUDIT_DISABLE", "").lower() in ("1", "true", "yes"):
         return
     path = triage_audit_path()
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
+        ctx = rag_context if isinstance(rag_context, str) else ""
         entry = {
             "timestamp": datetime.now(UTC).replace(microsecond=0).isoformat(),
             "input": payload,
             "output": result,
+            "retrieved_context": _truncated_rag_context(ctx),
+            "top_k_sources": top_k_sources_from_hits(retrieval_hits),
         }
         line = json.dumps(entry, ensure_ascii=False) + "\n"
         with path.open("a", encoding="utf-8") as f:
