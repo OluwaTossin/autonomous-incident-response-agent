@@ -12,6 +12,15 @@ from app.api.main import SERVICE_VERSION, app
 client = TestClient(app)
 
 
+def test_root_lists_endpoints() -> None:
+    r = client.get("/")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["service"] == "autonomous-incident-response-agent"
+    assert data["triage"] == "POST /triage"
+    assert data["docs"] == "/docs"
+
+
 def test_health() -> None:
     r = client.get("/health")
     assert r.status_code == 200

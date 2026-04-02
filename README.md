@@ -98,6 +98,8 @@ curl -s -X POST http://127.0.0.1:8000/triage -H "Content-Type: application/json"
 
 OpenAPI: `http://127.0.0.1:8000/docs`
 
+If `POST /triage` returns `{"detail":"Not Found"}`, something else is bound to that port or an old server is running. Check with `curl -s http://127.0.0.1:8000/` — you should see `service: autonomous-incident-response-agent` and `triage: POST /triage`. Then restart: `uv run serve-api` (or `uvicorn app.api.main:app` from the repo root).
+
 Set `LLM_MODEL` (default `gpt-4o-mini`) in `.env` if needed. Chat uses the same `OPENAI_API_KEY` / `OPENAI_API_BASE` as embeddings unless you split providers later.
 
 Refresh the lockfile after changing `pyproject.toml`:

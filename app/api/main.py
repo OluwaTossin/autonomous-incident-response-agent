@@ -21,6 +21,20 @@ app = FastAPI(
 )
 
 
+@app.get("/")
+def root() -> dict[str, Any]:
+    """Helps confirm you hit this app (not another process on :8000)."""
+    return {
+        "service": "autonomous-incident-response-agent",
+        "version": SERVICE_VERSION,
+        "docs": "/docs",
+        "health": "/health",
+        "version_path": "/version",
+        "ingest": "POST /ingest-incident",
+        "triage": "POST /triage",
+    }
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
