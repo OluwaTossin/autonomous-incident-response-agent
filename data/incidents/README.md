@@ -13,6 +13,7 @@ Index `data/incidents/incident-*.md` for gold narratives; include or exclude `sa
 
 ## Related
 
+- **JSON payload for API / `triage` CLI:** [`../../examples/sample_incident_payload.json`](../../examples/sample_incident_payload.json) (not stored in this folder).
 - Runbooks: [`../runbooks/`](../runbooks/)
 - Logs: [`../logs/`](../logs/)
 - Knowledge base: [`../knowledge_base/`](../knowledge_base/)
