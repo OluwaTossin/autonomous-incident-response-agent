@@ -1,0 +1,28 @@
+2026-04-20T02:10:01Z DEBUG [inventory-api] TRACE request body id=req_9912 (break-glass debug left enabled)
+2026-04-20T02:10:02Z INFO  [metrics] Node ephemeral disk 78% (/var/log/pods)
+2026-04-20T02:10:03Z INFO  [metrics] Disk usage 82%
+2026-04-20T02:10:04Z INFO  [metrics] Disk usage 88%
+2026-04-20T02:10:05Z WARN  [kubelet] Ephemeral storage pressure threshold approaching
+2026-04-20T02:10:06Z INFO  [metrics] Disk usage 91%
+2026-04-20T02:10:07Z INFO  [metrics] Disk usage 94%
+2026-04-20T02:10:08Z WARN  [inventory-api] Log volume high on emptyDir
+2026-04-20T02:10:09Z INFO  [metrics] Disk usage 97%
+2026-04-20T02:10:10Z ERROR [inventory-api] write /var/log/containers/inventory.log: no space left on device
+2026-04-20T02:10:11Z ERROR [fluent-bit] Failed to flush chunk (output buffer full)
+2026-04-20T02:10:12Z WARN  [payment-api] Shared node: logging agent backpressure
+2026-04-20T02:10:13Z ERROR [system] Write operation failed
+2026-04-20T02:10:14Z INFO  [metrics] Disk usage 100%
+2026-04-20T02:10:15Z ERROR [logging-service] Buffer overflow
+2026-04-20T02:10:16Z WARN  [queue] Log backlog increasing
+2026-04-20T02:10:17Z INFO  [metrics] Latency increased
+2026-04-20T02:10:18Z ERROR [app] I/O operation failed
+2026-04-20T02:10:19Z WARN  [system] System degradation detected
+2026-04-20T02:10:20Z ERROR [logging-service] Dropping logs
+2026-04-20T02:10:21Z WARN  [alert] Disk full alert triggered
+2026-04-20T02:10:22Z INFO  [cleanup] Removing old logs
+2026-04-20T02:10:23Z INFO  [metrics] Disk usage 92%
+2026-04-20T02:10:24Z INFO  [metrics] Disk usage 85%
+2026-04-20T02:10:25Z INFO  [inventory-api] TRACE disabled; log level restored INFO
+2026-04-20T02:10:26Z INFO  [metrics] Disk usage 78%
+2026-04-20T02:10:27Z INFO  [kubelet] Node disk pressure cleared
+2026-04-20T02:10:28Z INFO  [system] Ephemeral storage recovered

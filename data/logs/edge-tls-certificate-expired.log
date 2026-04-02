@@ -1,0 +1,12 @@
+2026-01-10T00:00:01Z INFO  [synthetic-edge] TLS probe https://api.example.com/health
+2026-01-10T00:00:02Z ERROR [probe] x509: certificate has expired or is not yet valid
+2026-01-10T00:00:03Z INFO  [curl] curl: (60) SSL certificate problem: certificate has expired
+2026-01-10T00:00:04Z WARN  [mobile-client] javax.net.ssl.SSLHandshakeException: Chain validation failed
+2026-01-10T00:00:05Z ERROR [alb] Client TLS handshakes failing (not same as target health)
+2026-01-10T00:00:06Z INFO  [acme] Certificate order status=invalid reason=DNS problem (historical — automation disabled during migration)
+2026-01-10T00:00:07Z WARN  [ingress] Listener arn:aws:elasticloadbalancing:... using cert serial=0x8a2f... notAfter=2026-01-09T23:59:59Z
+2026-01-10T00:00:08Z INFO  [metrics] api_tls_handshake_failures_total spike region=us-east-1
+2026-01-10T00:00:09Z ERROR [gateway] Upstream fetch to auth idp: tls: failed to verify certificate: x509: certificate has expired
+2026-01-10T00:01:00Z INFO  [ops] Attached new ACM cert to HTTPS listener
+2026-01-10T00:01:15Z INFO  [probe] TLS verify OK notAfter=2027-01-09T23:59:59Z
+2026-01-10T00:01:16Z INFO  [metrics] api_tls_handshake_failures_total=0

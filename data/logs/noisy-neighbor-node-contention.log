@@ -1,0 +1,26 @@
+2026-05-20T12:37:01Z INFO  [scheduler] Pod scheduled node=ip-10-0-3-12
+2026-05-20T12:37:02Z INFO  [metrics] Node CPU=65% instance_type=t3.2xlarge
+2026-05-20T12:37:03Z INFO  [analytics-job] Starting batch processing (node=ip-10-0-3-12)
+2026-05-20T12:37:04Z INFO  [metrics] Node CPU=82% cpu_credit_balance=low
+2026-05-20T12:37:05Z WARN  [payment-api] Latency p99 elevated (same node as analytics-job)
+2026-05-20T12:37:06Z INFO  [metrics] Node CPU=91%
+2026-05-20T12:37:07Z WARN  [kubelet] CPU throttling detected container=payment-api
+2026-05-20T12:37:08Z ERROR [recommendation-api] Request timeout
+2026-05-20T12:37:09Z INFO  [metrics] Cluster CPU=62%
+2026-05-20T12:37:10Z WARN  [profile-service] Slow response
+2026-05-20T12:37:11Z ERROR [kafka-consumer] Lag increasing
+2026-05-20T12:37:12Z INFO  [metrics] Consumer lag=50000
+2026-05-20T12:37:13Z WARN  [scheduler] Pod colocated with heavy workload
+2026-05-20T12:37:14Z ERROR [recommendation-api] Readiness probe failed
+2026-05-20T12:37:15Z INFO  [metrics] Node CPU=98%
+2026-05-20T12:37:16Z WARN  [kubelet] Resource contention
+2026-05-20T12:37:17Z ERROR [profile-service] Timeout
+2026-05-20T12:37:18Z INFO  [autoscaler] Adding pods
+2026-05-20T12:37:19Z WARN  [scheduler] New pods placed on same node
+2026-05-20T12:37:20Z ERROR [system] Degradation persists
+2026-05-20T12:37:21Z INFO  [ops] Moving workload to dedicated node group
+2026-05-20T12:37:22Z INFO  [scheduler] Rescheduling pods
+2026-05-20T12:37:23Z INFO  [metrics] Node CPU=72%
+2026-05-20T12:37:24Z INFO  [payment-api] Latency normalized (analytics-job cordoned to batch node pool)
+2026-05-20T12:37:25Z INFO  [kafka-consumer] Lag decreasing
+2026-05-20T12:37:26Z INFO  [system] Recovery complete

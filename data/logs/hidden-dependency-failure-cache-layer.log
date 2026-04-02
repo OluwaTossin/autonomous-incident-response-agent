@@ -1,0 +1,21 @@
+2026-06-07T09:55:01Z INFO  [api] Request received id=req_9931
+2026-06-07T09:55:02Z INFO  [cache] Cache hit key=user_771
+2026-06-07T09:55:03Z INFO  [api] Response 200 OK
+2026-06-07T09:55:04Z INFO  [metrics] Latency normal
+2026-06-07T09:55:05Z WARN  [cache] Backend timeout
+2026-06-07T09:55:06Z INFO  [cache] Serving stale data
+2026-06-07T09:55:07Z INFO  [api] Response 200 OK
+2026-06-07T09:55:08Z WARN  [cache] Increased stale responses
+2026-06-07T09:55:09Z INFO  [metrics] Success rate=100%
+2026-06-07T09:55:10Z WARN  [ops] User complaints rising
+2026-06-07T09:55:11Z ERROR [cache] Backend unavailable
+2026-06-07T09:55:12Z INFO  [cache] Fallback active
+2026-06-07T09:55:13Z WARN  [api] Data inconsistency detected
+2026-06-07T09:55:14Z INFO  [metrics] No errors reported
+2026-06-07T09:55:15Z WARN  [ops] Monitoring blind to issue
+2026-06-07T09:55:16Z ERROR [cache] Failure threshold reached
+2026-06-07T09:55:17Z INFO  [ops] Restarting cache cluster
+2026-06-07T09:55:18Z INFO  [cache] Recovery started
+2026-06-07T09:55:19Z INFO  [cache] Backend restored
+2026-06-07T09:55:20Z INFO  [api] Data consistency restored
+2026-06-07T09:55:21Z INFO  [system] Recovery complete

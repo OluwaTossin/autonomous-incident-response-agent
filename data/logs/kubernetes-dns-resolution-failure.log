@@ -1,0 +1,35 @@
+2026-05-12T08:14:01Z INFO  [payment-api] Processing request id=req_5512
+2026-05-12T08:14:02Z DEBUG [dns] Resolving auth-service.default.svc.cluster.local
+2026-05-12T08:14:03Z ERROR [dns] lookup failed: no such host
+2026-05-12T08:14:04Z WARN  [payment-api] Retry request
+2026-05-12T08:14:05Z INFO  [dns] Resolving auth-service.default.svc.cluster.local
+2026-05-12T08:14:06Z ERROR [dns] lookup timeout
+2026-05-12T08:14:07Z ERROR [payment-api] Upstream unavailable
+2026-05-12T08:14:08Z WARN  [gateway] 503 Service Unavailable
+2026-05-12T08:14:09Z INFO  [metrics] Error rate 8%
+2026-05-12T08:14:10Z DEBUG [dns] Retrying resolution
+2026-05-12T08:14:11Z INFO  [dns] Resolution successful
+2026-05-12T08:14:12Z INFO  [payment-api] Request succeeded
+2026-05-12T08:14:13Z ERROR [dns] lookup failed: SERVFAIL
+2026-05-12T08:14:14Z WARN  [auth-service] Connection dropped
+2026-05-12T08:14:15Z INFO  [metrics] Error rate 12%
+2026-05-12T08:14:16Z ERROR [dns] lookup failed: NXDOMAIN
+2026-05-12T08:14:17Z WARN  [payment-api] Intermittent DNS issue suspected
+2026-05-12T08:14:18Z INFO  [coredns] Received query
+2026-05-12T08:14:19Z ERROR [coredns] Upstream DNS timeout
+2026-05-12T08:14:20Z WARN  [coredns] Forwarding failed
+2026-05-12T08:14:21Z INFO  [metrics] DNS latency=600ms
+2026-05-12T08:14:22Z WARN  [payment-api] Increased latency
+2026-05-12T08:14:23Z ERROR [dns] Temporary failure in name resolution
+2026-05-12T08:14:24Z INFO  [metrics] Retry rate increased
+2026-05-12T08:14:25Z WARN  [auth-service] Timeout calling dependency
+2026-05-12T08:14:26Z INFO  [metrics] Error rate 18%
+2026-05-12T08:14:27Z ERROR [dns] getaddrinfo EAI_AGAIN
+2026-05-12T08:14:28Z WARN  [payment-api] Retry storm detected
+2026-05-12T08:14:29Z INFO  [ops] Scaling CoreDNS
+2026-05-12T08:14:30Z INFO  [coredns] Pod started
+2026-05-12T08:14:31Z INFO  [coredns] Handling requests
+2026-05-12T08:14:32Z INFO  [dns] Resolution successful
+2026-05-12T08:14:33Z INFO  [payment-api] Recovery detected
+2026-05-12T08:14:34Z INFO  [metrics] Error rate 6%
+2026-05-12T08:14:35Z INFO  [payment-api] System stabilizing

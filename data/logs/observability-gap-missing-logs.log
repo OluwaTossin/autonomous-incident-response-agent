@@ -1,0 +1,25 @@
+2026-05-30T13:22:01Z INFO  [gateway] Incoming request id=req_7711
+2026-05-30T13:22:02Z INFO  [gateway] Forwarding to user-service
+2026-05-30T13:22:03Z ERROR [gateway] Upstream timeout
+2026-05-30T13:22:04Z WARN  [gateway] Retrying request
+2026-05-30T13:22:05Z ERROR [gateway] Upstream timeout
+2026-05-30T13:22:06Z INFO  [metrics] Error rate=9%
+2026-05-30T13:22:07Z WARN  [ops] Checking user-service logs
+2026-05-30T13:22:08Z ERROR [ops] No logs found
+2026-05-30T13:22:09Z WARN  [ops] Log agent not reporting
+2026-05-30T13:22:10Z INFO  [metrics] CPU normal
+2026-05-30T13:22:11Z INFO  [metrics] Memory normal
+2026-05-30T13:22:12Z ERROR [gateway] Request failed again
+2026-05-30T13:22:13Z WARN  [ops] Partial observability detected
+2026-05-30T13:22:14Z INFO  [ops] Checking logging agent
+2026-05-30T13:22:15Z ERROR [logging-agent] CrashLoopBackOff
+2026-05-30T13:22:16Z INFO  [metrics] Log ingestion=0
+2026-05-30T13:22:17Z WARN  [ops] Blind spot confirmed
+2026-05-30T13:22:18Z INFO  [ops] Restarting logging agent
+2026-05-30T13:22:19Z INFO  [logging-agent] Starting
+2026-05-30T13:22:20Z INFO  [logging-agent] Connected to backend
+2026-05-30T13:22:21Z INFO  [metrics] Log ingestion restored
+2026-05-30T13:22:22Z INFO  [user-service] Processing request
+2026-05-30T13:22:23Z ERROR [user-service] DB timeout
+2026-05-30T13:22:24Z WARN  [ops] Root cause identified
+2026-05-30T13:22:25Z INFO  [system] Observability restored

@@ -1,0 +1,20 @@
+2026-06-05T18:10:01Z INFO  [dns] Resolving service endpoint
+2026-06-05T18:10:02Z INFO  [routing] Traffic directed to eu-west-1
+2026-06-05T18:10:03Z ERROR [region-eu] Service latency high
+2026-06-05T18:10:04Z WARN  [dns] Failover triggered
+2026-06-05T18:10:05Z INFO  [routing] Switching to us-east-1
+2026-06-05T18:10:06Z INFO  [region-us] Service responding
+2026-06-05T18:10:07Z WARN  [dns] Mixed resolution detected
+2026-06-05T18:10:08Z ERROR [region-eu] Still receiving traffic
+2026-06-05T18:10:09Z WARN  [routing] Split traffic condition
+2026-06-05T18:10:10Z INFO  [metrics] Error rate=12%
+2026-06-05T18:10:11Z WARN  [gateway] Inconsistent responses
+2026-06-05T18:10:12Z ERROR [session] Session mismatch
+2026-06-05T18:10:13Z WARN  [dns] TTL propagation delay
+2026-06-05T18:10:14Z INFO  [metrics] Requests split 60/40
+2026-06-05T18:10:15Z ERROR [gateway] Data inconsistency
+2026-06-05T18:10:16Z WARN  [ops] Split-brain suspected
+2026-06-05T18:10:17Z INFO  [ops] Forcing traffic to us-east-1
+2026-06-05T18:10:18Z INFO  [routing] Traffic stabilized
+2026-06-05T18:10:19Z INFO  [metrics] Error rate=3%
+2026-06-05T18:10:20Z INFO  [system] Recovery complete

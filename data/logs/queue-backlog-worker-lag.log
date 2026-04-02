@@ -1,0 +1,30 @@
+2026-04-26T11:00:01Z INFO  [worker] Fetching job id=job_771
+2026-04-26T11:00:02Z INFO  [metrics] Queue depth=500
+2026-04-26T11:00:03Z INFO  [metrics] Queue depth=900
+2026-04-26T11:00:04Z WARN  [worker] Processing latency increasing
+2026-04-26T11:00:05Z INFO  [metrics] Queue depth=1500
+2026-04-26T11:00:06Z WARN  [worker] report-db-query duration=84200ms (OLTP reader overloaded)
+2026-04-26T11:00:07Z ERROR [worker] canceling statement due to statement timeout
+2026-04-26T11:00:08Z INFO  [retry] Retrying job
+2026-04-26T11:00:09Z INFO  [metrics] Queue depth=3000
+2026-04-26T11:00:10Z INFO  [metrics] Queue depth=6000
+2026-04-26T11:00:11Z WARN  [queue] Backlog increasing rapidly
+2026-04-26T11:00:12Z INFO  [metrics] Queue depth=10000
+2026-04-26T11:00:13Z WARN  [worker] Throughput degraded
+2026-04-26T11:00:14Z ERROR [worker] Job failed id=job_771
+2026-04-26T11:00:15Z INFO  [metrics] Processing rate reduced
+2026-04-26T11:00:16Z WARN  [worker] Retry storm starting
+2026-04-26T11:00:17Z INFO  [metrics] Queue depth=14000
+2026-04-26T11:00:18Z WARN  [alert] Queue depth critical
+2026-04-26T11:00:19Z INFO  [autoscaler] Scaling workers
+2026-04-26T11:00:20Z WARN  [worker] Scaling not effective
+2026-04-26T11:00:21Z ERROR [worker] Downstream unavailable
+2026-04-26T11:00:22Z INFO  [metrics] Queue depth=18000
+2026-04-26T11:00:23Z WARN  [queue] Processing delay critical
+2026-04-26T11:00:24Z INFO  [ops] Routed report jobs to read replica + statement_timeout=30s
+2026-04-26T11:00:25Z INFO  [worker] Processing resumed
+2026-04-26T11:00:26Z INFO  [metrics] Queue depth=15000
+2026-04-26T11:00:27Z INFO  [metrics] Queue depth=11000
+2026-04-26T11:00:28Z INFO  [worker] Throughput improving
+2026-04-26T11:00:29Z INFO  [metrics] Queue depth=7000
+2026-04-26T11:00:30Z INFO  [worker] System stabilizing

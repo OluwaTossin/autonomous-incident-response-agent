@@ -1,0 +1,34 @@
+2026-04-24T16:30:01Z INFO  [payment-api] Processing transaction id=txn_9921
+2026-04-24T16:30:01Z DEBUG [fraud-service] Calling external fraud API
+2026-04-24T16:30:02Z WARN  [fraud-service] External API latency=2100ms
+2026-04-24T16:30:03Z WARN  [fraud-service] Timeout threshold exceeded
+2026-04-24T16:30:03Z INFO  [retry] Retrying request attempt=1
+2026-04-24T16:30:04Z WARN  [fraud-service] External API latency=2800ms
+2026-04-24T16:30:05Z ERROR [fraud-service] API timeout
+2026-04-24T16:30:05Z INFO  [retry] Retrying request attempt=2
+2026-04-24T16:30:06Z WARN  [payment-api] Latency increasing
+2026-04-24T16:30:07Z ERROR [fraud-service] Request failed after retries
+2026-04-24T16:30:08Z WARN  [queue] Fraud queue backlog increasing
+2026-04-24T16:30:09Z INFO  [metrics] Queue depth=3000
+2026-04-24T16:30:10Z INFO  [metrics] Queue depth=6000
+2026-04-24T16:30:11Z WARN  [payment-api] Retry storm detected
+2026-04-24T16:30:12Z ERROR [gateway] 504 Gateway Timeout
+2026-04-24T16:30:13Z WARN  [fraud-service] Circuit breaker half-open
+2026-04-24T16:30:14Z ERROR [fraud-service] Downstream dependency unavailable
+2026-04-24T16:30:15Z INFO  [metrics] Latency p95=3200ms
+2026-04-24T16:30:16Z WARN  [payment-api] Processing degraded
+2026-04-24T16:30:17Z ERROR [fraud-service] Timeout calling API
+2026-04-24T16:30:18Z INFO  [retry] Retrying request attempt=3
+2026-04-24T16:30:19Z ERROR [fraud-service] Retry exhausted
+2026-04-24T16:30:20Z WARN  [payment-api] Fallback fraud logic enabled
+2026-04-24T16:30:21Z INFO  [metrics] Queue depth=9000
+2026-04-24T16:30:22Z WARN  [queue] Backpressure triggered
+2026-04-24T16:30:23Z ERROR [gateway] 502 Bad Gateway
+2026-04-24T16:30:24Z WARN  [payment-api] Request timeout id=txn_9921
+2026-04-24T16:30:25Z INFO  [metrics] Error rate=22%
+2026-04-24T16:30:26Z WARN  [fraud-service] Dependency health degraded
+2026-04-24T16:30:27Z INFO  [fallback] Using cached fraud scores
+2026-04-24T16:30:28Z INFO  [metrics] Latency p95=1800ms
+2026-04-24T16:30:29Z INFO  [payment-api] Partial recovery
+2026-04-24T16:30:30Z INFO  [queue] Backlog stabilizing
+2026-04-24T16:30:31Z INFO  [payment-api] System stabilizing

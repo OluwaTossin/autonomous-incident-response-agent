@@ -1,0 +1,44 @@
+2026-04-12T09:15:01Z INFO  [notification-service] Starting batch processing
+2026-04-12T09:15:02Z INFO  [worker] Batch size=1000
+2026-04-12T09:15:03Z DEBUG [worker] Allocating buffer
+2026-04-12T09:15:04Z INFO  [metrics] Memory usage 68%
+2026-04-12T09:15:05Z INFO  [metrics] Memory usage 74%
+2026-04-12T09:15:06Z INFO  [metrics] Memory usage 81%
+2026-04-12T09:15:07Z WARN  [worker] Large allocation detected
+2026-04-12T09:15:08Z INFO  [metrics] Memory usage 86%
+2026-04-12T09:15:09Z INFO  [metrics] Memory usage 90%
+2026-04-12T09:15:10Z INFO  [metrics] Memory usage 94%
+2026-04-12T09:15:11Z ERROR [runtime] GC overhead limit exceeded
+2026-04-12T09:15:12Z WARN  [worker] Memory pressure increasing
+2026-04-12T09:15:13Z INFO  [metrics] Memory usage 97%
+2026-04-12T09:15:14Z ERROR [runtime] OutOfMemoryError: Java heap space
+2026-04-12T09:15:15Z ERROR [container] Killing process due to OOM
+2026-04-12T09:15:16Z INFO  [kubelet] Container terminated
+2026-04-12T09:15:17Z INFO  [kubelet] Restarting container
+2026-04-12T09:15:18Z INFO  [notification-service] Restarting...
+2026-04-12T09:15:19Z INFO  [metrics] Memory usage 42%
+2026-04-12T09:15:20Z INFO  [worker] Resuming batch
+2026-04-12T09:15:21Z DEBUG [worker] Allocating buffer
+2026-04-12T09:15:22Z INFO  [metrics] Memory usage 66%
+2026-04-12T09:15:23Z INFO  [metrics] Memory usage 73%
+2026-04-12T09:15:24Z INFO  [metrics] Memory usage 81%
+2026-04-12T09:15:25Z WARN  [worker] High memory footprint
+2026-04-12T09:15:26Z INFO  [metrics] Memory usage 88%
+2026-04-12T09:15:27Z INFO  [metrics] Memory usage 92%
+2026-04-12T09:15:28Z INFO  [metrics] Memory usage 96%
+2026-04-12T09:15:29Z ERROR [runtime] OutOfMemoryError
+2026-04-12T09:15:30Z ERROR [container] Killed by OOM
+2026-04-12T09:15:31Z INFO  [kubelet] Restarting container
+2026-04-12T09:15:32Z WARN  [queue] Backlog increasing
+2026-04-12T09:15:33Z INFO  [metrics] Queue depth 8000
+2026-04-12T09:15:34Z INFO  [metrics] Queue depth 12000
+2026-04-12T09:15:35Z WARN  [notification-service] Processing delay
+2026-04-12T09:15:36Z ERROR [worker] Failed batch processing
+2026-04-12T09:15:37Z INFO  [metrics] Memory usage 45%
+2026-04-12T09:15:38Z INFO  [deployment] Reducing batch size
+2026-04-12T09:15:39Z INFO  [worker] Batch size=100
+2026-04-12T09:15:40Z INFO  [metrics] Memory usage 52%
+2026-04-12T09:15:41Z INFO  [metrics] Memory usage 58%
+2026-04-12T09:15:42Z INFO  [notification-service] Stabilizing
+2026-04-12T09:15:43Z INFO  [metrics] Queue depth decreasing
+2026-04-12T09:15:44Z INFO  [notification-service] Recovery complete

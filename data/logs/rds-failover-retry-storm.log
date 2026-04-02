@@ -1,0 +1,28 @@
+2026-05-14T02:11:01Z INFO  [settlement-worker] Processing settlement id=stl_882731
+2026-05-14T02:11:02Z ERROR [db] Connection lost
+2026-05-14T02:11:03Z WARN  [db] Failover in progress
+2026-05-14T02:11:04Z ERROR [worker] Transaction failed
+2026-05-14T02:11:05Z INFO  [retry] Retrying immediately
+2026-05-14T02:11:06Z ERROR [db] connection refused
+2026-05-14T02:11:07Z WARN  [worker] Retry loop
+2026-05-14T02:11:08Z INFO  [metrics] Queue depth=5000
+2026-05-14T02:11:09Z INFO  [metrics] Queue depth=12000
+2026-05-14T02:11:10Z ERROR [db] timeout
+2026-05-14T02:11:11Z WARN  [worker] Retrying again
+2026-05-14T02:11:12Z INFO  [metrics] Queue depth=20000
+2026-05-14T02:11:13Z WARN  [worker] Duplicate attempt detected
+2026-05-14T02:11:14Z ERROR [ledger-api] Duplicate entry rejected
+2026-05-14T02:11:15Z INFO  [metrics] Retry rate=6x
+2026-05-14T02:11:16Z WARN  [worker] Retry amplification
+2026-05-14T02:11:17Z ERROR [db] still unavailable
+2026-05-14T02:11:18Z INFO  [db] Connection restored
+2026-05-14T02:11:19Z INFO  [worker] Processing resumes
+2026-05-14T02:11:20Z WARN  [worker] Backlog still growing
+2026-05-14T02:11:21Z INFO  [metrics] Queue depth=45000
+2026-05-14T02:11:22Z ERROR [worker] Retry storm continues
+2026-05-14T02:11:23Z WARN  [ops] Reducing retry rate
+2026-05-14T02:11:24Z INFO  [metrics] Retry rate=2x
+2026-05-14T02:11:25Z INFO  [worker] Processing stabilizing
+2026-05-14T02:11:26Z INFO  [metrics] Queue depth=30000
+2026-05-14T02:11:27Z INFO  [queue] Draining
+2026-05-14T02:11:28Z INFO  [worker] Recovery progressing

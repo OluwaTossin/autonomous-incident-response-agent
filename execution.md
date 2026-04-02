@@ -1,0 +1,301 @@
+# Execution Plan
+
+**Project:** Autonomous DevOps Incident Response Agent
+
+This document is the single source of truth for build order, scope, and milestones. Prefer shipping local value before cloud complexity.
+
+### Phase completion (rolling)
+
+| Phase | Status | Evidence |
+|-------|--------|----------|
+| **1** | Done | `docs/decisions/problem-definition.md` |
+| **2** | **Done** | `data/incidents/`, `data/logs/`, `data/knowledge_base/`, `docs/runbooks/` — see Phase 2 inventory |
+
+---
+
+## 1. Project goal
+
+Build an AI-powered incident response system that can:
+
+- Receive operational alerts
+- Retrieve relevant runbook knowledge
+- Reason over logs and context
+- Classify severity
+- Suggest remediation
+- Trigger deterministic workflows for escalation or response
+
+**Business value:** Reduces triage time, improves consistency of first response, and turns fragmented operational knowledge into an executable support layer.
+
+---
+
+## 2. What you are building (five parts)
+
+| Layer | Role |
+|--------|------|
+| **Ingress** | Receives incident events (UI, webhook, monitoring). |
+| **Reasoning** | LLM-driven agent interprets the issue and decides what to do. |
+| **Retrieval** | Pulls runbooks, past incidents, notes, and remediation guidance. |
+| **Workflow** | n8n executes deterministic actions (Slack, tickets, logging, webhooks). Webhook nodes can act as API triggers and return output. |
+| **Deployment & operations** | Containers; later AWS. **AWS Fargate** fits this phase: run containers without managing EC2. |
+
+---
+
+## 3. Prerequisites (before Phase 1)
+
+### 3.1 Accounts and access
+
+- [ ] GitHub account
+- [ ] AWS account (not required until later phases)
+- [ ] LLM access: **OpenAI** and/or **OpenRouter** (this project assumes these; other providers optional later)
+- [ ] (Optional) Slack workspace for alerts
+- [ ] (Optional) Hosted vector DB (e.g. Pinecone, Weaviate Cloud)
+
+### 3.2 Local tools
+
+Install and verify:
+
+- [ ] Git
+- [ ] Python 3.11+
+- [ ] Docker Desktop or Docker Engine
+- [ ] VS Code (or Cursor)
+- [ ] Terraform CLI
+- [ ] AWS CLI
+- [ ] Node.js (optional; helpers or frontend)
+- [ ] Postman or `curl` for API testing
+
+**Notes:** Terraform is the standard IaC path for repeatable infrastructure. n8n is easiest locally via Docker (see n8n self-hosting and AI workflow docs).
+
+### 3.3 Concepts to be comfortable with
+
+- Python packaging and virtual environments
+- REST APIs
+- Basic Docker
+- JSON
+- Environment variables and secrets
+- Git branching and commits
+- Prompting and tool-calling
+- Basic cloud networking (before deploy phases)
+
+### 3.4 Target repository layout
+
+```
+autonomous-incident-response-agent/
+├── execution.md
+├── README.md
+├── .env.example
+├── docs/
+│   ├── architecture/
+│   ├── runbooks/
+│   └── decisions/
+├── app/
+│   ├── api/
+│   ├── agent/
+│   ├── rag/
+│   ├── services/
+│   └── models/
+├── workflows/
+│   └── n8n/
+├── data/
+│   ├── incidents/          # Synthetic incident postmortems + sample-incident.md
+│   ├── logs/               # Synthetic .log bundles + sample-log.md
+│   └── knowledge_base/     # Supplementary ops docs (escalation, ownership, tiers)
+├── infra/
+│   └── terraform/
+│       ├── modules/
+│       └── envs/
+│           ├── dev/
+│           └── prod/
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   └── evaluation/
+└── docker/
+```
+
+### 3.5 Secrets template (`.env.example`)
+
+Do not commit real secrets. Expected keys:
+
+```env
+# LLM (you have these today)
+OPENAI_API_KEY=
+OPENROUTER_API_KEY=
+
+# Optional: OpenAI-compatible base URL when calling models via OpenRouter
+# OPENAI_API_BASE=https://openrouter.ai/api/v1
+
+# Cloud / integrations (add when you reach those phases)
+AWS_REGION=
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+SLACK_WEBHOOK_URL=
+VECTOR_DB_API_KEY=
+N8N_BASIC_AUTH_USER=
+N8N_BASIC_AUTH_PASSWORD=
+
+# Optional later
+# ANTHROPIC_API_KEY=
+```
+
+### 3.6 AWS before starting?
+
+**No** for Phase 1. Use AWS once local logic is stable enough to deserve deployment.
+
+---
+
+## 4. Macro stages
+
+| Stage | Focus |
+|--------|--------|
+| **A — Local prototype** | Core incident triage logic locally. |
+| **B — Integrated MVP** | Agent + RAG + n8n + UI as one system. |
+| **C — Production** | Containerise, Terraform, AWS deploy, monitoring. |
+
+---
+
+## 5. Phases (recommended sequence)
+
+### Phase 1 — Define the business problem
+
+- [x] One-page product definition in `docs/decisions/problem-definition.md`
+- **Deliverable:** Product boundary documented (no code required).
+
+### Phase 2 — Incident knowledge and sample data
+
+- [x] Runbooks, troubleshooting notes, postmortems, ownership, escalation matrix (examples)
+- [x] Sample incident payloads: CPU saturation, memory leak, 5xx spike, DB connection exhaustion, K8s crash loop, disk full, SSL expiry, etc. (covered across `data/incidents/` and `data/logs/`)
+- [x] Targets: `data/knowledge_base/`, `data/incidents/`, `data/logs/`, `docs/runbooks/`
+- **Deliverable:** ≥10 runbook docs, ≥20 incident examples, ≥5 realistic log files
+
+**Phase 2 inventory (verified):**
+
+| Asset | Location | Count |
+|-------|-----------|------:|
+| Runbooks | `docs/runbooks/*.md` | 11 |
+| Incident write-ups | `data/incidents/incident-*.md` | 20 |
+| Incident template / catalog | `data/incidents/sample-incident.md` | 1 |
+| Log bundles | `data/logs/*.log` | 21 |
+| Log conventions | `data/logs/sample-log.md` | 1 |
+| Knowledge base (supplementary) | `data/knowledge_base/*.md` | 5 (README + 4 guides) |
+
+**Ingestion note for Phase 3:** Index `docs/runbooks/`, `data/incidents/incident-*.md`, `data/logs/*.log`, and `data/knowledge_base/*.md` (see root `README.md` and `data/README.md`).
+
+
+### Phase 3 — Local RAG foundation
+
+- [ ] Under `app/rag/`: loader, chunking, embeddings, index, retrieval
+- [ ] Start simple (e.g. FAISS); migrate to managed vector store if needed
+- **Deliverable:** Script or endpoint: e.g. query _“High CPU on payment-api in production”_ → relevant runbook excerpts
+
+### Phase 4 — Reasoning agent (LangGraph)
+
+- [ ] Triage agent: interpret → retrieve → reason → structured output
+- [ ] **Output schema (JSON):** `incident_summary`, `severity` (LOW|MEDIUM|HIGH|CRITICAL), `likely_root_cause`, `recommended_actions[]`, `escalate`, `confidence`
+- [ ] **Nodes:** input normalisation → retrieval → analysis → decision → output formatter
+- **Deliverable:** Local Python script: incident payload → structured triage JSON
+
+### Phase 5 — API layer (FastAPI)
+
+- [ ] `POST /triage`, `POST /ingest-incident`, `GET /health`, `GET /version`
+- [ ] `/triage`: payload → retrieval → agent → structured response
+- **Deliverable:** Local backend verified with curl/Postman
+
+### Phase 6 — n8n execution layer
+
+- [ ] Run n8n locally (Docker)
+- [ ] **Workflow `incident-triage-escalation`:** webhook in → if CRITICAL → Slack + log → status out
+- [ ] **Workflow `incident-ticket-creation`:** triage in → if `escalate` → ticket payload → mock Jira-style API → ticket ref
+- **Deliverable:** Two workflows callable via test endpoints
+
+### Phase 7 — Minimal UI
+
+- [ ] Gradio: paste payload or pick sample → show summary, severity, root cause, actions, escalation
+- **Deliverable:** UI wired to FastAPI locally
+
+### Phase 8 — Evaluation
+
+- [ ] Gold set (20–30 incidents) with expected outcomes
+- [ ] Metrics: retrieval relevance, classification, hallucination signal, action quality, latency
+- **Deliverable:** Test harness + markdown quality report
+
+### Phase 9 — Containerise
+
+- [ ] Dockerise backend, UI, n8n, optional vector/DB
+- **Deliverable:** `docker-compose.yml` runs full stack locally
+
+### Phase 10 — AWS with Terraform
+
+- [ ] Layout: `infra/terraform/modules/` (vpc, ecs, alb, iam, ecr, monitoring) + `envs/dev`, `envs/prod`
+- [ ] Lean first cut: VPC, subnets, SGs, ECR, ECS cluster/services, ALB, IAM, CloudWatch logs, SSM parameters; **ECS on Fargate**
+- **Deliverable:** `terraform init`, `plan`, `apply` for dev
+
+### Phase 11 — Deploy to AWS
+
+- [ ] Push images to ECR; run services
+- **Deliverable:** Usable URL (dev/prod separated from day one)
+
+### Phase 12 — Observability
+
+- [ ] API latency, errors, tokens, workflow success, container logs, triage duration
+- **Deliverable:** CloudWatch logs for services + at least one dashboard or alarm path
+
+### Phase 13 — CI/CD
+
+- [ ] GitHub Actions: lint, unit tests, eval subset, docker build, push ECR, deploy trigger (dev)
+- **Deliverable:** Working workflow for dev
+
+### Phase 14 — Extensions (optional)
+
+- [ ] **A:** Slack incident intake
+- [ ] **B:** Similar past incidents before remediation
+- [ ] **C:** Structured reports for Jira/ServiceNow-style systems
+- [ ] **D:** Human approval for high-risk automation
+- [ ] **E:** Cost/model routing (cheap vs strong models)
+
+---
+
+## 6. Milestone order (checklist)
+
+Use this as the default execution order:
+
+- [ ] **Milestone 0** — Repo, tools, `.env.example`, folder structure *(partial: docs + data + execution present; `app/`, `workflows/`, `tests/`, `docker/`, `infra/` still to scaffold when you start code)*
+- [x] **Milestone 1** — Product problem and I/O definition
+- [x] **Milestone 2** — Runbooks, sample incidents, logs
+- [ ] **Milestone 3** — RAG retrieval locally
+- [ ] **Milestone 4** — LangGraph triage agent locally
+- [ ] **Milestone 5** — FastAPI endpoints
+- [ ] **Milestone 6** — n8n escalation workflow
+- [ ] **Milestone 7** — Gradio UI
+- [ ] **Milestone 8** — Evaluation suite
+- [ ] **Milestone 9** — Full docker-compose
+- [ ] **Milestone 10** — Terraform dev environment
+- [ ] **Milestone 11** — ECS Fargate deploy
+- [ ] **Milestone 12** — CloudWatch observability
+- [ ] **Milestone 13** — CI/CD
+
+---
+
+## 7. Definition of done (portfolio / JD alignment)
+
+At completion you should be able to demonstrate:
+
+- LangChain / LangGraph agent design
+- RAG pipeline (chunking, embeddings, vector search)
+- n8n workflow orchestration
+- Backend API engineering
+- AWS deployment
+- Terraform-based infrastructure
+- Monitoring and operational maturity
+- Credible business relevance (triage under pressure, consistent first response)
+
+---
+
+## 8. How to use this file
+
+1. Keep **problem definition** and **sample runbooks** current as the source of truth for what “good” looks like.
+2. Do not skip **Phase 2** data; retrieval quality depends on it.
+3. Treat **Phase 10+** as optional until Phases 1–9 prove the loop end-to-end locally.
+
+---
+
+*Last updated: 2026-04-02 — Phase 2 marked complete; Milestone 0 partial until app/infra scaffold. Update checkboxes as you complete milestones.*

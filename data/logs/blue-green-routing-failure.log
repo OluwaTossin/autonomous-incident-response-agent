@@ -1,0 +1,27 @@
+2026-05-27T20:03:01Z INFO  [deployment] Starting blue-green deployment
+2026-05-27T20:03:02Z INFO  [alb] Routing traffic to green target group
+2026-05-27T20:03:03Z INFO  [metrics] Green traffic=12%
+2026-05-27T20:03:04Z INFO  [metrics] Green traffic=18%
+2026-05-27T20:03:05Z WARN  [green-env] Downstream dependency not ready
+2026-05-27T20:03:06Z ERROR [green-env] API call failed
+2026-05-27T20:03:07Z WARN  [alb] Sticky session detected
+2026-05-27T20:03:08Z INFO  [metrics] Green traffic=27%
+2026-05-27T20:03:09Z ERROR [green-env] 502 Bad Gateway
+2026-05-27T20:03:10Z WARN  [frontend] User error reported
+2026-05-27T20:03:11Z INFO  [metrics] Error rate=15%
+2026-05-27T20:03:12Z WARN  [deployment] Traffic imbalance detected
+2026-05-27T20:03:13Z INFO  [metrics] Green traffic=34%
+2026-05-27T20:03:14Z ERROR [green-env] Dependency timeout
+2026-05-27T20:03:15Z WARN  [alb] Traffic exceeding expected weight
+2026-05-27T20:03:16Z ERROR [gateway] 503 Service Unavailable
+2026-05-27T20:03:17Z WARN  [ops] Investigating routing rules
+2026-05-27T20:03:18Z INFO  [ops] Found incorrect target group weight
+2026-05-27T20:03:19Z INFO  [ops] Resetting traffic to blue
+2026-05-27T20:03:20Z INFO  [metrics] Green traffic=5%
+2026-05-27T20:03:21Z INFO  [blue-env] Handling traffic normally
+2026-05-27T20:03:22Z INFO  [metrics] Error rate=3%
+2026-05-27T20:03:23Z INFO  [deployment] Rollback initiated
+2026-05-27T20:03:24Z INFO  [alb] Traffic fully routed to blue
+2026-05-27T20:03:25Z INFO  [metrics] Error rate=1%
+2026-05-27T20:03:26Z INFO  [system] Recovery confirmed
+2026-05-27T20:03:27Z INFO  [deployment] Deployment halted

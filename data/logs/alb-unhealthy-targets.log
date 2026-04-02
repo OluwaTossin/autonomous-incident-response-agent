@@ -1,0 +1,25 @@
+2026-04-14T18:22:01Z INFO  [alb] Health check initiated
+2026-04-14T18:22:02Z WARN  [alb] Health check failed target=10.0.1.12
+2026-04-14T18:22:03Z WARN  [alb] Health check failed target=10.0.1.13
+2026-04-14T18:22:04Z ERROR [alb] Marking target unhealthy
+2026-04-14T18:22:05Z INFO  [metrics] Healthy targets=3
+2026-04-14T18:22:06Z WARN  [gateway] Increased 503 responses
+2026-04-14T18:22:07Z ERROR [alb] Health check GET http://10.0.1.12:8080/health -> 404 (expected by ALB; app moved liveness)
+2026-04-14T18:22:08Z WARN  [alb] Retrying health check
+2026-04-14T18:22:09Z ERROR [alb] Target timeout
+2026-04-14T18:22:10Z INFO  [metrics] Healthy targets=2
+2026-04-14T18:22:11Z ERROR [gateway] 503 Service Unavailable
+2026-04-14T18:22:12Z WARN  [alb] All targets failing health checks
+2026-04-14T18:22:13Z ERROR [alb] No healthy targets
+2026-04-14T18:22:14Z WARN  [gateway] Traffic dropping
+2026-04-14T18:22:15Z INFO  [metrics] Error rate 35%
+2026-04-14T18:22:16Z DEBUG [app] GET /live -> 200 OK (liveness)
+2026-04-14T18:22:17Z DEBUG [app] GET /health -> 404 Not Found (removed in v2.4 deploy)
+2026-04-14T18:22:18Z INFO  [deployment] Updating target group health check path via Terraform
+2026-04-14T18:22:19Z INFO  [alb] Health check path set to /live port=8080
+2026-04-14T18:22:20Z INFO  [alb] Health check success target=10.0.1.12
+2026-04-14T18:22:21Z INFO  [alb] Health check success target=10.0.1.13
+2026-04-14T18:22:22Z INFO  [metrics] Healthy targets=4
+2026-04-14T18:22:23Z INFO  [gateway] Response 200 OK
+2026-04-14T18:22:24Z INFO  [metrics] Error rate 5%
+2026-04-14T18:22:25Z INFO  [alb] System stabilized

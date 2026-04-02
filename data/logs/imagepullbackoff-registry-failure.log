@@ -1,0 +1,27 @@
+2026-05-01T21:42:01Z INFO  [deployment] Starting rollout checkout-worker:v1.18.4
+2026-05-01T21:42:02Z INFO  [scheduler] Pod scheduled node=ip-10-0-2-14
+2026-05-01T21:42:03Z INFO  [kubelet] Pulling image registry.example.com/checkout-worker:v1.18.4
+2026-05-01T21:42:04Z ERROR [kubelet] Failed to pull image
+2026-05-01T21:42:05Z ERROR [kubelet] pull access denied
+2026-05-01T21:42:06Z WARN  [kubelet] Back-off pulling image
+2026-05-01T21:42:07Z INFO  [kubelet] ImagePullBackOff
+2026-05-01T21:42:08Z INFO  [metrics] Pending pods=3
+2026-05-01T21:42:09Z WARN  [deployment] Rollout stalled
+2026-05-01T21:42:10Z ERROR [kubelet] unauthorized: authentication required
+2026-05-01T21:42:11Z INFO  [kubelet] Retrying image pull
+2026-05-01T21:42:12Z ERROR [kubelet] Failed again
+2026-05-01T21:42:13Z WARN  [kubelet] Back-off restarting container
+2026-05-01T21:42:14Z INFO  [metrics] Queue depth rising
+2026-05-01T21:42:15Z INFO  [metrics] Queue depth=12000
+2026-05-01T21:42:16Z WARN  [worker] Capacity reduced
+2026-05-01T21:42:17Z ERROR [worker] Processing lag detected
+2026-05-01T21:42:18Z INFO  [metrics] Active workers=3
+2026-05-01T21:42:19Z WARN  [deployment] Progress deadline exceeded
+2026-05-01T21:42:20Z ERROR [kubelet] ImagePullBackOff persists
+2026-05-01T21:42:21Z INFO  [ops] Updating imagePullSecret
+2026-05-01T21:42:22Z INFO  [kubelet] Pulling image again
+2026-05-01T21:42:23Z INFO  [kubelet] Image pulled successfully
+2026-05-01T21:42:24Z INFO  [container] Starting container
+2026-05-01T21:42:25Z INFO  [metrics] Active workers=6
+2026-05-01T21:42:26Z INFO  [queue] Backlog draining
+2026-05-01T21:42:27Z INFO  [deployment] Rollout completed

@@ -1,0 +1,21 @@
+2026-04-22T08:00:01Z INFO  [billing-svc] Calling ledger over mTLS
+2026-04-22T08:00:01Z DEBUG [tls] Client handshake start peer=ledger.internal:8443
+2026-04-22T08:00:02Z ERROR [tls] tls: failed to verify certificate: x509: certificate signed by unknown authority
+2026-04-22T08:00:02Z WARN  [billing-svc] Retry idempotent read id=inv_4412
+2026-04-22T08:00:03Z ERROR [tls] remote error: tls: bad certificate
+2026-04-22T08:00:04Z WARN  [mesh-sidecar] Upstream reset stream
+2026-04-22T08:00:05Z ERROR [ledger-svc] Incoming connection from billing: handshake failed (client trust store missing new intermediate)
+2026-04-22T08:00:06Z INFO  [metrics] mesh_tls_handshake_failures_total=12
+2026-04-22T08:00:07Z ERROR [billing-svc] Post "https://ledger.internal:8443/v1/postings": EOF during handshake
+2026-04-22T08:00:08Z WARN  [ops] openssl verify -CAfile minimal-trust.pem leaf.crt -> error 20 at 0 depth lookup: unable to get local issuer certificate
+2026-04-22T08:00:09Z INFO  [ops] Issuer chain bundle was leaf-only after CA rotation job
+2026-04-22T08:00:10Z ERROR [billing-svc] Circuit breaker ledger OPEN
+2026-04-22T08:00:11Z WARN  [ledger-svc] Batch settlement delayed (east-west errors)
+2026-04-22T08:00:12Z INFO  [metrics] Error rate billing->ledger=11%
+2026-04-22T08:00:13Z INFO  [secrets-operator] Applying tls-bundle with full chain (leaf + intermediate + root)
+2026-04-22T08:00:14Z DEBUG [billing-svc] Reloading trust anchors
+2026-04-22T08:00:15Z INFO  [tls] Handshake successful cipher=TLS_AES_128_GCM_SHA256
+2026-04-22T08:00:16Z INFO  [billing-svc] Response 200 from ledger
+2026-04-22T08:00:17Z INFO  [metrics] mesh_tls_handshake_failures_total=0
+2026-04-22T08:00:18Z INFO  [ledger-svc] Postings throughput normal
+2026-04-22T08:00:19Z INFO  [system] mTLS east-west stabilized

@@ -1,0 +1,40 @@
+2026-04-16T11:40:01Z INFO  [orders-service] Processing order id=ord_7712
+2026-04-16T11:40:01Z DEBUG [db] Acquiring connection from pool
+2026-04-16T11:40:02Z INFO  [metrics] Active DB connections=78
+2026-04-16T11:40:03Z INFO  [metrics] Active DB connections=85
+2026-04-16T11:40:04Z WARN  [db] Connection pool nearing exhaustion
+2026-04-16T11:40:05Z INFO  [metrics] Active DB connections=92
+2026-04-16T11:40:06Z ERROR [db] Timeout acquiring connection
+2026-04-16T11:40:06Z WARN  [orders-service] Retrying DB query
+2026-04-16T11:40:07Z INFO  [metrics] Active DB connections=96
+2026-04-16T11:40:08Z ERROR [db] Connection pool exhausted
+2026-04-16T11:40:09Z ERROR [orders-service] Failed to persist order id=ord_7712
+2026-04-16T11:40:10Z INFO  [metrics] DB max connections=100
+2026-04-16T11:40:11Z WARN  [orders-service] High latency detected
+2026-04-16T11:40:12Z ERROR [db] FATAL: remaining connection slots are reserved for superuser
+2026-04-16T11:40:13Z WARN  [orders-service] Backpressure applied
+2026-04-16T11:40:14Z INFO  [metrics] Request latency p95=2100ms
+2026-04-16T11:40:15Z ERROR [orders-service] Timeout saving order
+2026-04-16T11:40:16Z INFO  [autoscaler] Scaling workers
+2026-04-16T11:40:17Z WARN  [db] Retry queue increasing
+2026-04-16T11:40:18Z INFO  [metrics] Active DB connections=100
+2026-04-16T11:40:19Z ERROR [db] FATAL: sorry, too many clients already
+2026-04-16T11:40:20Z ERROR [orders-service] Transaction failed
+2026-04-16T11:40:21Z WARN  [orders-service] Retrying operation
+2026-04-16T11:40:22Z INFO  [metrics] Latency p95=2500ms
+2026-04-16T11:40:23Z ERROR [db] Cannot acquire connection
+2026-04-16T11:40:24Z WARN  [queue] Order backlog increasing
+2026-04-16T11:40:25Z INFO  [metrics] Queue depth=5000
+2026-04-16T11:40:26Z INFO  [metrics] Queue depth=8000
+2026-04-16T11:40:27Z ERROR [orders-service] Order processing delayed
+2026-04-16T11:40:28Z WARN  [db] High contention detected
+2026-04-16T11:40:29Z INFO  [metrics] Active DB connections=100
+2026-04-16T11:40:30Z ERROR [orders-service] Failed retry
+2026-04-16T11:40:31Z INFO  [deployment] Reducing worker replicas
+2026-04-16T11:40:32Z INFO  [db] Connection pool size adjusted
+2026-04-16T11:40:33Z INFO  [metrics] Active DB connections=78
+2026-04-16T11:40:34Z INFO  [orders-service] Stabilizing
+2026-04-16T11:40:35Z INFO  [metrics] Latency p95=600ms
+2026-04-16T11:40:36Z INFO  [orders-service] Recovery in progress
+2026-04-16T11:40:37Z INFO  [queue] Backlog draining
+2026-04-16T11:40:38Z INFO  [orders-service] Normal operations resumed
