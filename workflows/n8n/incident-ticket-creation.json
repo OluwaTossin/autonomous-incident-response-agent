@@ -27,7 +27,7 @@
           "conditions": [
             {
               "id": "esc",
-              "leftValue": "={{ $json.escalate }}",
+              "leftValue": "={{ $json.body.escalate }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -52,7 +52,7 @@
         "url": "={{ ($env.TRIAGE_API_BASE || 'http://host.docker.internal:8000') + '/n8n/mock-jira/issue' }}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ summary: $json.incident_summary || 'Incident', description: JSON.stringify($json.recommended_actions || []) }) }}",
+        "jsonBody": "={{ JSON.stringify({ summary: $json.body.incident_summary || 'Incident', description: JSON.stringify($json.body.recommended_actions || []) }) }}",
         "options": {}
       },
       "id": "http-jira",

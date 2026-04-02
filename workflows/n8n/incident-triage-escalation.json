@@ -27,7 +27,7 @@
           "conditions": [
             {
               "id": "crit",
-              "leftValue": "={{ $json.severity }}",
+              "leftValue": "={{ $json.body.severity }}",
               "rightValue": "CRITICAL",
               "operator": {
                 "type": "string",
@@ -52,7 +52,7 @@
         "url": "={{ $env.SLACK_WEBHOOK_URL }}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ text: '*CRITICAL incident (triage)*\\n```' + JSON.stringify($json, null, 2) + '```' }) }}",
+        "jsonBody": "={{ JSON.stringify({ text: '*CRITICAL incident (triage)*\\n```' + JSON.stringify($json.body, null, 2) + '```' }) }}",
         "options": {}
       },
       "id": "http-slack",
@@ -67,7 +67,7 @@
         "url": "={{ ($env.TRIAGE_API_BASE || 'http://host.docker.internal:8000') + '/n8n/workflow-log' }}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ workflow: 'incident-triage-escalation', triage: $('Webhook').item.json }) }}",
+        "jsonBody": "={{ JSON.stringify({ workflow: 'incident-triage-escalation', triage: $('Webhook').item.json.body }) }}",
         "options": {}
       },
       "id": "http-log",
@@ -79,7 +79,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: true, action: 'slack_and_log', severity: $('Webhook').item.json.severity }) }}",
+        "responseBody": "={{ JSON.stringify({ ok: true, action: 'slack_and_log', severity: $('Webhook').item.json.body.severity }) }}",
         "options": {}
       },
       "id": "respond-ok",
@@ -91,7 +91,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: true, action: 'no_notification', severity: $json.severity }) }}",
+        "responseBody": "={{ JSON.stringify({ ok: true, action: 'no_notification', severity: $json.body.severity }) }}",
         "options": {}
       },
       "id": "respond-skip",

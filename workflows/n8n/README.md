@@ -42,8 +42,8 @@ docker compose -f docker-compose.n8n.yml up -d
 
 ### `incident-triage-escalation`
 
-1. **Webhook** accepts a **flat triage JSON** object (same fields as `POST /triage` returns).
-2. If **`severity === "CRITICAL"`**:
+1. **Webhook** accepts JSON in the **HTTP body** (same shape as `POST /triage` returns). n8n exposes that payload as **`$json.body`** in expressions — the workflows use `body.severity`, `body.escalate`, etc.
+2. If **`body.severity === "CRITICAL"`**:
    - **Notify Slack** — `POST` to `$env.SLACK_WEBHOOK_URL` with the triage JSON in the message text.
    - **Workflow log** — `POST` to `{TRIAGE_API_BASE}/n8n/workflow-log` with the triage body (append-only JSONL on the API host: `data/logs/n8n_workflow_events.jsonl`, gitignored).
 3. **Respond to Webhook** — JSON status (`slack_and_log` vs `no_notification`).
@@ -52,14 +52,14 @@ If `SLACK_WEBHOOK_URL` is empty, the CRITICAL branch fails at the HTTP node — 
 
 ### `incident-ticket-creation`
 
-1. **Webhook** accepts a **flat triage JSON** object.
-2. If **`escalate === true`** (boolean):
+1. **Webhook** accepts triage-shaped JSON in the HTTP body (available as **`$json.body`**).
+2. If **`body.escalate === true`** (boolean):
    - **Mock Jira create** — `POST {TRIAGE_API_BASE}/n8n/mock-jira/issue` with summary + description derived from triage.
 3. **Respond** — includes mock `ticket` key or `not_escalated`.
 
 ## Test with curl
 
-POST the **triage JSON** directly (no wrapper):
+POST the **triage JSON** as the request body (no extra wrapper — n8n still maps it to **`$json.body`** internally):
 
 ```bash
 # Not critical → no Slack branch
@@ -85,6 +85,8 @@ To test **CRITICAL** + Slack, set `"severity":"CRITICAL"` and a valid `SLACK_WEB
 ## Import / version notes
 
 Workflows were authored for **n8n 1.73.x** (see `docker-compose.n8n.yml` image tag). If import errors appear on a newer n8n, recreate the same graph in the UI from this README or adjust node type versions in the JSON.
+
+If **IF** conditions never match (e.g. always `not_escalated` / `no_notification`), your editor may be using old expressions: ensure **Is CRITICAL** uses `$json.body.severity` and **Should escalate** uses `$json.body.escalate` — re-import the JSON from this repo or fix the expressions in the UI.
 
 ## End-to-end with real triage
 
