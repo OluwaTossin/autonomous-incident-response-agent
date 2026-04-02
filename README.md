@@ -1,6 +1,8 @@
 # Autonomous DevOps Incident Response Agent
 
-AI-assisted incident triage: ingest alerts, retrieve runbooks and historical context, reason over logs, classify severity, suggest remediation, and (later) trigger workflows via n8n and deploy on AWS.
+**What this is:** an **AI-powered incident triage and diagnosis engine** — RAG over runbooks/incidents/logs, multi-source context fusion with the alert payload, heuristic guardrails plus LLM structured reasoning, and an action / escalation layer. That pattern matches **AIOps** assistants, **SRE copilots**, and internal reliability tooling at large shops.
+
+Operational scope today: ingest alerts (JSON), retrieve knowledge, return structured triage JSON. Later: workflows (n8n) and AWS deploy. For an explicit capability breakdown and the **~10% roadmap** (evidence attribution, contradiction handling, timelines), see [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md).
 
 **Owner:** Oluwatosin Jegede  
 **Plan:** Phases and deliverables are tracked in this README; keep a private `execution.md` in the repo root if you want a longer checklist (file is gitignored).
@@ -26,6 +28,7 @@ Secrets live in **`.env`** at the repo root (copy from [`.env.example`](.env.exa
 |------|---------|
 | `execution.md` (local, gitignored) | Optional private build sequence and checklists |
 | [`docs/decisions/`](docs/decisions/) | ADRs / product definition |
+| [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md) | Accurate product classification + elite-system roadmap |
 | [`docs/architecture/`](docs/architecture/) | **[Architecture diagram](docs/architecture/README.md)** (`architectural-diagram.png` at repo root) |
 | [`data/runbooks/`](data/runbooks/) | SRE-style procedural runbooks (`RB-*` IDs) |
 | [`data/incidents/`](data/incidents/) | Synthetic postmortem-style incidents (`INC-*`) |

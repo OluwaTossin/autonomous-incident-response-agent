@@ -159,6 +159,14 @@ def node_decision(state: TriageState) -> dict[str, Any]:
     return {"draft": draft}
 
 
+def _empty_triage_extras() -> dict[str, Any]:
+    return {
+        "evidence": [],
+        "conflicting_signals_summary": None,
+        "timeline": [],
+    }
+
+
 def node_output_formatter(state: TriageState) -> dict[str, Any]:
     if err := state.get("error"):
         return {
@@ -170,6 +178,7 @@ def node_output_formatter(state: TriageState) -> dict[str, Any]:
                 "recommended_actions": ["Fix the reported error and retry triage."],
                 "escalate": False,
                 "confidence": 0.0,
+                **_empty_triage_extras(),
             }
         }
     draft = state.get("draft") or {}
@@ -186,5 +195,6 @@ def node_output_formatter(state: TriageState) -> dict[str, Any]:
                 "recommended_actions": ["Validate agent output schema"],
                 "escalate": bool(draft.get("escalate", False)),
                 "confidence": 0.0,
+                **_empty_triage_extras(),
             },
         }

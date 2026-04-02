@@ -60,8 +60,11 @@ The system shall return a **structured triage result** suitable for display, log
 | **Likely root cause** | Hypothesis grounded in retrieved context; must be labeled as hypothesis, not fact. |
 | **Recommended remediation** | Ordered, actionable steps (can reference runbook IDs or titles). |
 | **Escalation decision** | Boolean or enum: whether to escalate (page next tier, leadership, vendor, etc.). |
+| **Evidence attribution** *(extended)* | List of `{ type, source, reason }` tying conclusions to corpus files and payload slices. |
+| **Contradiction / multi-cause** *(extended)* | Optional summary when signals imply more than one primary failure mode. |
+| **Timeline** *(extended)* | Ordered event strings (relative or ISO) for temporal orientation. |
 
-A machine-readable JSON shape (for API and agents) is specified in **execution.md** Phase 4; this document defines **semantic** requirements only.
+The canonical Pydantic schema lives in [`app/models/triage.py`](../../app/models/triage.py). Product framing and roadmap for the extended fields are in [`capabilities-and-roadmap.md`](capabilities-and-roadmap.md). This document defines **semantic** requirements; keep a private root `execution.md` for personal phase checklists if you use one.
 
 ---
 
@@ -78,7 +81,7 @@ A machine-readable JSON shape (for API and agents) is specified in **execution.m
 
 ## Explicit non-goals (initial version)
 
-- Fully automated remediation without human review (unless later gated — see execution.md Phase 14).
+- Fully automated remediation without human review (unless later gated in your local execution plan).
 - Guaranteed root-cause correctness (LLM + RAG produce **hypotheses**; humans verify).
 - Replacement of the authoritative monitoring or ticketing system of record.
 
@@ -95,4 +98,4 @@ A machine-readable JSON shape (for API and agents) is specified in **execution.m
 ## References
 
 - Sample operational procedure: `data/runbooks/sample-runbook-01.md`
-- Build order and phases: `execution.md`
+- Build order / phases: maintainer-local `execution.md` (gitignored) or this repo’s [`README.md`](../../README.md)
