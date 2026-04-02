@@ -5,21 +5,66 @@
 Operational scope today: ingest alerts (JSON), retrieve knowledge, return structured triage JSON. Later: workflows (n8n) and AWS deploy. For an explicit capability breakdown and the **~10% roadmap** (evidence attribution, contradiction handling, timelines), see [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md).
 
 **Owner:** Oluwatosin Jegede  
-**Plan:** Phases and deliverables are tracked in this README; keep a private `execution.md` in the repo root if you want a longer checklist (file is gitignored).
+**Plan:** Phases **1–5** are summarized below; optional private notes in root `execution.md` (gitignored).
+
+Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_dotenv` only reads `.env`**. Never commit `.env` or real keys in `.env.example`.
 
 ---
 
-## Current status
+## Build progress: Phases 1–5 (complete)
 
-| Phase | Status | Notes |
-|-------|--------|--------|
+| Phase | Status | Primary artifacts |
+|-------|--------|---------------------|
 | **1** — Problem definition | Done | [`docs/decisions/problem-definition.md`](docs/decisions/problem-definition.md) |
-| **2** — Knowledge & sample data | **Done** | Runbooks, incidents, logs, `data/knowledge_base/` |
-| **3** — Local RAG | **Done** | `app/rag/` + FAISS; `uv run python -m app.rag.cli build-index` / `query "…"` |
-| **4** — LangGraph agent | **Done** | `app/agent/` + `uv run triage -f examples/sample_incident_payload.json` |
-| **5** — API layer | **Done** | `app/api/` — FastAPI: `GET /health`, `GET /version`, `POST /ingest-incident`, `POST /triage` |
+| **2** — Knowledge & sample data | Done | [`data/runbooks/`](data/runbooks/), [`data/incidents/`](data/incidents/), [`data/logs/`](data/logs/), [`data/knowledge_base/`](data/knowledge_base/) |
+| **3** — Local RAG | Done | [`app/rag/`](app/rag/) · FAISS index under `.rag_index/` (gitignored) |
+| **4** — LangGraph triage agent | Done | [`app/agent/`](app/agent/), [`app/models/`](app/models/) |
+| **5** — HTTP API | Done | [`app/api/`](app/api/) · FastAPI + JSONL audit log |
 
-Secrets live in **`.env`** at the repo root (copy from [`.env.example`](.env.example)). **`load_dotenv` only reads `.env`** — not `.env.example`. Never commit `.env` or put real keys in `.env.example`.
+### Phase 1 — Problem definition
+
+- **Deliverable:** Product boundary and I/O semantics — who triggers the system, minimum incident payload fields, required triage outputs (summary, severity, hypothesis, actions, escalation).
+- **Doc:** [`docs/decisions/problem-definition.md`](docs/decisions/problem-definition.md) (also references extended schema in code).
+
+### Phase 2 — Knowledge & sample data
+
+- **Deliverable:** Synthetic **operational corpus** for retrieval and demos (not production data).
+- **Layout:** Runbooks under `data/runbooks/` (RAG corpus; procedures with `RB-*` IDs). Incidents under `data/incidents/` (`incident-*.md` narratives). Log bundles under `data/logs/` (`*.log` + conventions in `sample-log.md`). Supplementary ops context in `data/knowledge_base/` (escalation, ownership, first-response).
+- **Reference:** [`data/README.md`](data/README.md) for globs and counts.
+
+### Phase 3 — Local RAG
+
+- **Deliverable:** Chunk → embed → FAISS index; top‑k retrieval with scores, `doc_type`, and `source` paths.
+- **Code:** [`app/rag/`](app/rag/) (`config`, loader, chunking, embeddings, index, [`retrieve`](app/rag/retrieve.py)).
+- **Corpus globs (repo root):** `data/runbooks/**/*.md`, `data/incidents/incident-*.md`, `data/logs/*.log`, `data/knowledge_base/**/*.md`, `docs/decisions/**/*.md`.
+- **Commands:** `uv run rag-build` / `uv run python -m app.rag.cli build-index`; `uv run rag-query "…"` or `query` subcommand.
+- **Config:** `OPENAI_API_KEY` (or OpenRouter + base URL), `EMBEDDING_MODEL`, `RAG_INDEX_DIR` (see `.env.example`).
+
+### Phase 4 — LangGraph triage agent
+
+- **Deliverable:** Incident JSON → normalized narrative → **same retrieval query as RAG** → LLM structured triage + guardrails.
+- **Graph (nodes):** `normalize_input` → `retrieval` → `analysis` → `enrich_triage` → `decision` → `output_formatter`.
+- **Models:** [`app/models/incident.py`](app/models/incident.py) (payload), [`app/models/triage.py`](app/models/triage.py) — `TriageOutput` includes `evidence[]`, `conflicting_signals_summary`, `timeline` (plus core fields).
+- **Deterministic layer:** [`app/agent/signal_reasoning.py`](app/agent/signal_reasoning.py) merges **programmatic evidence** from retrieval hits, **multi-signal contradiction** heuristics on the payload, and **programmatic timeline** extraction; merged with the LLM draft in `enrich_triage`.
+- **API for automation:** `run_triage(incident)` and `run_triage_with_audit(incident)` → `(result, {rag_context, retrieval_hits})` in [`app/agent/graph.py`](app/agent/graph.py).
+- **CLI:** `uv run triage -f examples/sample_incident_payload.json` (needs `.env`, built index, chat-capable model).
+- **Product framing:** [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md).
+
+### Phase 5 — HTTP API (FastAPI)
+
+- **Deliverable:** Local backend for ingest validation and full triage over HTTP.
+- **Endpoints:** `GET /` (service discovery), `GET /health`, `GET /version`, `POST /ingest-incident` (validate + normalize only), `POST /triage` (full pipeline; response body is **only** the triage JSON, same shape as CLI).
+- **Run:** `uv run serve-api` or `uvicorn app.api.main:app` (optional `API_HOST`, `API_PORT`). OpenAPI: `/docs`.
+- **Audit log:** Each `POST /triage` appends one line to `data/logs/triage_outputs.jsonl` (**gitignored**): `timestamp`, `input`, `output`, **`retrieved_context`**, **`top_k_sources`**. Env: `TRIAGE_AUDIT_DISABLE`, `TRIAGE_AUDIT_JSONL`, `TRIAGE_AUDIT_MAX_RAG_CHARS`. How to validate: [`docs/decisions/triage-audit-validation.md`](docs/decisions/triage-audit-validation.md).
+
+### Tests
+
+- **Command:** `uv run pytest` (unit + integration; integration mocks LLM where needed).
+- **Layout:** `tests/unit/`, `tests/integration/`.
+
+### Next (not in Phases 1–5)
+
+- **Phase 6+:** n8n workflows, UI, evaluation harness, Docker, AWS/Terraform, CI/CD — see your local `execution.md` or future README updates.
 
 ---
 
@@ -99,8 +144,6 @@ curl -s -X POST http://127.0.0.1:8000/triage -H "Content-Type: application/json"
 
 OpenAPI: `http://127.0.0.1:8000/docs`
 
-Each successful `POST /triage` appends one JSONL line: `timestamp`, `input`, `output`, **`retrieved_context`** (same RAG text the model sees), **`top_k_sources`** (ranked retrieval metadata for debugging). File: **`data/logs/triage_outputs.jsonl`** (gitignored). Env: `TRIAGE_AUDIT_DISABLE`, `TRIAGE_AUDIT_JSONL`, `TRIAGE_AUDIT_MAX_RAG_CHARS` (see `.env.example`). **Validation checklist:** [`docs/decisions/triage-audit-validation.md`](docs/decisions/triage-audit-validation.md) (multi-line inspect, schema, leakage, future `expected_severity` eval).
-
 If `POST /triage` returns `{"detail":"Not Found"}`, something else is bound to that port or an old server is running. Check with `curl -s http://127.0.0.1:8000/` — you should see `service: autonomous-incident-response-agent` and `triage: POST /triage`. Then restart: `uv run serve-api` (or `uvicorn app.api.main:app` from the repo root).
 
 Set `LLM_MODEL` (default `gpt-4o-mini`) in `.env` if needed. Chat uses the same `OPENAI_API_KEY` / `OPENAI_API_BASE` as embeddings unless you split providers later.
@@ -112,20 +155,6 @@ uv lock
 ```
 
 [`requirements.txt`](requirements.txt) is an optional mirror for non-uv workflows; **prefer `uv sync`**.
-
----
-
-## Phase 3 — RAG corpus (already wired in code)
-
-The loader indexes (from repo root):
-
-- `data/runbooks/**/*.md`
-- `data/incidents/incident-*.md`, `sample-incident.md`
-- `data/logs/*.log`
-- `data/knowledge_base/**/*.md`
-- `docs/decisions/**/*.md`
-
-Set `OPENAI_API_KEY` (or `OPENROUTER_API_KEY` + `OPENAI_API_BASE` if your provider is OpenAI-compatible). See [`.env.example`](.env.example).
 
 ---
 
