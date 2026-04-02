@@ -25,6 +25,7 @@ Secrets: copy [`.env.example`](.env.example) to `.env` (never commit `.env`). Th
 |------|---------|
 | [`execution.md`](execution.md) | Build sequence and checklists |
 | [`docs/decisions/`](docs/decisions/) | ADRs / product definition |
+| [`docs/architecture/`](docs/architecture/) | **[Architecture diagram](docs/architecture/README.md)** (`architectural-diagram.png` at repo root) |
 | [`docs/runbooks/`](docs/runbooks/) | SRE-style procedural runbooks (`RB-*` IDs) |
 | [`data/incidents/`](data/incidents/) | Synthetic postmortem-style incidents (`INC-*`) |
 | [`data/logs/`](data/logs/) | Synthetic log bundles + [`sample-log.md`](data/logs/sample-log.md) |

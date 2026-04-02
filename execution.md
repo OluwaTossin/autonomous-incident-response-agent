@@ -30,6 +30,8 @@ Build an AI-powered incident response system that can:
 
 ## 2. What you are building (five parts)
 
+**Visual:** [`docs/architecture/README.md`](docs/architecture/README.md) (diagram: `architectural-diagram.png`).
+
 | Layer | Role |
 |--------|------|
 | **Ingress** | Receives incident events (UI, webhook, monitoring). |
