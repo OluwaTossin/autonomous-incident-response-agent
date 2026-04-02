@@ -19,6 +19,7 @@ def test_root_lists_endpoints() -> None:
     assert data["service"] == "autonomous-incident-response-agent"
     assert data["triage"] == "POST /triage"
     assert data["docs"] == "/docs"
+    assert data["gradio_ui"] == "/ui"
 
 
 def test_health() -> None:
@@ -75,7 +76,7 @@ def test_triage_calls_graph(fake_triage: dict) -> None:
             {"score": 0.5, "source": "data/logs/a.log", "doc_type": "log", "chunk_index": 0},
         ],
     }
-    with patch("app.api.main.run_triage_with_audit", return_value=(fake_triage, audit)) as m:
+    with patch("app.api.triage_execution.run_triage_with_audit", return_value=(fake_triage, audit)) as m:
         r = client.post(
             "/triage",
             json={"alert_title": "x", "service_name": "y"},

@@ -2,16 +2,16 @@
 
 **What this is:** an **AI-powered incident triage and diagnosis engine** — RAG over runbooks/incidents/logs, multi-source context fusion with the alert payload, heuristic guardrails plus LLM structured reasoning, and an action / escalation layer. That pattern matches **AIOps** assistants, **SRE copilots**, and internal reliability tooling at large shops.
 
-Operational scope today: ingest alerts (JSON), retrieve knowledge, return structured triage JSON over HTTP, and drive **n8n** webhooks (Slack + mock ticketing). Later: UI, eval harness, full stack Docker, AWS deploy. For an explicit capability breakdown and the **~10% roadmap** (evidence attribution, contradiction handling, timelines), see [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md).
+Operational scope today: ingest alerts (JSON), retrieve knowledge, return structured triage JSON over HTTP, optional **Gradio** console at `/ui`, and **n8n** webhooks (Slack + mock ticketing). Later: eval harness, full stack Docker, AWS deploy. For an explicit capability breakdown and the **~10% roadmap** (evidence attribution, contradiction handling, timelines), see [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md).
 
 **Owner:** Oluwatosin Jegede  
-**Plan:** Phases **1–6** are summarized below; optional private notes in root `execution.md` (gitignored).
+**Plan:** Phases **1–7** are summarized below; optional private notes in root `execution.md` (gitignored).
 
 Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_dotenv` only reads `.env`**. Never commit `.env` or real keys in `.env.example`.
 
 ---
 
-## Build progress: Phases 1–6 (through n8n layer)
+## Build progress: Phases 1–7
 
 | Phase | Status | Primary artifacts |
 |-------|--------|---------------------|
@@ -21,6 +21,7 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 | **4** — LangGraph triage agent | Done | [`app/agent/`](app/agent/), [`app/models/`](app/models/) |
 | **5** — HTTP API | Done | [`app/api/`](app/api/) · FastAPI + JSONL audit log |
 | **6** — n8n execution layer | Done | [`workflows/n8n/`](workflows/n8n/) · [`docker-compose.n8n.yml`](docker-compose.n8n.yml) · `POST /n8n/*` helpers |
+| **7** — Minimal UI | Done | [`app/ui/`](app/ui/) · Gradio at **`/ui`** (`uv sync --extra ui`) |
 
 ### Phase 1 — Problem definition
 
@@ -75,9 +76,17 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 - **Command:** `uv run pytest` (unit + integration; integration mocks LLM where needed).
 - **Layout:** `tests/unit/`, `tests/integration/`.
 
-### Next (Phase 7+)
+### Phase 7 — Minimal UI (Gradio)
 
-- **Phase 7+:** Minimal UI (e.g. Gradio), evaluation harness, full `docker-compose` stack, AWS/Terraform, CI/CD — see your local `execution.md` or future README updates.
+- **Deliverable:** Browser console on the **same process** as the API — paste incident JSON, run triage (same graph + audit as `POST /triage`), copy **`triage_id`**, submit **feedback** rows to `triage_feedback.jsonl`.
+- **Install:** `uv sync --extra ui` (adds Gradio).
+- **Run:** `uv run serve-api` → open **http://127.0.0.1:8000/ui** (with default host/port). Disable the mount with **`ENABLE_GRADIO_UI=0`** (pytest sets this automatically).
+- **Code:** [`app/ui/gradio_app.py`](app/ui/gradio_app.py) · display helpers [`app/ui/triage_display.py`](app/ui/triage_display.py) · shared runner [`app/api/triage_execution.py`](app/api/triage_execution.py).
+- **UX:** Severity badge, color-coded confidence bar, sectioned summary / root cause / actions / timeline, evidence grouped (logs · incidents · metrics · runbooks/knowledge) in `<details>`, collapsible raw JSON, links to `/docs`, copy **`triage_id`**, Gradio toasts (`Success` / `Warning`), feedback button re-enabled on each new triage run.
+
+### Next (Phase 8+)
+
+- **Phase 8+:** Evaluation harness, full `docker-compose` stack (API + index + n8n), AWS/Terraform, CI/CD — see your local `execution.md` or future README updates.
 
 ---
 
@@ -95,7 +104,7 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 | [`data/logs/`](data/logs/) | Synthetic log bundles + [`sample-log.md`](data/logs/sample-log.md) |
 | [`data/knowledge_base/`](data/knowledge_base/) | Escalation, ownership, tiers, first-response notes |
 | [`data/README.md`](data/README.md) | Data layout and ingestion globs |
-| `app/` | `app/rag/`, `app/agent/`, `app/api/` (FastAPI), `app/models/` |
+| `app/` | `app/rag/`, `app/agent/`, `app/api/` (FastAPI), `app/models/`, `app/ui/` (Gradio) |
 | [`examples/sample_incident_payload.json`](examples/sample_incident_payload.json) | Sample JSON for `triage` CLI |
 | [`workflows/n8n/`](workflows/n8n/) | n8n workflow JSON + Phase 6 runbook |
 | [`docker-compose.n8n.yml`](docker-compose.n8n.yml) | Local n8n service (Phase 6) |
@@ -157,6 +166,14 @@ curl -s -X POST http://127.0.0.1:8000/triage -H "Content-Type: application/json"
 ```
 
 OpenAPI: `http://127.0.0.1:8000/docs`
+
+**Phase 7 — Gradio UI (optional extra, same server as Phase 5):**
+
+```bash
+uv sync --extra ui
+uv run serve-api
+# Browser: http://127.0.0.1:8000/ui
+```
 
 **Phase 6 — n8n (parallel terminal, API must still be running):**
 

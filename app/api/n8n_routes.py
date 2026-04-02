@@ -86,13 +86,11 @@ def workflow_log(event: dict[str, Any] = Body(...)) -> dict[str, str]:
     return {"status": "logged"}
 
 
-@router.post("/triage-feedback")
-def triage_feedback(event: dict[str, Any] = Body(...)) -> dict[str, str]:
+def record_triage_feedback(event: dict[str, Any]) -> dict[str, str]:
     """
-    Append human feedback after an escalation (diagnosis correct, actions useful, notes).
+    Append one feedback JSONL line (same persistence as ``POST /n8n/triage-feedback``).
 
-    Include **triage_id** (UUID from ``POST /triage``) so rows join to ``triage_outputs.jsonl``.
-    Disable with N8N_TRIAGE_FEEDBACK_DISABLE=1.
+    Used by the HTTP route and the Phase 7 Gradio UI.
     """
     if os.environ.get("N8N_TRIAGE_FEEDBACK_DISABLE", "").lower() in ("1", "true", "yes"):
         return {"status": "skipped"}
@@ -115,3 +113,14 @@ def triage_feedback(event: dict[str, Any] = Body(...)) -> dict[str, str]:
         logger.warning("n8n triage feedback write failed (%s): %s", path, e)
         return {"status": "error"}
     return {"status": "logged"}
+
+
+@router.post("/triage-feedback")
+def triage_feedback(event: dict[str, Any] = Body(...)) -> dict[str, str]:
+    """
+    Append human feedback after an escalation (diagnosis correct, actions useful, notes).
+
+    Include **triage_id** (UUID from ``POST /triage``) so rows join to ``triage_outputs.jsonl``.
+    Disable with N8N_TRIAGE_FEEDBACK_DISABLE=1.
+    """
+    return record_triage_feedback(event)

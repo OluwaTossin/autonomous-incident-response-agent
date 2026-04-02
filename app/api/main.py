@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
 from typing import Any
-from uuid import uuid4
 
 from fastapi import Body, FastAPI, HTTPException
 from pydantic import ValidationError
 
-from app.agent.graph import run_triage_with_audit
 from app.agent.nodes import parse_incident_payload
-from app.api.audit import append_triage_jsonl
 from app.api.n8n_routes import router as n8n_router
+from app.api.triage_execution import run_full_triage
 
 # Keep in sync with pyproject [project].version
 SERVICE_VERSION = "0.1.0"
@@ -20,7 +19,7 @@ SERVICE_VERSION = "0.1.0"
 app = FastAPI(
     title="Autonomous Incident Response API",
     version=SERVICE_VERSION,
-    description="Incident ingest and LangGraph triage with RAG (Phase 5–6).",
+    description="Incident ingest and LangGraph triage with RAG (Phase 5–7).",
 )
 
 app.include_router(n8n_router)
@@ -40,6 +39,7 @@ def root() -> dict[str, Any]:
         "n8n_mock_jira": "POST /n8n/mock-jira/issue",
         "n8n_workflow_log": "POST /n8n/workflow-log",
         "n8n_triage_feedback": "POST /n8n/triage-feedback",
+        "gradio_ui": "/ui",
     }
 
 
@@ -113,15 +113,19 @@ def post_triage(
     ),
 ) -> dict[str, Any]:
     """Run retrieval + LangGraph agent; return structured triage JSON with ``triage_id`` for feedback join."""
-    _validate_incident_body(body)
-    triage_id = str(uuid4())
-    result, audit_meta = run_triage_with_audit(body)
-    result_out = {**result, "triage_id": triage_id}
-    append_triage_jsonl(
-        body,
-        result_out,
-        triage_id=triage_id,
-        rag_context=audit_meta.get("rag_context"),
-        retrieval_hits=audit_meta.get("retrieval_hits"),
-    )
-    return result_out
+    incident = _validate_incident_body(body)
+    return run_full_triage(incident)
+
+
+def _with_optional_gradio(application: FastAPI) -> FastAPI:
+    if os.environ.get("ENABLE_GRADIO_UI", "1").lower() in ("0", "false", "no"):
+        return application
+    try:
+        from app.ui.gradio_app import with_gradio_ui
+
+        return with_gradio_ui(application)
+    except ImportError:
+        return application
+
+
+app = _with_optional_gradio(app)
