@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from app.agent.graph import run_triage_with_audit
 from app.agent.nodes import parse_incident_payload
 from app.api.audit import append_triage_jsonl
+from app.api.n8n_routes import router as n8n_router
 
 # Keep in sync with pyproject [project].version
 SERVICE_VERSION = "0.1.0"
@@ -18,8 +19,10 @@ SERVICE_VERSION = "0.1.0"
 app = FastAPI(
     title="Autonomous Incident Response API",
     version=SERVICE_VERSION,
-    description="Incident ingest and LangGraph triage with RAG (Phase 5).",
+    description="Incident ingest and LangGraph triage with RAG (Phase 5–6).",
 )
+
+app.include_router(n8n_router)
 
 
 @app.get("/")
@@ -33,6 +36,8 @@ def root() -> dict[str, Any]:
         "version_path": "/version",
         "ingest": "POST /ingest-incident",
         "triage": "POST /triage",
+        "n8n_mock_jira": "POST /n8n/mock-jira/issue",
+        "n8n_workflow_log": "POST /n8n/workflow-log",
     }
 
 

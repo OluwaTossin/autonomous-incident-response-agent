@@ -12,8 +12,8 @@ High-level view of the **Autonomous DevOps Incident Response System**: alerts an
 
 | Diagram area | Implementation (by phase) |
 |--------------|---------------------------|
-| Monitoring / Slack / engineer ingress | Phase 5–6: FastAPI + webhooks; optional Slack intake |
-| API Gateway & Webhook | Phase 5: `app/api/` |
+| Monitoring / Slack / engineer ingress | Phase 5–6: FastAPI + n8n webhooks; Slack via n8n when CRITICAL |
+| API Gateway & Webhook | Phase 5: `app/api/` · Phase 6: `workflows/n8n/` + `docker-compose.n8n.yml` |
 | LLM Agent (LangChain / LangGraph) | Phase 4: `app/agent/` |
 | RAG + logs & runbooks + vector store | Phase 3: `app/rag/` + corpora under `data/` and `data/runbooks/` |
 | Response API | Phase 5: structured triage JSON over HTTP |

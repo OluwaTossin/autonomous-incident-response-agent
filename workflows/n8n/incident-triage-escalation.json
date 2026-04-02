@@ -1,0 +1,130 @@
+{
+  "name": "incident-triage-escalation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "triage-escalation",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-triage-esc",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "triage-escalation"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "crit",
+              "leftValue": "={{ $json.severity }}",
+              "rightValue": "CRITICAL",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-critical",
+      "name": "Is CRITICAL",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: '*CRITICAL incident (triage)*\\n```' + JSON.stringify($json, null, 2) + '```' }) }}",
+        "options": {}
+      },
+      "id": "http-slack",
+      "name": "Notify Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.TRIAGE_API_BASE || 'http://host.docker.internal:8000') + '/n8n/workflow-log' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ workflow: 'incident-triage-escalation', triage: $('Webhook').item.json }) }}",
+        "options": {}
+      },
+      "id": "http-log",
+      "name": "Workflow log",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, action: 'slack_and_log', severity: $('Webhook').item.json.severity }) }}",
+        "options": {}
+      },
+      "id": "respond-ok",
+      "name": "Respond Critical",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, action: 'no_notification', severity: $json.severity }) }}",
+        "options": {}
+      },
+      "id": "respond-skip",
+      "name": "Respond Not Critical",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [680, 420]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Is CRITICAL", "type": "main", "index": 0 }]]
+    },
+    "Is CRITICAL": {
+      "main": [
+        [
+          { "node": "Notify Slack", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Respond Not Critical", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Notify Slack": {
+      "main": [[{ "node": "Workflow log", "type": "main", "index": 0 }]]
+    },
+    "Workflow log": {
+      "main": [[{ "node": "Respond Critical", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "tags": [],
+  "meta": { "templateCredsSetupCompleted": true }
+}

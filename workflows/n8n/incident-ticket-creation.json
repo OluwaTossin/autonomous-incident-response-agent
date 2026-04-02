@@ -1,0 +1,112 @@
+{
+  "name": "incident-ticket-creation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ticket-creation",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-ticket",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "ticket-creation"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "esc",
+              "leftValue": "={{ $json.escalate }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-escalate",
+      "name": "Should escalate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.TRIAGE_API_BASE || 'http://host.docker.internal:8000') + '/n8n/mock-jira/issue' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ summary: $json.incident_summary || 'Incident', description: JSON.stringify($json.recommended_actions || []) }) }}",
+        "options": {}
+      },
+      "id": "http-jira",
+      "name": "Mock Jira create",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, action: 'ticket_created', ticket: $json.key, jira: $json }) }}",
+        "options": {}
+      },
+      "id": "respond-ticket",
+      "name": "Respond With Ticket",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, action: 'not_escalated', ticket: null }) }}",
+        "options": {}
+      },
+      "id": "respond-no-ticket",
+      "name": "Respond No Ticket",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [680, 420]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Should escalate", "type": "main", "index": 0 }]]
+    },
+    "Should escalate": {
+      "main": [
+        [
+          { "node": "Mock Jira create", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Respond No Ticket", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Mock Jira create": {
+      "main": [[{ "node": "Respond With Ticket", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "tags": [],
+  "meta": { "templateCredsSetupCompleted": true }
+}

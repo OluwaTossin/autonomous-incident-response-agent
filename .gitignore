@@ -43,3 +43,4 @@ Thumbs.db
 
 # API triage audit (append-only JSONL; may contain alert text)
 data/logs/triage_outputs.jsonl
+data/logs/n8n_workflow_events.jsonl

@@ -1,0 +1,29 @@
+# Phase 6 — n8n only (run API separately: uv run serve-api)
+#
+# Usage:
+#   docker compose -f docker-compose.n8n.yml up -d
+#   open http://localhost:5678
+#
+# Workflows import: workflows/n8n/*.json (see workflows/n8n/README.md)
+
+services:
+  n8n:
+    image: n8nio/n8n:1.73.1
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678/
+      - GENERIC_TIMEZONE=UTC
+      # Passed into workflow expressions as $env.*
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      - TRIAGE_API_BASE=${TRIAGE_API_BASE:-http://host.docker.internal:8000}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - n8n_phase6_data:/home/node/.n8n
+
+volumes:
+  n8n_phase6_data:
