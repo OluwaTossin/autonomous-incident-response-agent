@@ -40,7 +40,7 @@ Read-only replica for job; statement timeout; separate **small pool** for batch 
 
 ## Runbooks
 
-- **Primary:** `RB-QUEUE-LAG-009` — `docs/runbooks/runbook-09-queue-backlog-worker-lag.md`
+- **Primary:** `RB-QUEUE-LAG-009` — `data/runbooks/runbook-09-queue-backlog-worker-lag.md`
 - **Related:** `RB-DB-CONN-004`, `RB-GEN-HIGH-CPU-001`
 
 ```json

@@ -39,7 +39,7 @@ Fix envFrom reference; re-enable sync; add **pre-delete** check that no Deployme
 
 ## Runbooks
 
-- **Primary:** `RB-K8S-CRASH-005` — `docs/runbooks/runbook-05-kubernetes-crashloopbackoff.md`
+- **Primary:** `RB-K8S-CRASH-005` — `data/runbooks/runbook-05-kubernetes-crashloopbackoff.md`
 - **Related:** `RB-HTTP-5XX-003`
 
 ```json

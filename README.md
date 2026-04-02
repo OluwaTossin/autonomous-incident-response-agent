@@ -27,7 +27,7 @@ Secrets live in **`.env`** at the repo root (copy from [`.env.example`](.env.exa
 | [`execution.md`](execution.md) | Build sequence and checklists |
 | [`docs/decisions/`](docs/decisions/) | ADRs / product definition |
 | [`docs/architecture/`](docs/architecture/) | **[Architecture diagram](docs/architecture/README.md)** (`architectural-diagram.png` at repo root) |
-| [`docs/runbooks/`](docs/runbooks/) | SRE-style procedural runbooks (`RB-*` IDs) |
+| [`data/runbooks/`](data/runbooks/) | SRE-style procedural runbooks (`RB-*` IDs) |
 | [`data/incidents/`](data/incidents/) | Synthetic postmortem-style incidents (`INC-*`) |
 | [`data/logs/`](data/logs/) | Synthetic log bundles + [`sample-log.md`](data/logs/sample-log.md) |
 | [`data/knowledge_base/`](data/knowledge_base/) | Escalation, ownership, tiers, first-response notes |
@@ -90,7 +90,7 @@ uv lock
 
 The loader indexes (from repo root):
 
-- `docs/runbooks/**/*.md`
+- `data/runbooks/**/*.md`
 - `data/incidents/incident-*.md`, `sample-incident.md`
 - `data/logs/*.log`
 - `data/knowledge_base/**/*.md`

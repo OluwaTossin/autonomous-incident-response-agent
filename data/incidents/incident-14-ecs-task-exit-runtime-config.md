@@ -39,7 +39,7 @@ Correct env; add **lint** in CDK for heap ≤ 0.75 × task memory.
 
 ## Runbooks
 
-- **Primary:** `RB-MEM-OOM-002` — `docs/runbooks/runbook-02-memory-pressure-oom.md`
+- **Primary:** `RB-MEM-OOM-002` — `data/runbooks/runbook-02-memory-pressure-oom.md`
 - **Related:** `RB-K8S-CRASH-005` *(analogous crash/restart loop patterns)*
 
 ```json

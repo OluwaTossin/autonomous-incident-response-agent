@@ -39,7 +39,7 @@ Increase allocated storage; tune autovacuum; add **predictive** alert on **free 
 
 ## Runbooks
 
-- **Primary:** `RB-DISK-SAT-006` — `docs/runbooks/runbook-06-disk-storage-saturation.md`
+- **Primary:** `RB-DISK-SAT-006` — `data/runbooks/runbook-06-disk-storage-saturation.md`
 - **Related:** `RB-DB-CONN-004`, `RB-HTTP-5XX-003`
 
 ```json

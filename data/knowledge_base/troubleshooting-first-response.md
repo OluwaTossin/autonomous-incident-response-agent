@@ -1,6 +1,6 @@
 # First-response checklist (first 15 minutes)
 
-Generic SRE sequence for **alert → bounded triage**. Pair with specific **`RB-*`** runbooks from `docs/runbooks/`.
+Generic SRE sequence for **alert → bounded triage**. Pair with specific **`RB-*`** runbooks from `data/runbooks/`.
 
 1. **Acknowledge** the page; open war room / ticket; note **UTC** time.  
 2. **Classify blast radius:** one service vs many, one region vs global.  

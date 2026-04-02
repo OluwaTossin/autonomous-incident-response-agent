@@ -74,4 +74,4 @@ Use this folder for **semantic** training; wire **Phase 8** evals to confirm the
 ## Related paths
 
 - Incidents: `data/incidents/sample-incident.md`
-- Runbooks: `docs/runbooks/`
+- Runbooks: `data/runbooks/`

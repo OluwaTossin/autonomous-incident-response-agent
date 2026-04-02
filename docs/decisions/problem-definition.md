@@ -94,5 +94,5 @@ A machine-readable JSON shape (for API and agents) is specified in **execution.m
 
 ## References
 
-- Sample operational procedure: `docs/runbooks/sample-runbook-01.md`
+- Sample operational procedure: `data/runbooks/sample-runbook-01.md`
 - Build order and phases: `execution.md`

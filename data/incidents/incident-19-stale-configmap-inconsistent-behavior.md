@@ -39,7 +39,7 @@ Annotate pod template with **checksum/config**; Reloader or equivalent; integrat
 
 ## Runbooks
 
-- **Primary:** `RB-K8S-CRASH-005` — `docs/runbooks/runbook-05-kubernetes-crashloopbackoff.md` *(config/consistency)*  
+- **Primary:** `RB-K8S-CRASH-005` — `data/runbooks/runbook-05-kubernetes-crashloopbackoff.md` *(config/consistency)*  
 - **Related:** `RB-HTTP-5XX-003`
 
 ```json

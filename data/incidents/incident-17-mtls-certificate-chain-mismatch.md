@@ -39,7 +39,7 @@ Full chain in Secret; CI **lint** `openssl verify -CAfile` against minimal trust
 
 ## Runbooks
 
-- **Primary:** `RB-TLS-CERT-007` — `docs/runbooks/runbook-07-ssl-tls-certificate-expiry.md`
+- **Primary:** `RB-TLS-CERT-007` — `data/runbooks/runbook-07-ssl-tls-certificate-expiry.md`
 - **Related:** `RB-HTTP-5XX-003`, `RB-EXT-API-008`
 
 ```json

@@ -9,11 +9,11 @@ Use this structure for **historical incidents**, **training data**, and **evalua
 
 ## How this ties to runbooks
 
-Each incident should cite at least one **`Runbook ID`** from `docs/runbooks/` (e.g. `RB-HTTP-5XX-003`). That lets RAG and triage agents retrieve **procedure** alongside **past narrative**.
+Each incident should cite at least one **`Runbook ID`** from `data/runbooks/` (e.g. `RB-HTTP-5XX-003`). That lets RAG and triage agents retrieve **procedure** alongside **past narrative**.
 
 | Runbook ID | Document |
 |------------|----------|
-| `RB-PAYMENT-API-HIGH-CPU-001` | `docs/runbooks/sample-runbook-01.md` |
+| `RB-PAYMENT-API-HIGH-CPU-001` | `data/runbooks/sample-runbook-01.md` |
 | `RB-GEN-HIGH-CPU-001` | `runbook-01-high-cpu-usage.md` |
 | `RB-MEM-OOM-002` | `runbook-02-memory-pressure-oom.md` |
 | `RB-HTTP-5XX-003` | `runbook-03-http-5xx-spike.md` |

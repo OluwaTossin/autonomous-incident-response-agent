@@ -40,7 +40,7 @@ Rollback deployment; emergency index created in maintenance window next day; re-
 
 ## Runbooks
 
-- **Primary:** `RB-GEN-HIGH-CPU-001` — `docs/runbooks/runbook-01-high-cpu-usage.md`
+- **Primary:** `RB-GEN-HIGH-CPU-001` — `data/runbooks/runbook-01-high-cpu-usage.md`
 - **Related:** `RB-PAYMENT-API-HIGH-CPU-001` (if payment-adjacent), `RB-HTTP-5XX-003`
 
 ## Follow-ups

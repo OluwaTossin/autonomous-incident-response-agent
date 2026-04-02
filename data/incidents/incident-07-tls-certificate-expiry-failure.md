@@ -39,7 +39,7 @@ New cert; re-enabled automation; imported all public names into **central cert i
 
 ## Runbooks
 
-- **Primary:** `RB-TLS-CERT-007` — `docs/runbooks/runbook-07-ssl-tls-certificate-expiry.md`
+- **Primary:** `RB-TLS-CERT-007` — `data/runbooks/runbook-07-ssl-tls-certificate-expiry.md`
 - **Related:** `RB-LB-HEALTH-010`, `RB-HTTP-5XX-003`
 
 ```json

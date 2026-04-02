@@ -39,7 +39,7 @@ Tuned retry policy; added **bulkhead** per dependency; degraded mode returns **q
 
 ## Runbooks
 
-- **Primary:** `RB-EXT-API-008` — `docs/runbooks/runbook-08-external-api-dependency-failure.md`
+- **Primary:** `RB-EXT-API-008` — `data/runbooks/runbook-08-external-api-dependency-failure.md`
 - **Related:** `RB-GEN-HIGH-CPU-001`, `RB-HTTP-5XX-003`
 
 ```json

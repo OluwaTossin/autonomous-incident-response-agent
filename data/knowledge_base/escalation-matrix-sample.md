@@ -29,5 +29,5 @@ Synthetic template aligned with [`docs/decisions/problem-definition.md`](../../d
 
 ## Related
 
-- Runbooks: `docs/runbooks/`  
+- Runbooks: `data/runbooks/`  
 - Incidents: `data/incidents/`

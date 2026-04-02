@@ -40,7 +40,7 @@ Async job pattern; tuned query; ALB timeout aligned only as safety net.
 
 ## Runbooks
 
-- **Primary:** `RB-HTTP-5XX-003` — `docs/runbooks/runbook-03-http-5xx-spike.md`
+- **Primary:** `RB-HTTP-5XX-003` — `data/runbooks/runbook-03-http-5xx-spike.md`
 - **Related:** `RB-LB-HEALTH-010`, `RB-DB-CONN-004`
 
 ```json

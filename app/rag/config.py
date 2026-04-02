@@ -48,7 +48,7 @@ def embedding_model() -> str:
 
 # Corpus roots relative to project root
 CORPUS_GLOBS: list[tuple[str, str]] = [
-    ("runbook", "docs/runbooks/**/*.md"),
+    ("runbook", "data/runbooks/**/*.md"),
     ("incident", "data/incidents/incident-*.md"),
     ("incident", "data/incidents/sample-incident.md"),
     ("log", "data/logs/*.log"),

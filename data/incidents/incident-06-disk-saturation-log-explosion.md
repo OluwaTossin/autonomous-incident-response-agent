@@ -39,7 +39,7 @@ Revert log level; enforce **max log size** in chart; break-glass requires **expi
 
 ## Runbooks
 
-- **Primary:** `RB-DISK-SAT-006` — `docs/runbooks/runbook-06-disk-storage-saturation.md`
+- **Primary:** `RB-DISK-SAT-006` — `data/runbooks/runbook-06-disk-storage-saturation.md`
 - **Related:** `RB-K8S-CRASH-005`, `RB-LB-HEALTH-010`
 
 ```json

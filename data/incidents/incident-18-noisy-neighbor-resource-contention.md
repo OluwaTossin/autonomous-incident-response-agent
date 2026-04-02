@@ -39,7 +39,7 @@ Dedicated node group for batch; **taint** `workload=batch`; payment on **non-bur
 
 ## Runbooks
 
-- **Primary:** `RB-GEN-HIGH-CPU-001` — `docs/runbooks/runbook-01-high-cpu-usage.md`
+- **Primary:** `RB-GEN-HIGH-CPU-001` — `data/runbooks/runbook-01-high-cpu-usage.md`
 - **Related:** `RB-PAYMENT-API-HIGH-CPU-001`, `sample-runbook-01.md`
 
 ```json

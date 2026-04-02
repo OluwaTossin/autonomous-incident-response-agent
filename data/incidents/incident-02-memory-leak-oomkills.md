@@ -39,7 +39,7 @@ Rollback image; fix streaming; raised **memory request** slightly after load pro
 
 ## Runbooks
 
-- **Primary:** `RB-MEM-OOM-002` — `docs/runbooks/runbook-02-memory-pressure-oom.md`
+- **Primary:** `RB-MEM-OOM-002` — `data/runbooks/runbook-02-memory-pressure-oom.md`
 - **Related:** `RB-K8S-CRASH-005`, `RB-QUEUE-LAG-009`
 
 ```json

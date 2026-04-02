@@ -40,7 +40,7 @@ Exponential backoff + **jitter** on connect; **max** reconnect concurrency; vali
 
 ## Runbooks
 
-- **Primary:** `RB-DB-CONN-004` — `docs/runbooks/runbook-04-database-connection-exhaustion.md`
+- **Primary:** `RB-DB-CONN-004` — `data/runbooks/runbook-04-database-connection-exhaustion.md`
 - **Related:** `RB-HTTP-5XX-003`
 
 ```json

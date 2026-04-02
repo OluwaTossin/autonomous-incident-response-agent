@@ -4,7 +4,7 @@ Synthetic **postmortem-style** incident records (`INC-001`–`INC-020`) plus [`s
 
 ## Contents
 
-- **`incident-NN-*.md`** — Scenario write-ups with timelines, impact, root cause, and **`RB-*`** runbook links (paths point to `docs/runbooks/`).
+- **`incident-NN-*.md`** — Scenario write-ups with timelines, impact, root cause, and **`RB-*`** runbook links (paths point to `data/runbooks/`).
 - **`sample-incident.md`** — Structure template, runbook ID table, optional JSON block for eval harnesses.
 
 ## Phase 3 ingestion
@@ -13,6 +13,6 @@ Index `data/incidents/incident-*.md` for gold narratives; include or exclude `sa
 
 ## Related
 
-- Runbooks: [`docs/runbooks/`](../../docs/runbooks/)
-- Logs: [`data/logs/`](../logs/)
-- Knowledge base: [`data/knowledge_base/`](../knowledge_base/)
+- Runbooks: [`../runbooks/`](../runbooks/)
+- Logs: [`../logs/`](../logs/)
+- Knowledge base: [`../knowledge_base/`](../knowledge_base/)

@@ -39,7 +39,7 @@ Rollback DaemonSet; scaled CoreDNS; added **NodeLocal DNSCache** on roadmap; red
 
 ## Runbooks
 
-- **Primary:** `RB-EXT-API-008` — `docs/runbooks/runbook-08-external-api-dependency-failure.md` *(dependency/auth over network)*  
+- **Primary:** `RB-EXT-API-008` — `data/runbooks/runbook-08-external-api-dependency-failure.md` *(dependency/auth over network)*  
 - **Related:** `RB-HTTP-5XX-003`, `RB-GEN-HIGH-CPU-001` (CoreDNS CPU)
 
 > **Note:** Add a dedicated **cluster DNS** runbook when you formalise platform SRE docs.

@@ -10,4 +10,4 @@ Synthetic **log bundles** (`.log`) for triage/RAG practice, plus [`sample-log.md
 ## Related
 
 - Incidents: [`../incidents/`](../incidents/)
-- Runbooks: [`../../docs/runbooks/`](../../docs/runbooks/)
+- Runbooks: [`../runbooks/`](../runbooks/)

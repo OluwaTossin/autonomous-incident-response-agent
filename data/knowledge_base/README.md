@@ -1,6 +1,6 @@
 # Knowledge base (supplementary)
 
-These markdown files complement **`docs/runbooks/`** (procedures) and **`data/incidents/`** (narratives). Use them for RAG context on **ownership**, **escalation**, and **dependency criticality**.
+These markdown files complement **`data/runbooks/`** (procedures) and **`data/incidents/`** (narratives). Use them for RAG context on **ownership**, **escalation**, and **dependency criticality**.
 
 | File | Contents |
 |------|-----------|

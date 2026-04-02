@@ -39,7 +39,7 @@ Point health check to **`/live`**; add CI contract test **ALB path == app**; sin
 
 ## Runbooks
 
-- **Primary:** `RB-LB-HEALTH-010` — `docs/runbooks/runbook-10-load-balancer-unhealthy-targets.md`
+- **Primary:** `RB-LB-HEALTH-010` — `data/runbooks/runbook-10-load-balancer-unhealthy-targets.md`
 - **Related:** `RB-HTTP-5XX-003`
 
 ```json

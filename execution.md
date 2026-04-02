@@ -9,7 +9,7 @@ This document is the single source of truth for build order, scope, and mileston
 | Phase | Status | Evidence |
 |-------|--------|----------|
 | **1** | Done | `docs/decisions/problem-definition.md` |
-| **2** | **Done** | `data/incidents/`, `data/logs/`, `data/knowledge_base/`, `docs/runbooks/` — see Phase 2 inventory |
+| **2** | **Done** | `data/incidents/`, `data/logs/`, `data/knowledge_base/`, `data/runbooks/` — see Phase 2 inventory |
 | **3** | **Done** | `app/rag/` + FAISS; `uv run python -m app.rag.cli build-index` then `query "…"` returns runbook/log/incident hits |
 | **4** | **Done** | `app/agent/` LangGraph: normalize → RAG → LLM structured triage → decision rules → JSON; `uv run triage -f examples/sample_incident_payload.json` |
 
@@ -90,7 +90,6 @@ autonomous-incident-response-agent/
 ├── .env.example
 ├── docs/
 │   ├── architecture/
-│   ├── runbooks/
 │   └── decisions/
 ├── app/
 │   ├── api/
@@ -101,6 +100,7 @@ autonomous-incident-response-agent/
 ├── workflows/
 │   └── n8n/
 ├── data/
+│   ├── runbooks/           # SRE procedural corpus (RB-*); RAG retrieval
 │   ├── incidents/          # Synthetic incident postmortems + sample-incident.md
 │   ├── logs/               # Synthetic .log bundles + sample-log.md
 │   └── knowledge_base/     # Supplementary ops docs (escalation, ownership, tiers)
@@ -169,21 +169,21 @@ N8N_BASIC_AUTH_PASSWORD=
 
 - [x] Runbooks, troubleshooting notes, postmortems, ownership, escalation matrix (examples)
 - [x] Sample incident payloads: CPU saturation, memory leak, 5xx spike, DB connection exhaustion, K8s crash loop, disk full, SSL expiry, etc. (covered across `data/incidents/` and `data/logs/`)
-- [x] Targets: `data/knowledge_base/`, `data/incidents/`, `data/logs/`, `docs/runbooks/`
+- [x] Targets: `data/knowledge_base/`, `data/incidents/`, `data/logs/`, `data/runbooks/`
 - **Deliverable:** ≥10 runbook docs, ≥20 incident examples, ≥5 realistic log files
 
 **Phase 2 inventory (verified):**
 
 | Asset | Location | Count |
 |-------|-----------|------:|
-| Runbooks | `docs/runbooks/*.md` | 11 |
+| Runbooks | `data/runbooks/*.md` | 11 |
 | Incident write-ups | `data/incidents/incident-*.md` | 20 |
 | Incident template / catalog | `data/incidents/sample-incident.md` | 1 |
 | Log bundles | `data/logs/*.log` | 21 |
 | Log conventions | `data/logs/sample-log.md` | 1 |
 | Knowledge base (supplementary) | `data/knowledge_base/*.md` | 5 (README + 4 guides) |
 
-**Ingestion note for Phase 3:** Index `docs/runbooks/`, `data/incidents/incident-*.md`, `data/logs/*.log`, and `data/knowledge_base/*.md` (see root `README.md` and `data/README.md`).
+**Ingestion note for Phase 3:** Index `data/runbooks/`, `data/incidents/incident-*.md`, `data/logs/*.log`, and `data/knowledge_base/*.md` (see root `README.md` and `data/README.md`).
 
 
 ### Phase 3 — Local RAG foundation
