@@ -98,6 +98,8 @@ curl -s -X POST http://127.0.0.1:8000/triage -H "Content-Type: application/json"
 
 OpenAPI: `http://127.0.0.1:8000/docs`
 
+Each successful `POST /triage` appends a line to **`data/logs/triage_outputs.jsonl`** (project root, UTF-8 JSONL: `timestamp`, `input`, `output`). That file is gitignored. Disable with `TRIAGE_AUDIT_DISABLE=1` or set `TRIAGE_AUDIT_JSONL` to a custom path (see `.env.example`).
+
 If `POST /triage` returns `{"detail":"Not Found"}`, something else is bound to that port or an old server is running. Check with `curl -s http://127.0.0.1:8000/` — you should see `service: autonomous-incident-response-agent` and `triage: POST /triage`. Then restart: `uv run serve-api` (or `uvicorn app.api.main:app` from the repo root).
 
 Set `LLM_MODEL` (default `gpt-4o-mini`) in `.env` if needed. Chat uses the same `OPENAI_API_KEY` / `OPENAI_API_BASE` as embeddings unless you split providers later.

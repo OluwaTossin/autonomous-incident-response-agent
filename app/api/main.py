@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from app.agent.graph import run_triage
 from app.agent.nodes import parse_incident_payload
+from app.api.audit import append_triage_jsonl
 
 # Keep in sync with pyproject [project].version
 SERVICE_VERSION = "0.1.0"
@@ -106,4 +107,6 @@ def post_triage(
 ) -> dict[str, Any]:
     """Run retrieval + LangGraph agent; return structured triage JSON."""
     _validate_incident_body(body)
-    return run_triage(body)
+    result = run_triage(body)
+    append_triage_jsonl(body, result)
+    return result

@@ -40,3 +40,6 @@ Thumbs.db
 
 # Local FAISS index + chunk metadata (Phase 3 RAG)
 .rag_index/
+
+# API triage audit (append-only JSONL; may contain alert text)
+data/logs/triage_outputs.jsonl
