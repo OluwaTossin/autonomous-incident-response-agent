@@ -54,7 +54,7 @@ Target shape (illustrative):
 
 This builds **trust**, **explainability**, and **interview credibility**.
 
-**Implementation:** Partially addressed in code — see `EvidenceItem` and `evidence` on `TriageOutput` in [`app/models/triage.py`](../../app/models/triage.py). Retrieval snippets expose `source=`; the model should cite those filenames/paths and ingest excerpts where applicable.
+**Implementation:** [`app/agent/signal_reasoning.py`](../../app/agent/signal_reasoning.py) builds one `evidence` row per retrieved **source** (merged chunk scores). [`node_enrich_triage`](../../app/agent/nodes.py) prepends those rows and dedupes against the LLM’s payload-specific evidence. Schema: [`app/models/triage.py`](../../app/models/triage.py).
 
 ### 2. Contradiction handling
 
@@ -62,7 +62,7 @@ What happens when **logs say CPU high** but **DB connections are also exhausted*
 
 > “Conflicting signals detected. Possible multi-cause incident.”
 
-**Implementation:** Use `conflicting_signals_summary` on `TriageOutput` when evidence pulls in different failure modes; leave `null` when signals align.
+**Implementation:** Heuristic multi-family detection in `detect_conflicting_signals()` (CPU vs DB pool, memory, disk, network/TLS, etc.) runs on the incident payload; if the LLM left `conflicting_signals_summary` empty, the enrich step fills it. Otherwise the model’s wording is kept.
 
 ### 3. Time awareness
 
@@ -78,7 +78,7 @@ Real incidents are **temporal** (before deploy, after deploy, during spike). The
 
 Use incident `time_of_occurrence` as anchor when absolute timestamps are unknown; prefer ISO timestamps when present in payload or logs.
 
-**Implementation:** `timeline` on `TriageOutput` — list of short strings, ordered.
+**Implementation:** `build_programmatic_timeline()` anchors on `time_of_occurrence` / `timestamp` / `detected_at`, extracts ISO-like times and `T+2m`-style markers from logs, then `merge_timelines()` prepends those before LLM timeline lines (deduped).
 
 ---
 
@@ -86,8 +86,8 @@ Use incident `time_of_occurrence` as anchor when absolute timestamps are unknown
 
 | Theme | Field / artifact | Status |
 |--------|------------------|--------|
-| Attribution | `evidence[]` | Schema + prompts; tighten evals over time |
-| Contradictions | `conflicting_signals_summary` | Schema + prompts |
-| Temporality | `timeline[]` | Schema + prompts |
+| Attribution | `evidence[]` | Programmatic RAG rows + LLM payload rows (deduped) |
+| Contradictions | `conflicting_signals_summary` | Heuristics + LLM (LLM wins if non-empty) |
+| Temporality | `timeline[]` | Programmatic extraction + LLM (merged, deduped) |
 
-Next hardening steps: evaluation harness with gold attributions, API contract for Phase 5 (`POST /triage`), and optional automatic evidence pre-fill from retrieval metadata before the LLM pass.
+Next hardening steps: evaluation harness with gold attributions, richer parsers (deploy markers, trace IDs), and Phase 5 API (`POST /triage`).

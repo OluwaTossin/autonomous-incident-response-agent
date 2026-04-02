@@ -1,4 +1,4 @@
-"""Compile the triage LangGraph (five nodes)."""
+"""Compile the triage LangGraph (normalize → retrieve → analyze → enrich → decision → format)."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from app.agent.nodes import (
     TriageState,
     node_analysis,
     node_decision,
+    node_enrich_triage,
     node_normalize_input,
     node_output_formatter,
     node_retrieval,
@@ -21,13 +22,15 @@ def build_triage_graph() -> StateGraph:
     g.add_node("normalize_input", node_normalize_input)
     g.add_node("retrieval", node_retrieval)
     g.add_node("analysis", node_analysis)
+    g.add_node("enrich_triage", node_enrich_triage)
     g.add_node("decision", node_decision)
     g.add_node("output_formatter", node_output_formatter)
 
     g.add_edge(START, "normalize_input")
     g.add_edge("normalize_input", "retrieval")
     g.add_edge("retrieval", "analysis")
-    g.add_edge("analysis", "decision")
+    g.add_edge("analysis", "enrich_triage")
+    g.add_edge("enrich_triage", "decision")
     g.add_edge("decision", "output_formatter")
     g.add_edge("output_formatter", END)
     return g

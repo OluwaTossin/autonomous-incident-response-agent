@@ -10,10 +10,17 @@ from langchain_openai import ChatOpenAI
 from pydantic import ValidationError
 
 from app.agent.prompts import TRIAGE_SYSTEM
+from app.agent.signal_reasoning import (
+    build_programmatic_timeline,
+    detect_conflicting_signals,
+    evidence_from_retrieval_dicts,
+    merge_evidence_lists,
+    merge_timelines,
+)
 from app.models.incident import IncidentPayload
 from app.models.triage import TriageOutput
 from app.rag.config import openai_api_key, openai_base_url
-from app.rag.retrieve import retrieve
+from app.rag.retrieve import RetrievalHit, retrieve
 
 
 class TriageState(TypedDict, total=False):
@@ -21,6 +28,7 @@ class TriageState(TypedDict, total=False):
     normalized_narrative: str
     retrieval_query: str
     rag_context: str
+    retrieval_hits: list[dict[str, Any]]
     draft: dict[str, Any]
     result: dict[str, Any]
     error: str
@@ -84,6 +92,15 @@ def node_normalize_input(state: TriageState) -> dict[str, Any]:
     }
 
 
+def _hit_to_state_dict(h: RetrievalHit) -> dict[str, Any]:
+    return {
+        "score": h.score,
+        "source": h.source,
+        "doc_type": h.doc_type,
+        "chunk_index": h.chunk_index,
+    }
+
+
 def node_retrieval(state: TriageState) -> dict[str, Any]:
     if state.get("error"):
         return {}
@@ -95,16 +112,23 @@ def node_retrieval(state: TriageState) -> dict[str, Any]:
             "rag_context": (
                 f"(Vector retrieval failed — build index with "
                 f"`uv run python -m app.rag.cli build-index`. Error: {e})"
-            )
+            ),
+            "retrieval_hits": [],
         }
     if not hits:
-        return {"rag_context": "(No retrieval hits; index may be empty or query mismatched.)"}
+        return {
+            "rag_context": "(No retrieval hits; index may be empty or query mismatched.)",
+            "retrieval_hits": [],
+        }
     blocks = []
     for i, h in enumerate(hits, 1):
         blocks.append(
             f"[{i}] score={h.score:.3f} type={h.doc_type} source={h.source}\n{h.text}"
         )
-    return {"rag_context": "\n\n---\n\n".join(blocks)}
+    return {
+        "rag_context": "\n\n---\n\n".join(blocks),
+        "retrieval_hits": [_hit_to_state_dict(h) for h in hits],
+    }
 
 
 def _chat_model() -> ChatOpenAI:
@@ -145,6 +169,44 @@ Produce triage JSON matching the schema."""
         return {"error": f"Unexpected LLM output type: {type(out)!r}"}
     except Exception as e:
         return {"error": f"LLM analysis failed: {e}"}
+
+
+def node_enrich_triage(state: TriageState) -> dict[str, Any]:
+    """Merge programmatic evidence, contradiction heuristics, and timeline after LLM draft."""
+    if state.get("error"):
+        return {}
+    draft = state.get("draft")
+    if not draft or not isinstance(draft, dict):
+        return {}
+    incident = state.get("incident") or {}
+    if not isinstance(incident, dict):
+        incident = {}
+
+    hit_dicts = state.get("retrieval_hits") or []
+    prog_evidence = evidence_from_retrieval_dicts(
+        hit_dicts if isinstance(hit_dicts, list) else []
+    )
+    llm_evidence = draft.get("evidence") if isinstance(draft.get("evidence"), list) else []
+    merged_evidence = merge_evidence_lists(prog_evidence, llm_evidence)
+
+    conflict = detect_conflicting_signals(incident)
+    existing_conflict = (draft.get("conflicting_signals_summary") or "").strip()
+    if conflict and not existing_conflict:
+        new_conflict = conflict
+    else:
+        new_conflict = draft.get("conflicting_signals_summary")
+
+    prog_tl = build_programmatic_timeline(incident)
+    llm_tl = draft.get("timeline") if isinstance(draft.get("timeline"), list) else []
+    merged_tl = merge_timelines(prog_tl, [str(x) for x in llm_tl])
+
+    enriched = {
+        **draft,
+        "evidence": merged_evidence,
+        "conflicting_signals_summary": new_conflict,
+        "timeline": merged_tl,
+    }
+    return {"draft": enriched}
 
 
 def node_decision(state: TriageState) -> dict[str, Any]:
