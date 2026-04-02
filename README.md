@@ -5,9 +5,26 @@
 Operational scope today: ingest alerts (JSON), retrieve knowledge, return structured triage JSON over HTTP, optional **Gradio** at `/ui`, **n8n** webhooks (Slack + mock ticketing), and an **offline eval harness** (`triage-eval`). Later: full stack Docker, AWS deploy. For an explicit capability breakdown and the **~10% roadmap** (evidence attribution, contradiction handling, timelines), see [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md).
 
 **Owner:** Oluwatosin Jegede  
-**Plan:** Phases **1–8** are summarized below; optional private notes in root `execution.md` (gitignored).
+**Status:** Phases **1–8** shipped (through **offline evaluation**). **Phase 9** next: full local `docker-compose` (API + n8n + optional index story).
+
+**Plan:** Detailed phase notes below; optional private checklist in root **`execution.md`** (gitignored — mirror milestones here if you need them in git).
 
 Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_dotenv` only reads `.env`**. Never commit `.env` or real keys in `.env.example`.
+
+### Quick start (happy path)
+
+1. `uv sync --extra dev` (add `--extra ui` for Gradio at `/ui`).
+2. `uv run rag-build` — build FAISS index under `.rag_index/` (needs `OPENAI_API_KEY` in `.env`).
+3. `uv run serve-api` — API + optional `/ui` → [`/docs`](http://127.0.0.1:8000/docs).
+4. `docker compose -f docker-compose.n8n.yml up -d` — n8n; import workflows from [`workflows/n8n/`](workflows/n8n/) ([runbook](workflows/n8n/README.md)).
+5. `uv run triage-eval` — regression-style eval over [`data/eval/gold.jsonl`](data/eval/gold.jsonl) (live LLM, ~8 cases).
+
+| Command | Role |
+|---------|------|
+| `uv run rag-build` / `rag-query` | Index + ad-hoc retrieval |
+| `uv run triage -f …` | One-shot triage CLI |
+| `uv run serve-api` | FastAPI + OpenAPI |
+| `uv run triage-eval` | Gold JSONL → Markdown report |
 
 ---
 
@@ -95,7 +112,8 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 
 ### Next (Phase 9+)
 
-- **Phase 9+:** Full `docker-compose` stack (API + index + n8n), AWS/Terraform, CI/CD — see your local `execution.md` or future README updates.
+- **Phase 9 — Containerise:** Single **`docker-compose.yml`** (or compose profile) to run API (+ optional Gradio), n8n, and documented volume mounts for `.rag_index` / `.env` — see your local **`execution.md`** (gitignored) or this README as the in-repo checklist.
+- **Phase 10+:** AWS/Terraform, CI/CD, observability — same roadmap.
 
 ---
 
@@ -199,7 +217,7 @@ uv run serve-api
 docker compose -f docker-compose.n8n.yml up -d
 ```
 
-Import [`workflows/n8n/incident-triage-escalation.json`](workflows/n8n/incident-triage-escalation.json) and [`workflows/n8n/incident-ticket-creation.json`](workflows/n8n/incident-ticket-creation.json) in the n8n UI, activate, then follow [`workflows/n8n/README.md`](workflows/n8n/README.md).
+Import and activate in n8n: [`incident-triage-escalation.json`](workflows/n8n/incident-triage-escalation.json), [`incident-ticket-creation.json`](workflows/n8n/incident-ticket-creation.json), and optionally [`incident-triage-feedback.json`](workflows/n8n/incident-triage-feedback.json) — then follow [`workflows/n8n/README.md`](workflows/n8n/README.md).
 
 If `POST /triage` returns `{"detail":"Not Found"}`, something else is bound to that port or an old server is running. Check with `curl -s http://127.0.0.1:8000/` — you should see `service: autonomous-incident-response-agent` and `triage: POST /triage`. Then restart: `uv run serve-api` (or `uvicorn app.api.main:app` from the repo root).
 
