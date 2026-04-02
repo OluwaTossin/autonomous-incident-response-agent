@@ -17,6 +17,7 @@ Operational scope today: ingest alerts (JSON), retrieve knowledge, return struct
 | **2** — Knowledge & sample data | **Done** | Runbooks, incidents, logs, `data/knowledge_base/` |
 | **3** — Local RAG | **Done** | `app/rag/` + FAISS; `uv run python -m app.rag.cli build-index` / `query "…"` |
 | **4** — LangGraph agent | **Done** | `app/agent/` + `uv run triage -f examples/sample_incident_payload.json` |
+| **5** — API layer | **Done** | `app/api/` — FastAPI: `GET /health`, `GET /version`, `POST /ingest-incident`, `POST /triage` |
 
 Secrets live in **`.env`** at the repo root (copy from [`.env.example`](.env.example)). **`load_dotenv` only reads `.env`** — not `.env.example`. Never commit `.env` or put real keys in `.env.example`.
 
@@ -35,7 +36,7 @@ Secrets live in **`.env`** at the repo root (copy from [`.env.example`](.env.exa
 | [`data/logs/`](data/logs/) | Synthetic log bundles + [`sample-log.md`](data/logs/sample-log.md) |
 | [`data/knowledge_base/`](data/knowledge_base/) | Escalation, ownership, tiers, first-response notes |
 | [`data/README.md`](data/README.md) | Data layout and ingestion globs |
-| `app/` | `app/rag/` (FAISS), `app/agent/` (LangGraph triage), `app/models/` |
+| `app/` | `app/rag/`, `app/agent/`, `app/api/` (FastAPI), `app/models/` |
 | [`examples/sample_incident_payload.json`](examples/sample_incident_payload.json) | Sample JSON for `triage` CLI |
 | `workflows/n8n/` | *(Phase 6+)* |
 | `infra/terraform/` | *(Phase 10+)* |
@@ -76,6 +77,26 @@ uv run rag-query "High CPU on payment-api in production"
 uv run python -m app.agent.cli -f examples/sample_incident_payload.json
 # or: uv run triage -f examples/sample_incident_payload.json
 ```
+
+**Phase 5 — HTTP API (same env as triage):**
+
+```bash
+uv run serve-api
+# or: uv run uvicorn app.api.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Optional: `API_HOST`, `API_PORT` for `serve-api`.
+
+```bash
+curl -s http://127.0.0.1:8000/health
+curl -s http://127.0.0.1:8000/version
+curl -s -X POST http://127.0.0.1:8000/ingest-incident -H "Content-Type: application/json" \
+  -d @examples/sample_incident_payload.json
+curl -s -X POST http://127.0.0.1:8000/triage -H "Content-Type: application/json" \
+  -d @examples/sample_incident_payload.json
+```
+
+OpenAPI: `http://127.0.0.1:8000/docs`
 
 Set `LLM_MODEL` (default `gpt-4o-mini`) in `.env` if needed. Chat uses the same `OPENAI_API_KEY` / `OPENAI_API_BASE` as embeddings unless you split providers later.
 

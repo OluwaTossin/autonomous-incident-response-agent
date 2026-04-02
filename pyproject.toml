@@ -12,15 +12,18 @@ dependencies = [
     "langgraph>=1.1.4",
     "langchain-openai>=1.1.12",
     "langchain-core>=1.2.24",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0.0", "ruff>=0.6.0"]
+dev = ["pytest>=8.0.0", "ruff>=0.6.0", "httpx>=0.27.0"]
 
 [project.scripts]
 rag-build = "app.rag.cli:main_build"
 rag-query = "app.rag.cli:main_query"
 triage = "app.agent.cli:main"
+serve-api = "app.api.server:main"
 
 [build-system]
 requires = ["hatchling"]
