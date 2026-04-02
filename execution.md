@@ -10,6 +10,7 @@ This document is the single source of truth for build order, scope, and mileston
 |-------|--------|----------|
 | **1** | Done | `docs/decisions/problem-definition.md` |
 | **2** | **Done** | `data/incidents/`, `data/logs/`, `data/knowledge_base/`, `docs/runbooks/` — see Phase 2 inventory |
+| **3** | **Done** | `app/rag/` + FAISS; `uv run python -m app.rag.cli build-index` then `query "…"` returns runbook/log/incident hits |
 
 ---
 
@@ -58,6 +59,7 @@ Install and verify:
 
 - [ ] Git
 - [ ] Python 3.11+
+- [ ] **[uv](https://docs.astral.sh/uv/)** (recommended for this repo: `uv sync`, `uv run …`)
 - [ ] Docker Desktop or Docker Engine
 - [ ] VS Code (or Cursor)
 - [ ] Terraform CLI
@@ -69,7 +71,7 @@ Install and verify:
 
 ### 3.3 Concepts to be comfortable with
 
-- Python packaging and virtual environments
+- Python packaging; **uv** for envs and runs (`uv sync`, `uv run`)
 - REST APIs
 - Basic Docker
 - JSON
@@ -185,9 +187,9 @@ N8N_BASIC_AUTH_PASSWORD=
 
 ### Phase 3 — Local RAG foundation
 
-- [ ] Under `app/rag/`: loader, chunking, embeddings, index, retrieval
-- [ ] Start simple (e.g. FAISS); migrate to managed vector store if needed
-- **Deliverable:** Script or endpoint: e.g. query _“High CPU on payment-api in production”_ → relevant runbook excerpts
+- [x] Under `app/rag/`: loader, chunking, embeddings, index, retrieval
+- [x] Start simple (FAISS); migrate to managed vector store if needed (later)
+- **Deliverable:** Script or endpoint: e.g. query _“High CPU on payment-api in production”_ → relevant runbook excerpts **(verified via CLI)**
 
 ### Phase 4 — Reasoning agent (LangGraph)
 
@@ -260,10 +262,10 @@ N8N_BASIC_AUTH_PASSWORD=
 
 Use this as the default execution order:
 
-- [ ] **Milestone 0** — Repo, tools, `.env.example`, folder structure *(partial: docs + data + execution present; `app/`, `workflows/`, `tests/`, `docker/`, `infra/` still to scaffold when you start code)*
+- [ ] **Milestone 0** — Repo, tools, `.env.example`, folder structure *(partial: `app/rag/` + docs + data present; `workflows/`, `tests/`, `docker/`, `infra/` still optional until later phases)*
 - [x] **Milestone 1** — Product problem and I/O definition
 - [x] **Milestone 2** — Runbooks, sample incidents, logs
-- [ ] **Milestone 3** — RAG retrieval locally
+- [x] **Milestone 3** — RAG retrieval locally
 - [ ] **Milestone 4** — LangGraph triage agent locally
 - [ ] **Milestone 5** — FastAPI endpoints
 - [ ] **Milestone 6** — n8n escalation workflow
@@ -300,4 +302,4 @@ At completion you should be able to demonstrate:
 
 ---
 
-*Last updated: 2026-04-02 — Phase 2 marked complete; Milestone 0 partial until app/infra scaffold. Update checkboxes as you complete milestones.*
+*Last updated: 2026-04-02 — Phases 1–3 complete (RAG CLI verified). Next: Phase 4 LangGraph agent. Update checkboxes as you complete milestones.*

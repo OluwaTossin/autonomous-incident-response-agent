@@ -12,10 +12,10 @@ AI-assisted incident triage: ingest alerts, retrieve runbooks and historical con
 | Phase | Status | Notes |
 |-------|--------|--------|
 | **1** — Problem definition | Done | [`docs/decisions/problem-definition.md`](docs/decisions/problem-definition.md) |
-| **2** — Knowledge & sample data | **Done** | Runbooks, incidents, logs, and `data/knowledge_base/` meet plan thresholds (see `execution.md`) |
-| **3** — Local RAG | Next | `app/rag/` loader → chunk → embed → retrieve |
+| **2** — Knowledge & sample data | **Done** | Runbooks, incidents, logs, `data/knowledge_base/` (see `execution.md`) |
+| **3** — Local RAG | **Done** | `app/rag/` + FAISS; `uv run python -m app.rag.cli build-index` / `query "…"` |
 
-Secrets: copy [`.env.example`](.env.example) to `.env` (never commit `.env`). This project assumes **OpenAI** and/or **OpenRouter** keys for LLM phases.
+Secrets live in **`.env`** at the repo root (copy from [`.env.example`](.env.example)). **`load_dotenv` only reads `.env`** — not `.env.example`. Never commit `.env` or put real keys in `.env.example`.
 
 ---
 
@@ -37,15 +37,55 @@ Secrets: copy [`.env.example`](.env.example) to `.env` (never commit `.env`). Th
 
 ---
 
-## Phase 3 quick prep
+## Python environment (**uv**, not manual venv + pip)
 
-1. Python 3.11+ virtualenv; install deps when `pyproject.toml` / `requirements.txt` exist.  
-2. Point the RAG document loader at:
-   - `docs/runbooks/**/*.md`
-   - `data/incidents/incident-*.md`
-   - `data/logs/*.log`
-   - `data/knowledge_base/**/*.md`  
-3. Use `OPENAI_API_KEY` or `OPENROUTER_API_KEY` per `.env.example`.
+This repo uses **[uv](https://docs.astral.sh/uv/)** to create `.venv`, resolve deps from [`pyproject.toml`](pyproject.toml), and run commands with locked versions ([`uv.lock`](uv.lock)).
+
+Install uv (pick one):
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# or: brew install uv
+```
+
+Sync and install the project (editable) + dev tools:
+
+```bash
+cd autonomous-incident-response-agent
+uv sync --extra dev
+```
+
+Run RAG CLI (always via `uv run` so the right env is used):
+
+```bash
+uv run python -m app.rag.cli build-index
+uv run python -m app.rag.cli query "High CPU on payment-api in production"
+# or entry points:
+uv run rag-build
+uv run rag-query "High CPU on payment-api in production"
+```
+
+Refresh the lockfile after changing `pyproject.toml`:
+
+```bash
+uv lock
+```
+
+[`requirements.txt`](requirements.txt) is an optional mirror for non-uv workflows; **prefer `uv sync`**.
+
+---
+
+## Phase 3 — RAG corpus (already wired in code)
+
+The loader indexes (from repo root):
+
+- `docs/runbooks/**/*.md`
+- `data/incidents/incident-*.md`, `sample-incident.md`
+- `data/logs/*.log`
+- `data/knowledge_base/**/*.md`
+- `docs/decisions/**/*.md`
+
+Set `OPENAI_API_KEY` (or `OPENROUTER_API_KEY` + `OPENAI_API_BASE` if your provider is OpenAI-compatible). See [`.env.example`](.env.example).
 
 ---
 
