@@ -20,6 +20,6 @@ High-level view of the **Autonomous DevOps Incident Response System**: alerts an
 | n8n workflows | Phase 6: `workflows/n8n/` |
 | AWS (ECS Fargate, RDS, CloudWatch, etc.) | Phases 9–12: `docker/`, `infra/terraform/` |
 
-Aligns with the five layers in [`execution.md`](../../execution.md) (ingress, reasoning, retrieval, workflow, deployment).
+Aligns with the five layers in the maintainer’s local `execution.md` (ingress, reasoning, retrieval, workflow, deployment), if present.
 
 **Maintainer:** Oluwatosin Jegede

@@ -3,7 +3,7 @@
 AI-assisted incident triage: ingest alerts, retrieve runbooks and historical context, reason over logs, classify severity, suggest remediation, and (later) trigger workflows via n8n and deploy on AWS.
 
 **Owner:** Oluwatosin Jegede  
-**Plan:** See [`execution.md`](execution.md) for phases, milestones, and deliverables.
+**Plan:** Phases and deliverables are tracked in this README; keep a private `execution.md` in the repo root if you want a longer checklist (file is gitignored).
 
 ---
 
@@ -12,7 +12,7 @@ AI-assisted incident triage: ingest alerts, retrieve runbooks and historical con
 | Phase | Status | Notes |
 |-------|--------|--------|
 | **1** — Problem definition | Done | [`docs/decisions/problem-definition.md`](docs/decisions/problem-definition.md) |
-| **2** — Knowledge & sample data | **Done** | Runbooks, incidents, logs, `data/knowledge_base/` (see `execution.md`) |
+| **2** — Knowledge & sample data | **Done** | Runbooks, incidents, logs, `data/knowledge_base/` |
 | **3** — Local RAG | **Done** | `app/rag/` + FAISS; `uv run python -m app.rag.cli build-index` / `query "…"` |
 | **4** — LangGraph agent | **Done** | `app/agent/` + `uv run triage -f examples/sample_incident_payload.json` |
 
@@ -24,7 +24,7 @@ Secrets live in **`.env`** at the repo root (copy from [`.env.example`](.env.exa
 
 | Path | Purpose |
 |------|---------|
-| [`execution.md`](execution.md) | Build sequence and checklists |
+| `execution.md` (local, gitignored) | Optional private build sequence and checklists |
 | [`docs/decisions/`](docs/decisions/) | ADRs / product definition |
 | [`docs/architecture/`](docs/architecture/) | **[Architecture diagram](docs/architecture/README.md)** (`architectural-diagram.png` at repo root) |
 | [`data/runbooks/`](data/runbooks/) | SRE-style procedural runbooks (`RB-*` IDs) |

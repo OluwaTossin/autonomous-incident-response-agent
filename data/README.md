@@ -1,6 +1,6 @@
 # Data directory
 
-Phase 2 **operational knowledge** and **sample telemetry** for RAG and evaluation, aligned with [`execution.md`](../execution.md).
+Phase 2 **operational knowledge** and **sample telemetry** for RAG and evaluation (see root `README.md` for phase status).
 
 ## Layout
 
