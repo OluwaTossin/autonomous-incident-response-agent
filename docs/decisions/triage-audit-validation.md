@@ -81,6 +81,8 @@ With `timestamp`, `input`, and `output`, you can add a parallel **gold** dataset
 
 Then offline scripts can join on payload hash or id and compute **expected vs actual** severity, escalation, or action overlap — accuracy, regressions, and prompt/index changes.
 
+The repo ships **`uv run triage-eval`** (see [`data/eval/README.md`](../../data/eval/README.md) and [`app/eval/`](../../app/eval/)) which runs a **gold JSONL** file through the live LangGraph + LLM and emits a **Markdown report** (classification, latency, optional retrieval checks, evidence-grounding heuristic).
+
 ---
 
 ## 5. RAG debugging

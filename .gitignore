@@ -45,3 +45,7 @@ Thumbs.db
 data/logs/triage_outputs.jsonl
 data/logs/n8n_workflow_events.jsonl
 data/logs/triage_feedback.jsonl
+
+# Eval Markdown reports (regenerate with triage-eval --out)
+data/eval/reports/*
+!data/eval/reports/.gitkeep

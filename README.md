@@ -2,16 +2,16 @@
 
 **What this is:** an **AI-powered incident triage and diagnosis engine** — RAG over runbooks/incidents/logs, multi-source context fusion with the alert payload, heuristic guardrails plus LLM structured reasoning, and an action / escalation layer. That pattern matches **AIOps** assistants, **SRE copilots**, and internal reliability tooling at large shops.
 
-Operational scope today: ingest alerts (JSON), retrieve knowledge, return structured triage JSON over HTTP, optional **Gradio** console at `/ui`, and **n8n** webhooks (Slack + mock ticketing). Later: eval harness, full stack Docker, AWS deploy. For an explicit capability breakdown and the **~10% roadmap** (evidence attribution, contradiction handling, timelines), see [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md).
+Operational scope today: ingest alerts (JSON), retrieve knowledge, return structured triage JSON over HTTP, optional **Gradio** at `/ui`, **n8n** webhooks (Slack + mock ticketing), and an **offline eval harness** (`triage-eval`). Later: full stack Docker, AWS deploy. For an explicit capability breakdown and the **~10% roadmap** (evidence attribution, contradiction handling, timelines), see [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md).
 
 **Owner:** Oluwatosin Jegede  
-**Plan:** Phases **1–7** are summarized below; optional private notes in root `execution.md` (gitignored).
+**Plan:** Phases **1–8** are summarized below; optional private notes in root `execution.md` (gitignored).
 
 Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_dotenv` only reads `.env`**. Never commit `.env` or real keys in `.env.example`.
 
 ---
 
-## Build progress: Phases 1–7
+## Build progress: Phases 1–8
 
 | Phase | Status | Primary artifacts |
 |-------|--------|---------------------|
@@ -22,6 +22,7 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 | **5** — HTTP API | Done | [`app/api/`](app/api/) · FastAPI + JSONL audit log |
 | **6** — n8n execution layer | Done | [`workflows/n8n/`](workflows/n8n/) · [`docker-compose.n8n.yml`](docker-compose.n8n.yml) · `POST /n8n/*` helpers |
 | **7** — Minimal UI | Done | [`app/ui/`](app/ui/) · Gradio at **`/ui`** (`uv sync --extra ui`) |
+| **8** — Evaluation | Done | [`app/eval/`](app/eval/) · [`data/eval/gold.jsonl`](data/eval/gold.jsonl) · `uv run triage-eval` |
 
 ### Phase 1 — Problem definition
 
@@ -73,8 +74,8 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 
 ### Tests
 
-- **Command:** `uv run pytest` (unit + integration; integration mocks LLM where needed).
-- **Layout:** `tests/unit/`, `tests/integration/`.
+- **Command:** `uv sync --extra dev` then `uv run pytest` (unit + integration; integration mocks LLM where needed).
+- **Layout:** `tests/unit/` (includes `test_eval_metrics.py` for Phase 8 metrics), `tests/integration/`.
 
 ### Phase 7 — Minimal UI (Gradio)
 
@@ -84,9 +85,17 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 - **Code:** [`app/ui/gradio_app.py`](app/ui/gradio_app.py) · display helpers [`app/ui/triage_display.py`](app/ui/triage_display.py) · shared runner [`app/api/triage_execution.py`](app/api/triage_execution.py).
 - **UX:** Severity badge, color-coded confidence bar, sectioned summary / root cause / actions / timeline, evidence grouped (logs · incidents · metrics · runbooks/knowledge) in `<details>`, collapsible raw JSON, links to `/docs`, copy **`triage_id`**, Gradio toasts (`Success` / `Warning`), feedback button re-enabled on each new triage run.
 
-### Next (Phase 8+)
+### Phase 8 — Evaluation
 
-- **Phase 8+:** Evaluation harness, full `docker-compose` stack (API + index + n8n), AWS/Terraform, CI/CD — see your local `execution.md` or future README updates.
+- **Deliverable:** Gold JSONL (**8** seed cases, grow toward 20–30 per `execution.md`), CLI **`uv run triage-eval`**, Markdown report (stdout or `--out`).
+- **Metrics:** Severity / escalate / action-count vs gold; optional retrieval substring + score checks; per-case latency (mean, p95); evidence–retrieval overlap heuristic (grounding signal, not a full hallucination judge).
+- **Paths:** [`data/eval/README.md`](data/eval/README.md) (format), [`data/eval/gold.jsonl`](data/eval/gold.jsonl), [`app/eval/`](app/eval/) (runner, metrics, report).
+- **Run:** Same prerequisites as triage (`.env`, built index, LLM). By default **`TRIAGE_AUDIT_DISABLE`** is set for the run so eval does not flood `triage_outputs.jsonl`; use **`--keep-audit`** to append audit lines.
+- **Reports:** `uv run triage-eval --out data/eval/reports/latest.md` — the **`data/eval/reports/`** contents are **gitignored** (local runs); only a **`.gitkeep`** is kept so the folder exists.
+
+### Next (Phase 9+)
+
+- **Phase 9+:** Full `docker-compose` stack (API + index + n8n), AWS/Terraform, CI/CD — see your local `execution.md` or future README updates.
 
 ---
 
@@ -104,7 +113,8 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 | [`data/logs/`](data/logs/) | Synthetic log bundles + [`sample-log.md`](data/logs/sample-log.md) |
 | [`data/knowledge_base/`](data/knowledge_base/) | Escalation, ownership, tiers, first-response notes |
 | [`data/README.md`](data/README.md) | Data layout and ingestion globs |
-| `app/` | `app/rag/`, `app/agent/`, `app/api/` (FastAPI), `app/models/`, `app/ui/` (Gradio) |
+| `app/` | `app/rag/`, `app/agent/`, `app/api/` (FastAPI), `app/models/`, `app/ui/` (Gradio), `app/eval/` (Phase 8) |
+| [`data/eval/`](data/eval/) | Gold JSONL + eval README |
 | [`examples/sample_incident_payload.json`](examples/sample_incident_payload.json) | Sample JSON for `triage` CLI |
 | [`workflows/n8n/`](workflows/n8n/) | n8n workflow JSON + Phase 6 runbook |
 | [`docker-compose.n8n.yml`](docker-compose.n8n.yml) | Local n8n service (Phase 6) |
@@ -145,6 +155,14 @@ uv run rag-query "High CPU on payment-api in production"
 ```bash
 uv run python -m app.agent.cli -f examples/sample_incident_payload.json
 # or: uv run triage -f examples/sample_incident_payload.json
+```
+
+**Phase 8 — evaluation (same env; calls live LLM per gold row):**
+
+```bash
+uv run triage-eval
+# Markdown report to file:
+uv run triage-eval --out data/eval/reports/latest.md
 ```
 
 **Phase 5 — HTTP API (same env as triage):**

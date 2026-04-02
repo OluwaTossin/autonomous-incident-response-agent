@@ -10,6 +10,7 @@ Phase 2 **operational knowledge** and **sample telemetry** for RAG and evaluatio
 | **`incidents/`** | Synthetic incident postmortems (`incident-*.md`) + `sample-incident.md`. |
 | **`logs/`** | Synthetic `.log` bundles + `sample-log.md`. |
 | **`knowledge_base/`** | Supplementary ops docs (escalation, ownership, dependency tiers, first-response checklist). |
+| **`eval/`** | Phase 8 gold JSONL + README (`gold.jsonl` for `uv run triage-eval`). |
 
 ## Inventory
 

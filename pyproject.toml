@@ -24,6 +24,7 @@ ui = ["gradio>=5.0.0"]
 rag-build = "app.rag.cli:main_build"
 rag-query = "app.rag.cli:main_query"
 triage = "app.agent.cli:main"
+triage-eval = "app.eval.cli:main"
 serve-api = "app.api.server:main"
 
 [build-system]
