@@ -31,3 +31,8 @@ packages = ["app"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+filterwarnings = [
+    "ignore:builtin type SwigPyPacked:DeprecationWarning",
+    "ignore:builtin type SwigPyObject:DeprecationWarning",
+    "ignore:builtin type swigvarlink:DeprecationWarning",
+]
