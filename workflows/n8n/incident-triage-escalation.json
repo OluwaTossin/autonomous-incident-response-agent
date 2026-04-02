@@ -12,7 +12,7 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [240, 300],
+      "position": [240, 380],
       "webhookId": "triage-escalation"
     },
     {
@@ -44,7 +44,91 @@
       "name": "Is CRITICAL",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [460, 300]
+      "position": [460, 380]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "hi",
+              "leftValue": "={{ Number($json.body.confidence ?? 0) }}",
+              "rightValue": 0.85,
+              "operator": {
+                "type": "number",
+                "operation": "gt",
+                "name": "filter.operator.number.gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-conf-high",
+      "name": "Confidence > 0.85",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [680, 280]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "med",
+              "leftValue": "={{ Number($json.body.confidence ?? 0) }}",
+              "rightValue": 0.6,
+              "operator": {
+                "type": "number",
+                "operation": "gte",
+                "name": "filter.operator.number.gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-conf-med",
+      "name": "Confidence >= 0.6",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const item = $input.first().json;\nconst b = item.body || {};\nconst service = String(b.service_name != null && b.service_name !== '' ? b.service_name : 'unknown');\nconst evidenceArr = Array.isArray(b.evidence) ? b.evidence : [];\nconst evidenceSummary = [];\nfor (let i = 0; i < evidenceArr.length && evidenceSummary.length < 12; i++) {\n  const e = evidenceArr[i];\n  if (!e || typeof e !== 'object') continue;\n  const r = e.reason || '';\n  const s = e.source || '';\n  const t = e.type || '';\n  const line = (r && s) ? (r + ' — ' + s) : (r || s || t);\n  if (line) evidenceSummary.push(String(line));\n}\nconst rec = b.recommended_actions;\nconst actions = Array.isArray(rec) ? rec.map(function (a) { return String(a); }) : [];\nvar conf = b.confidence;\nvar confStr = (conf != null && conf !== '') ? String(conf) : 'n/a';\nvar rc = b.likely_root_cause || 'n/a';\nvar summary = b.incident_summary || 'Incident';\nfunction cap(s, n) {\n  s = String(s);\n  return s.length > n ? s.substring(0, n) + '…' : s;\n}\nvar fields = [\n  { title: 'Service', value: cap(service, 200), short: true },\n  { title: 'Confidence', value: cap(confStr, 200), short: true },\n  { title: 'Likely root cause', value: cap(rc, 2000), short: false },\n  { title: 'Actions', value: cap(actions.length ? actions.map(function (a) { return '• ' + a; }).join('\\n') : 'n/a', 2000), short: false },\n  { title: 'Evidence summary', value: cap(evidenceSummary.length ? evidenceSummary.map(function (e) { return '• ' + e; }).join('\\n') : 'n/a', 2000), short: false },\n];\nvar payload = {\n  text: '🚨 CRITICAL: ' + cap(summary, 500) + ' (' + service + ', conf ' + confStr + ')',\n  attachments: [\n    {\n      color: 'danger',\n      title: '🚨 CRITICAL Incident Detected',\n      fields: fields,\n    },\n  ],\n};\nreturn [{ json: { slackPost: payload } }];"
+      },
+      "id": "code-slack-a",
+      "name": "Build Slack payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 180]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const item = $input.first().json;\nconst b = item.body || {};\nconst service = String(b.service_name != null && b.service_name !== '' ? b.service_name : 'unknown');\nconst evidenceArr = Array.isArray(b.evidence) ? b.evidence : [];\nconst evidenceSummary = [];\nfor (let i = 0; i < evidenceArr.length && evidenceSummary.length < 12; i++) {\n  const e = evidenceArr[i];\n  if (!e || typeof e !== 'object') continue;\n  const r = e.reason || '';\n  const s = e.source || '';\n  const t = e.type || '';\n  const line = (r && s) ? (r + ' — ' + s) : (r || s || t);\n  if (line) evidenceSummary.push(String(line));\n}\nconst rec = b.recommended_actions;\nconst actions = Array.isArray(rec) ? rec.map(function (a) { return String(a); }) : [];\nvar conf = b.confidence;\nvar confStr = (conf != null && conf !== '') ? String(conf) : 'n/a';\nvar rc = b.likely_root_cause || 'n/a';\nvar summary = b.incident_summary || 'Incident';\nfunction cap(s, n) {\n  s = String(s);\n  return s.length > n ? s.substring(0, n) + '…' : s;\n}\nvar fields = [\n  { title: 'Service', value: cap(service, 200), short: true },\n  { title: 'Confidence', value: cap(confStr, 200), short: true },\n  { title: 'Likely root cause', value: cap(rc, 2000), short: false },\n  { title: 'Actions', value: cap(actions.length ? actions.map(function (a) { return '• ' + a; }).join('\\n') : 'n/a', 2000), short: false },\n  { title: 'Evidence summary', value: cap(evidenceSummary.length ? evidenceSummary.map(function (e) { return '• ' + e; }).join('\\n') : 'n/a', 2000), short: false },\n];\nvar payload = {\n  text: '🚨 CRITICAL: ' + cap(summary, 500) + ' (' + service + ', conf ' + confStr + ')',\n  attachments: [\n    {\n      color: 'danger',\n      title: '🚨 CRITICAL Incident Detected',\n      fields: fields,\n    },\n  ],\n};\nreturn [{ json: { slackPost: payload } }];"
+      },
+      "id": "code-slack-b",
+      "name": "Build Slack payload (medium)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 420]
     },
     {
       "parameters": {
@@ -52,14 +136,29 @@
         "url": "={{ $env.SLACK_WEBHOOK_URL }}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ text: '*CRITICAL incident (triage)*\\n```' + JSON.stringify($json.body, null, 2) + '```' }) }}",
+        "jsonBody": "={{ JSON.stringify($json.slackPost) }}",
         "options": {}
       },
-      "id": "http-slack",
+      "id": "http-slack-a",
       "name": "Notify Slack",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [680, 200]
+      "position": [1340, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.slackPost) }}",
+        "options": {}
+      },
+      "id": "http-slack-b",
+      "name": "Notify Slack (medium tier)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 420]
     },
     {
       "parameters": {
@@ -67,26 +166,65 @@
         "url": "={{ ($env.TRIAGE_API_BASE || 'http://host.docker.internal:8000') + '/n8n/workflow-log' }}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ workflow: 'incident-triage-escalation', triage: $('Webhook').item.json.body }) }}",
+        "jsonBody": "={{ JSON.stringify({ workflow: 'incident-triage-escalation', tier: 'high_confidence', triage: $('Webhook').item.json.body }) }}",
         "options": {}
       },
-      "id": "http-log",
+      "id": "http-log-high",
       "name": "Workflow log",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [900, 200]
+      "position": [1560, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.TRIAGE_API_BASE || 'http://host.docker.internal:8000') + '/n8n/workflow-log' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ workflow: 'incident-triage-escalation', tier: 'log_review', triage: $('Webhook').item.json.body }) }}",
+        "options": {}
+      },
+      "id": "http-log-low",
+      "name": "Workflow log (review)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 560]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: true, action: 'slack_and_log', severity: $('Webhook').item.json.body.severity }) }}",
+        "responseBody": "={{ JSON.stringify({ ok: true, action: 'slack_and_page', tier: 'high', severity: $('Webhook').item.json.body.severity, confidence: $('Webhook').item.json.body.confidence }) }}",
         "options": {}
       },
-      "id": "respond-ok",
-      "name": "Respond Critical",
+      "id": "respond-high",
+      "name": "Respond high tier",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1120, 200]
+      "position": [1780, 180]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, action: 'slack_only', tier: 'medium', severity: $('Webhook').item.json.body.severity, confidence: $('Webhook').item.json.body.confidence }) }}",
+        "options": {}
+      },
+      "id": "respond-medium",
+      "name": "Respond medium tier",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1560, 420]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, action: 'log_review', tier: 'low', severity: $('Webhook').item.json.body.severity, confidence: $('Webhook').item.json.body.confidence }) }}",
+        "options": {}
+      },
+      "id": "respond-low",
+      "name": "Respond log review",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1340, 560]
     },
     {
       "parameters": {
@@ -98,7 +236,7 @@
       "name": "Respond Not Critical",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [680, 420]
+      "position": [680, 520]
     }
   ],
   "connections": {
@@ -107,19 +245,39 @@
     },
     "Is CRITICAL": {
       "main": [
-        [
-          { "node": "Notify Slack", "type": "main", "index": 0 }
-        ],
-        [
-          { "node": "Respond Not Critical", "type": "main", "index": 0 }
-        ]
+        [{ "node": "Confidence > 0.85", "type": "main", "index": 0 }],
+        [{ "node": "Respond Not Critical", "type": "main", "index": 0 }]
       ]
+    },
+    "Confidence > 0.85": {
+      "main": [
+        [{ "node": "Build Slack payload", "type": "main", "index": 0 }],
+        [{ "node": "Confidence >= 0.6", "type": "main", "index": 0 }]
+      ]
+    },
+    "Confidence >= 0.6": {
+      "main": [
+        [{ "node": "Build Slack payload (medium)", "type": "main", "index": 0 }],
+        [{ "node": "Workflow log (review)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Slack payload": {
+      "main": [[{ "node": "Notify Slack", "type": "main", "index": 0 }]]
+    },
+    "Build Slack payload (medium)": {
+      "main": [[{ "node": "Notify Slack (medium tier)", "type": "main", "index": 0 }]]
     },
     "Notify Slack": {
       "main": [[{ "node": "Workflow log", "type": "main", "index": 0 }]]
     },
+    "Notify Slack (medium tier)": {
+      "main": [[{ "node": "Respond medium tier", "type": "main", "index": 0 }]]
+    },
     "Workflow log": {
-      "main": [[{ "node": "Respond Critical", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Respond high tier", "type": "main", "index": 0 }]]
+    },
+    "Workflow log (review)": {
+      "main": [[{ "node": "Respond log review", "type": "main", "index": 0 }]]
     }
   },
   "pinData": {},

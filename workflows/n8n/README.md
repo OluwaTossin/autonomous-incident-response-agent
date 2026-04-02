@@ -26,6 +26,7 @@ Open **http://localhost:5678**, create an owner account (first visit), then **Im
 |------|--------------------------------------|
 | [`incident-triage-escalation.json`](incident-triage-escalation.json) | `POST http://localhost:5678/webhook/triage-escalation` |
 | [`incident-ticket-creation.json`](incident-ticket-creation.json) | `POST http://localhost:5678/webhook/ticket-creation` |
+| [`incident-triage-feedback.json`](incident-triage-feedback.json) | `POST http://localhost:5678/webhook/triage-feedback` |
 
 **Activate** each workflow (toggle in n8n UI) so webhooks listen.
 
@@ -42,13 +43,18 @@ docker compose -f docker-compose.n8n.yml up -d
 
 ### `incident-triage-escalation`
 
-1. **Webhook** accepts JSON in the **HTTP body** (same shape as `POST /triage` returns). n8n exposes that payload as **`$json.body`** in expressions — the workflows use `body.severity`, `body.escalate`, etc.
-2. If **`body.severity === "CRITICAL"`**:
-   - **Notify Slack** — `POST` to `$env.SLACK_WEBHOOK_URL` with the triage JSON in the message text.
-   - **Workflow log** — `POST` to `{TRIAGE_API_BASE}/n8n/workflow-log` with the triage body (append-only JSONL on the API host: `data/logs/n8n_workflow_events.jsonl`, gitignored).
-3. **Respond to Webhook** — JSON status (`slack_and_log` vs `no_notification`).
+1. **Webhook** accepts JSON in the **HTTP body** (same shape as `POST /triage` returns). n8n exposes that payload as **`$json.body`** in expressions — the workflows use `body.severity`, `body.confidence`, etc.
+2. If **`body.severity !== "CRITICAL"`** — respond `action: no_notification`.
+3. If **CRITICAL**, **confidence tiers** (numeric `body.confidence`, missing treated as `0`):
+   - **`confidence > 0.85`** — **Build Slack payload** (Code node) → rich Slack attachment (service, likely root cause, confidence, actions, evidence summary) → **Notify Slack** → **Workflow log** (`tier: high_confidence`) → respond `action: slack_and_page`, `tier: high` (wire PagerDuty/Opsgenie on this branch if you use them).
+   - **`0.6 ≤ confidence ≤ 0.85`** — same Slack formatting → **Slack only** (no workflow log) → respond `action: slack_only`, `tier: medium`.
+   - **`< 0.6`** — **Workflow log** only (`tier: log_review`) → respond `action: log_review`, `tier: low`.
 
-If `SLACK_WEBHOOK_URL` is empty, the CRITICAL branch fails at the HTTP node — set a real webhook or temporarily change the workflow in the UI.
+If `SLACK_WEBHOOK_URL` is empty, branches that post to Slack fail at the HTTP node — set a real webhook or adjust the workflow in the UI.
+
+### `incident-triage-feedback`
+
+Optional follow-up: **Webhook** forwards the POST body to **`POST {TRIAGE_API_BASE}/n8n/triage-feedback`**, which appends one line to **`data/logs/triage_feedback.jsonl`** (gitignored). Include **`triage_id`** (UUID from `POST /triage`) so the row joins to **`triage_outputs.jsonl`**. Also send `diagnosis_correct`, `actions_useful`, `notes`, and optional `triage_snapshot` for eval / tuning. Each logged line has top-level `triage_id` plus the full `feedback` object. Env: `N8N_TRIAGE_FEEDBACK_DISABLE`, `N8N_TRIAGE_FEEDBACK_JSONL`.
 
 ### `incident-ticket-creation`
 
@@ -73,7 +79,17 @@ curl -s -X POST http://localhost:5678/webhook/ticket-creation \
   -d '{"escalate":true,"incident_summary":"Outage","recommended_actions":["page"],"severity":"HIGH","likely_root_cause":"x","confidence":0.5,"evidence":[],"timeline":[]}'
 ```
 
-To test **CRITICAL** + Slack, set `"severity":"CRITICAL"` and a valid `SLACK_WEBHOOK_URL` in the environment passed to the n8n container.
+To exercise **CRITICAL** tiers, set `"severity":"CRITICAL"` and vary `confidence` (e.g. `0.9` → high, `0.7` → medium, `0.4` → log review). Use a valid `SLACK_WEBHOOK_URL` for paths that notify Slack.
+
+Minimal CRITICAL bodies for each tier (add `likely_root_cause`, `recommended_actions`, `evidence`, `timeline` as in real triage):
+
+```bash
+BASE='{"severity":"CRITICAL","incident_summary":"CPU","likely_root_cause":"contention","recommended_actions":["Check CPU"],"escalate":true,"evidence":[],"timeline":[]}'
+
+curl -s -X POST http://localhost:5678/webhook/triage-escalation -H "Content-Type: application/json" -d "$(echo $BASE | jq '. + {confidence: 0.9}')"
+curl -s -X POST http://localhost:5678/webhook/triage-escalation -H "Content-Type: application/json" -d "$(echo $BASE | jq '. + {confidence: 0.7, service_name: \"payment-api\"}')"
+curl -s -X POST http://localhost:5678/webhook/triage-escalation -H "Content-Type: application/json" -d "$(echo $BASE | jq '. + {confidence: 0.4}')"
+```
 
 ## API routes (FastAPI)
 
@@ -81,12 +97,15 @@ To test **CRITICAL** + Slack, set `"severity":"CRITICAL"` and a valid `SLACK_WEB
 |--------|------|------|
 | POST | `/n8n/mock-jira/issue` | Returns `{ key, id, self, fields }` like Jira |
 | POST | `/n8n/workflow-log` | Appends one JSONL line (`N8N_WORKFLOW_LOG_DISABLE`, `N8N_WORKFLOW_LOG_JSONL`) |
+| POST | `/n8n/triage-feedback` | Appends human feedback JSONL (`N8N_TRIAGE_FEEDBACK_DISABLE`, `N8N_TRIAGE_FEEDBACK_JSONL`) |
 
 ## Import / version notes
 
 Workflows were authored for **n8n 1.73.x** (see `docker-compose.n8n.yml` image tag). If import errors appear on a newer n8n, recreate the same graph in the UI from this README or adjust node type versions in the JSON.
 
 If **IF** conditions never match (e.g. always `not_escalated` / `no_notification`), your editor may be using old expressions: ensure **Is CRITICAL** uses `$json.body.severity` and **Should escalate** uses `$json.body.escalate` — re-import the JSON from this repo or fix the expressions in the UI.
+
+**`triage-feedback` → `{"message":"Error in workflow"}`** — Usually the **POST triage-feedback** HTTP node failed (connection refused, or **404**). From the host, `curl -s http://127.0.0.1:8000/ | jq .n8n_triage_feedback` must show `POST /n8n/triage-feedback`; if you get **404** on that path, restart the API from this repo (`uv run serve-api`) so it loads the current `n8n_routes`. From inside Docker, the URL must be reachable (`TRIAGE_API_BASE`, default `http://host.docker.internal:8000`).
 
 ## End-to-end with real triage
 

@@ -81,7 +81,10 @@ def test_triage_calls_graph(fake_triage: dict) -> None:
             json={"alert_title": "x", "service_name": "y"},
         )
     assert r.status_code == 200
-    assert r.json() == fake_triage
+    data = r.json()
+    tid = data.pop("triage_id", None)
+    assert tid and len(tid) == 36
+    assert data == fake_triage
     m.assert_called_once()
 
 

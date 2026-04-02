@@ -62,11 +62,14 @@ def append_triage_jsonl(
     payload: dict[str, Any],
     result: dict[str, Any],
     *,
+    triage_id: str,
     rag_context: str | None = None,
     retrieval_hits: list[dict[str, Any]] | None = None,
 ) -> None:
     """
-    Append one JSON line: timestamp, input, output, retrieved_context, top_k_sources.
+    Append one JSON line: triage_id, timestamp, input, output, retrieved_context, top_k_sources.
+
+    `triage_id` must match the id returned on `POST /triage` and referenced by feedback rows.
 
     Never raises to callers. Does not log API keys (only request body you send — scrub payloads).
     """
@@ -77,6 +80,7 @@ def append_triage_jsonl(
         path.parent.mkdir(parents=True, exist_ok=True)
         ctx = rag_context if isinstance(rag_context, str) else ""
         entry = {
+            "triage_id": triage_id,
             "timestamp": datetime.now(UTC).replace(microsecond=0).isoformat(),
             "input": payload,
             "output": result,

@@ -16,12 +16,15 @@ def test_append_triage_jsonl_writes_line(tmp_path, monkeypatch: pytest.MonkeyPat
 
     append_triage_jsonl(
         {"alert_title": "x"},
-        {"severity": "LOW", "incident_summary": "y"},
+        {"severity": "LOW", "incident_summary": "y", "triage_id": "tid-a"},
+        triage_id="tid-a",
     )
     assert target.is_file()
     row = json.loads(target.read_text(encoding="utf-8").strip())
+    assert row["triage_id"] == "tid-a"
     assert row["input"]["alert_title"] == "x"
     assert row["output"]["severity"] == "LOW"
+    assert row["output"]["triage_id"] == "tid-a"
     assert "timestamp" in row
     assert row["retrieved_context"] == ""
     assert row["top_k_sources"] == []
@@ -34,7 +37,8 @@ def test_append_includes_rag_and_sources(tmp_path, monkeypatch: pytest.MonkeyPat
 
     append_triage_jsonl(
         {"alert_title": "z"},
-        {"severity": "HIGH"},
+        {"severity": "HIGH", "triage_id": "tid-b"},
+        triage_id="tid-b",
         rag_context="ctx block",
         retrieval_hits=[
             {"score": 0.2, "source": "b.md", "doc_type": "incident", "chunk_index": 1},
@@ -42,6 +46,7 @@ def test_append_includes_rag_and_sources(tmp_path, monkeypatch: pytest.MonkeyPat
         ],
     )
     row = json.loads(target.read_text(encoding="utf-8").strip())
+    assert row["triage_id"] == "tid-b"
     assert row["retrieved_context"] == "ctx block"
     assert row["top_k_sources"][0]["source"] == "a.md"
     assert row["top_k_sources"][0]["score"] == 0.9
@@ -61,7 +66,7 @@ def test_triage_audit_respects_disable(monkeypatch: pytest.MonkeyPatch, tmp_path
     monkeypatch.setenv("TRIAGE_AUDIT_JSONL", str(target))
     monkeypatch.setenv("TRIAGE_AUDIT_DISABLE", "1")
 
-    append_triage_jsonl({}, {})
+    append_triage_jsonl({}, {"triage_id": "x"}, triage_id="x")
     assert not target.exists()
 
 

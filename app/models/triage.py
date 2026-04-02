@@ -29,6 +29,10 @@ class EvidenceItem(BaseModel):
 
 class TriageOutput(BaseModel):
     incident_summary: str = Field(..., min_length=1)
+    service_name: str | None = Field(
+        default=None,
+        description="Affected service or component when known (from incident or inference)",
+    )
     severity: Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"]
     likely_root_cause: str = Field(..., min_length=1)
     recommended_actions: list[str] = Field(..., min_length=1)

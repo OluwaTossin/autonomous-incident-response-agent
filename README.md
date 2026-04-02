@@ -45,7 +45,7 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 
 - **Deliverable:** Incident JSON → normalized narrative → **same retrieval query as RAG** → LLM structured triage + guardrails.
 - **Graph (nodes):** `normalize_input` → `retrieval` → `analysis` → `enrich_triage` → `decision` → `output_formatter`.
-- **Models:** [`app/models/incident.py`](app/models/incident.py) (payload), [`app/models/triage.py`](app/models/triage.py) — `TriageOutput` includes `evidence[]`, `conflicting_signals_summary`, `timeline` (plus core fields).
+- **Models:** [`app/models/incident.py`](app/models/incident.py) (payload), [`app/models/triage.py`](app/models/triage.py) — `TriageOutput` includes optional `service_name`, `evidence[]`, `conflicting_signals_summary`, `timeline` (plus core fields).
 - **Deterministic layer:** [`app/agent/signal_reasoning.py`](app/agent/signal_reasoning.py) merges **programmatic evidence** from retrieval hits, **multi-signal contradiction** heuristics on the payload, and **programmatic timeline** extraction; merged with the LLM draft in `enrich_triage`.
 - **API for automation:** `run_triage(incident)` and `run_triage_with_audit(incident)` → `(result, {rag_context, retrieval_hits})` in [`app/agent/graph.py`](app/agent/graph.py).
 - **CLI:** `uv run triage -f examples/sample_incident_payload.json` (needs `.env`, built index, chat-capable model).
@@ -54,18 +54,20 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 ### Phase 5 — HTTP API (FastAPI)
 
 - **Deliverable:** Local backend for ingest validation and full triage over HTTP.
-- **Endpoints:** `GET /` (service discovery), `GET /health`, `GET /version`, `POST /ingest-incident` (validate + normalize only), `POST /triage` (full pipeline; response body is **only** the triage JSON, same shape as CLI).
+- **Endpoints:** `GET /` (service discovery), `GET /health`, `GET /version`, `POST /ingest-incident` (validate + normalize only), `POST /triage` (full pipeline; response is triage fields plus **`triage_id`** (UUID) for feedback and eval joins).
 - **Run:** `uv run serve-api` or `uvicorn app.api.main:app` (optional `API_HOST`, `API_PORT`). OpenAPI: `/docs`.
-- **Audit log:** Each `POST /triage` appends one line to `data/logs/triage_outputs.jsonl` (**gitignored**): `timestamp`, `input`, `output`, **`retrieved_context`**, **`top_k_sources`**. Env: `TRIAGE_AUDIT_DISABLE`, `TRIAGE_AUDIT_JSONL`, `TRIAGE_AUDIT_MAX_RAG_CHARS`. How to validate: [`docs/decisions/triage-audit-validation.md`](docs/decisions/triage-audit-validation.md).
+- **Audit log:** Each `POST /triage` appends one line to `data/logs/triage_outputs.jsonl` (**gitignored**): **`triage_id`**, `timestamp`, `input`, `output` (includes the same **`triage_id`**), **`retrieved_context`**, **`top_k_sources`**. Env: `TRIAGE_AUDIT_DISABLE`, `TRIAGE_AUDIT_JSONL`, `TRIAGE_AUDIT_MAX_RAG_CHARS`. How to validate: [`docs/decisions/triage-audit-validation.md`](docs/decisions/triage-audit-validation.md).
+- **Feedback join:** Send **`triage_id`** from the triage response on **`POST /n8n/triage-feedback`**; feedback JSONL lines include top-level **`triage_id`** for correlation with the audit file.
 
 ### Phase 6 — n8n execution layer
 
 - **Deliverable:** Run **n8n in Docker**; two **importable workflows** driven by **webhooks**; FastAPI **mock Jira** + **workflow event log** for automation glue.
 - **Docker:** [`docker-compose.n8n.yml`](docker-compose.n8n.yml) — `docker compose -f docker-compose.n8n.yml up -d` → UI at **http://localhost:5678**. Uses `host.docker.internal` + `TRIAGE_API_BASE` (default `http://host.docker.internal:8000`) to reach the API from the container. Set **`SLACK_WEBHOOK_URL`** in repo-root **`.env`** (gitignored); Compose injects it into n8n — never commit the real URL.
 - **Workflows (import JSON in n8n, then activate):**
-  - **`incident-triage-escalation`** — `POST …/webhook/triage-escalation` with **flat triage JSON**; if `severity === CRITICAL`, posts to **`SLACK_WEBHOOK_URL`** and logs via **`POST /n8n/workflow-log`**.
+  - **`incident-triage-escalation`** — `POST …/webhook/triage-escalation` with **flat triage JSON**; if `severity === CRITICAL`, routes by **`confidence`** (Slack + log vs Slack-only vs log-only) and sends a **rich Slack attachment** (service, root cause, actions, evidence). See [`workflows/n8n/README.md`](workflows/n8n/README.md).
   - **`incident-ticket-creation`** — `POST …/webhook/ticket-creation` with flat triage JSON; if `escalate === true`, **`POST /n8n/mock-jira/issue`** and returns a mock `MOCK-*` key.
-- **API helpers:** [`app/api/n8n_routes.py`](app/api/n8n_routes.py) — `POST /n8n/mock-jira/issue`, `POST /n8n/workflow-log` (append **`data/logs/n8n_workflow_events.jsonl`**, gitignored; env `N8N_WORKFLOW_LOG_DISABLE`, `N8N_WORKFLOW_LOG_JSONL`).
+  - **`incident-triage-feedback`** (optional) — `POST …/webhook/triage-feedback` → **`POST /n8n/triage-feedback`**; include **`triage_id`** from **`POST /triage`** plus labels (`diagnosis_correct`, `actions_useful`, etc.).
+- **API helpers:** [`app/api/n8n_routes.py`](app/api/n8n_routes.py) — `POST /n8n/mock-jira/issue`, `POST /n8n/workflow-log`, `POST /n8n/triage-feedback` (append-only logs under `data/logs/`, gitignored; see env vars in [`workflows/n8n/README.md`](workflows/n8n/README.md)).
 - **Guide:** [`workflows/n8n/README.md`](workflows/n8n/README.md) (curl examples, pipe `POST /triage` → ticket webhook).
 
 ### Tests

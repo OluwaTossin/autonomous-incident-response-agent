@@ -45,9 +45,10 @@ For each record, confirm:
 
 | Field | Expectation |
 |--------|-------------|
+| `triage_id` | UUID string; same value appears inside `output.triage_id` and must be sent back with feedback |
 | `timestamp` | ISO-8601 UTC string |
 | `input` | Object (incident payload as sent) |
-| `output` | Triage object: `incident_summary`, `severity`, `likely_root_cause`, `recommended_actions`, `escalate`, `confidence`, `evidence`, `conflicting_signals_summary`, `timeline` |
+| `output` | Triage object: **`triage_id`**, `incident_summary`, `severity`, `likely_root_cause`, `recommended_actions`, `escalate`, `confidence`, `evidence`, `conflicting_signals_summary`, `timeline`, optional `service_name` |
 | `retrieved_context` | String (RAG block shown to the LLM; may be truncated — see `TRIAGE_AUDIT_MAX_RAG_CHARS`) |
 | `top_k_sources` | Array of `{source, doc_type, score, chunk_index}` sorted by `score` descending |
 

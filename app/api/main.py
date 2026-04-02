@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Any
+from uuid import uuid4
 
 from fastapi import Body, FastAPI, HTTPException
 from pydantic import ValidationError
@@ -38,6 +39,7 @@ def root() -> dict[str, Any]:
         "triage": "POST /triage",
         "n8n_mock_jira": "POST /n8n/mock-jira/issue",
         "n8n_workflow_log": "POST /n8n/workflow-log",
+        "n8n_triage_feedback": "POST /n8n/triage-feedback",
     }
 
 
@@ -110,13 +112,16 @@ def post_triage(
         },
     ),
 ) -> dict[str, Any]:
-    """Run retrieval + LangGraph agent; return structured triage JSON."""
+    """Run retrieval + LangGraph agent; return structured triage JSON with ``triage_id`` for feedback join."""
     _validate_incident_body(body)
+    triage_id = str(uuid4())
     result, audit_meta = run_triage_with_audit(body)
+    result_out = {**result, "triage_id": triage_id}
     append_triage_jsonl(
         body,
-        result,
+        result_out,
+        triage_id=triage_id,
         rag_context=audit_meta.get("rag_context"),
         retrieval_hits=audit_meta.get("retrieval_hits"),
     )
-    return result
+    return result_out

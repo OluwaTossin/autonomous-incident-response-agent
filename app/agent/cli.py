@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from uuid import uuid4
 
 from app.agent.graph import run_triage
 
@@ -46,7 +47,7 @@ def main(args: list[str] | None = None) -> int:
         print("JSON root must be an object", file=sys.stderr)
         return 1
 
-    result = run_triage(incident)
+    result = {**run_triage(incident), "triage_id": str(uuid4())}
     print(json.dumps(result, indent=2, ensure_ascii=False))
     return 0 if "error" not in result or not result.get("error") else 2
 

@@ -200,11 +200,18 @@ def node_enrich_triage(state: TriageState) -> dict[str, Any]:
     llm_tl = draft.get("timeline") if isinstance(draft.get("timeline"), list) else []
     merged_tl = merge_timelines(prog_tl, [str(x) for x in llm_tl])
 
+    svc = (
+        str(incident.get("service_name") or incident.get("serviceName") or "").strip() or None
+    )
+    if not svc and draft.get("service_name"):
+        svc = str(draft.get("service_name")).strip() or None
+
     enriched = {
         **draft,
         "evidence": merged_evidence,
         "conflicting_signals_summary": new_conflict,
         "timeline": merged_tl,
+        "service_name": svc,
     }
     return {"draft": enriched}
 
@@ -223,6 +230,7 @@ def node_decision(state: TriageState) -> dict[str, Any]:
 
 def _empty_triage_extras() -> dict[str, Any]:
     return {
+        "service_name": None,
         "evidence": [],
         "conflicting_signals_summary": None,
         "timeline": [],

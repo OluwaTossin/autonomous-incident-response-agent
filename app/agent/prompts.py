@@ -12,5 +12,6 @@ Rules:
 - evidence: add entries for payload-specific support (metrics, alert title, log lines) with type (log|incident|runbook|knowledge|decision|metric|alert|other), source, and reason. Retrieval-derived rows are merged automatically after your reply from index metadata—focus your evidence on what comes from the INCIDENT text.
 - conflicting_signals_summary: if metrics/logs/retrieval suggest incompatible primary causes (e.g. CPU saturation vs DB connection exhaustion both plausible), set a short explicit sentence; otherwise null.
 - timeline: ordered short strings (e.g. "T+2m CPU spike", ISO timestamps if given in payload/logs). Empty list only if no temporal ordering is inferable.
+- service_name: echo incident.service_name (or serviceName) when present; otherwise infer a short component name from the incident text, or null if unknown.
 
 Output must match the required structured schema exactly."""

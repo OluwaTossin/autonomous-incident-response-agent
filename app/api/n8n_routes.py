@@ -28,6 +28,15 @@ def _workflow_log_path() -> Path:
     return root / "data" / "logs" / "n8n_workflow_events.jsonl"
 
 
+def _triage_feedback_path() -> Path:
+    custom = os.environ.get("N8N_TRIAGE_FEEDBACK_JSONL", "").strip()
+    root = project_root()
+    if custom:
+        p = Path(custom)
+        return p if p.is_absolute() else (root / p)
+    return root / "data" / "logs" / "triage_feedback.jsonl"
+
+
 @router.post("/mock-jira/issue")
 def mock_jira_issue(body: dict[str, Any] = Body(default_factory=dict)) -> dict[str, Any]:
     """
@@ -73,5 +82,36 @@ def workflow_log(event: dict[str, Any] = Body(...)) -> dict[str, str]:
             f.write(line)
     except OSError as e:
         logger.warning("n8n workflow log write failed (%s): %s", path, e)
+        return {"status": "error"}
+    return {"status": "logged"}
+
+
+@router.post("/triage-feedback")
+def triage_feedback(event: dict[str, Any] = Body(...)) -> dict[str, str]:
+    """
+    Append human feedback after an escalation (diagnosis correct, actions useful, notes).
+
+    Include **triage_id** (UUID from ``POST /triage``) so rows join to ``triage_outputs.jsonl``.
+    Disable with N8N_TRIAGE_FEEDBACK_DISABLE=1.
+    """
+    if os.environ.get("N8N_TRIAGE_FEEDBACK_DISABLE", "").lower() in ("1", "true", "yes"):
+        return {"status": "skipped"}
+    path = _triage_feedback_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tid = event.get("triage_id") if isinstance(event, dict) else None
+        tid_str = str(tid).strip() if tid is not None and str(tid).strip() else None
+        line = json.dumps(
+            {
+                "timestamp": datetime.now(UTC).replace(microsecond=0).isoformat(),
+                "triage_id": tid_str,
+                "feedback": event,
+            },
+            ensure_ascii=False,
+        ) + "\n"
+        with path.open("a", encoding="utf-8") as f:
+            f.write(line)
+    except OSError as e:
+        logger.warning("n8n triage feedback write failed (%s): %s", path, e)
         return {"status": "error"}
     return {"status": "logged"}
