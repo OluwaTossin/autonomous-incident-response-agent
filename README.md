@@ -114,8 +114,9 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 ### Phase 9 — Docker Compose (full stack)
 
 - **Deliverable:** One command brings up **FastAPI + Gradio** and **n8n** on a shared Docker network.
-- **Files:** [`Dockerfile`](Dockerfile) (Python 3.12, `uv sync --frozen`, UI extra), [`docker-compose.yml`](docker-compose.yml), [`.dockerignore`](.dockerignore).
+- **Files:** [`Dockerfile`](Dockerfile) (Python 3.12, `uv sync --frozen`, UI extra, **`curl` + explicit `HEALTHCHECK`** for ALB/ECS-style probes), [`docker-compose.yml`](docker-compose.yml), [`.dockerignore`](.dockerignore).
 - **Prerequisites:** `.env` with `OPENAI_API_KEY`; on the host run **`uv run rag-build`** once so **`./.rag_index`** exists (mounted **read-only** into the API container). Optional `SLACK_WEBHOOK_URL` for n8n (same as Phase 6).
+- **Persistence (not ephemeral on rebuild):** **`./data:/app/data`** (corpus paths, `data/logs` JSONL, eval outputs under `data/eval/` if written) and **`./.rag_index`** (FAISS) are bind-mounted from the host.
 - **Run:**
   ```bash
   docker compose up -d --build
@@ -124,7 +125,11 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
   - If **port 8000 is already allocated** (local `uv run serve-api`, another container, OrbStack):  
     `COMPOSE_API_PORT=18080 docker compose up -d --build` → open **http://127.0.0.1:18080/docs** (n8n still uses `http://api:8000` on the Docker network).
   - n8n: [http://localhost:5678](http://localhost:5678) — import and activate workflows from [`workflows/n8n/`](workflows/n8n/). **`TRIAGE_API_BASE`** is set to **`http://api:8000`** inside Compose (do not override to `host.docker.internal` for this stack).
-- **Logs:** `./data/logs` is mounted writable for triage audit and n8n JSONL helpers.
+- **End-to-end check (definition of done before Phase 10):** With Compose up and **n8n workflow `incident-ticket-creation` imported + active**, run from repo root:
+  ```bash
+  API_BASE=http://127.0.0.1:8000 ./scripts/e2e_stack_check.sh
+  ```
+  Use your published port if needed (e.g. `API_BASE=http://127.0.0.1:18080`). The script: **`GET /health`** → **`POST /triage`** (validates `triage_id`, severity, actions, non-empty **evidence**; optional **`STRICT_RAG_EVIDENCE=1`** requires a `data/` source in evidence) → **`POST …/webhook/ticket-creation`** (mock Jira path). **`SKIP_TRIAGE=1`** or **`SKIP_N8N=1`** to isolate steps.
 - **n8n-only** (API on host): keep using [`docker-compose.n8n.yml`](docker-compose.n8n.yml) and `TRIAGE_API_BASE=http://host.docker.internal:8000`.
 
 ### Next (Phase 10+)
@@ -150,6 +155,7 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 | `app/` | `app/rag/`, `app/agent/`, `app/api/` (FastAPI), `app/models/`, `app/ui/` (Gradio), `app/eval/` (Phase 8) |
 | [`data/eval/`](data/eval/) | Gold JSONL + eval README |
 | [`examples/sample_incident_payload.json`](examples/sample_incident_payload.json) | Sample JSON for `triage` CLI |
+| [`scripts/e2e_stack_check.sh`](scripts/e2e_stack_check.sh) | Health + `/triage` + n8n webhook smoke test |
 | [`workflows/n8n/`](workflows/n8n/) | n8n workflow JSON + Phase 6 runbook |
 | [`docker-compose.yml`](docker-compose.yml) | Phase 9 — API + n8n |
 | [`docker-compose.n8n.yml`](docker-compose.n8n.yml) | Phase 6 — n8n only |

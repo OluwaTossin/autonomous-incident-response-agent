@@ -32,6 +32,8 @@ Open **http://localhost:5678**, create an owner account (first visit), then **Im
 
 **Activate** each workflow (toggle in n8n UI) so webhooks listen.
 
+**Stack E2E:** from the repo root, with the API reachable and **`incident-ticket-creation` active**, run [`scripts/e2e_stack_check.sh`](../scripts/e2e_stack_check.sh) (set `API_BASE` if the API is not on `:8000`).
+
 ### Docker → host API
 
 Compose sets `TRIAGE_API_BASE` default to `http://host.docker.internal:8000` and `extra_hosts: host.docker.internal:host-gateway` (Linux-friendly). If the API is elsewhere, export before `up`:

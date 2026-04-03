@@ -3,6 +3,8 @@
 # Prerequisites:
 #   1. Copy `.env.example` → `.env` and set OPENAI_API_KEY (and SLACK_WEBHOOK_URL if using Slack nodes).
 #   2. On the host: `uv run rag-build` so `./.rag_index` exists (mounted read-only into the API).
+# Persistence: `./data` (corpus paths, logs, eval artifacts) and `./.rag_index` (FAISS) are bind-mounted
+# so image rebuilds do not wipe JSONL logs or the vector index.
 #
 # Usage (repo root):
 #   docker compose up -d --build
@@ -27,18 +29,13 @@ services:
       API_PORT: "8000"
       ENABLE_GRADIO_UI: "${ENABLE_GRADIO_UI:-1}"
     volumes:
-      # Pre-built FAISS index from host (`uv run rag-build`)
+      # Pre-built FAISS index from host (`uv run rag-build`); survives container rebuilds.
       - ./.rag_index:/app/.rag_index:ro
-      # Writable JSONL logs (triage audit, n8n helpers)
-      - ./data/logs:/app/data/logs
+      # Full data tree: runbooks/incidents/logs (read), JSONL audit + n8n logs + eval (write).
+      - ./data:/app/data
     healthcheck:
       test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)",
-        ]
+        ["CMD", "curl", "--fail", "--silent", "--show-error", "--max-time", "4", "http://127.0.0.1:8000/health"]
       interval: 30s
       timeout: 5s
       retries: 3
