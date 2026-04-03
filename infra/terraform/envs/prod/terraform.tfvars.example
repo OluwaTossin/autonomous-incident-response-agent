@@ -35,3 +35,6 @@ enable_execute_command    = false
 # Phase 12 — browser triage UI. After UI deploy, add triage_ui_url to cors_origins and re-apply.
 # cors_origins = "http://localhost:3000,https://<cloudfront-or-s3-website>"
 # enable_triage_ui_cloudfront = true
+
+# Phase 13 — CloudWatch alarms → SNS (recommended for prod)
+# observability_alarm_sns_topic_arns = ["arn:aws:sns:eu-west-1:123456789012:aira-prod-alerts"]

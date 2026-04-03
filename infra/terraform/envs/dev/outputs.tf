@@ -74,3 +74,21 @@ output "triage_ui_url" {
   description = "Browser URL for the static triage UI (add to cors_origins for API CORS)"
   value       = module.triage_ui_cdn.ui_url
 }
+
+# Phase 13 — observability
+output "cloudwatch_dashboard_name" {
+  description = "Console: CloudWatch → Dashboards"
+  value       = module.monitoring.dashboard_name
+}
+
+output "cloudwatch_custom_metric_namespace" {
+  value = module.monitoring.custom_metric_namespace
+}
+
+output "cloudwatch_alarm_alb_target_5xx" {
+  value = module.monitoring.alarm_target_5xx_name
+}
+
+output "cloudwatch_alarm_alb_unhealthy_targets" {
+  value = module.monitoring.alarm_unhealthy_targets_name
+}

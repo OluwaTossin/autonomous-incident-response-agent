@@ -35,3 +35,8 @@ enable_execute_command    = false
 # Phase 12 — browser triage UI (Next.js static export → S3). After first UI deploy, add triage_ui_url:
 # cors_origins = "http://localhost:3000,http://127.0.0.1:3000,<paste terraform output -raw triage_ui_url>"
 # enable_triage_ui_cloudfront = true   # private S3 + HTTPS (requires CloudFront-capable account)
+
+# Phase 13 — CloudWatch (optional SNS for alarms)
+# observability_alarm_sns_topic_arns = ["arn:aws:sns:eu-west-1:123456789012:aira-alerts"]
+# observability_alb_target_5xx_threshold = 10
+# observability_create_dashboard = true

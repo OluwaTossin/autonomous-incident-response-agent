@@ -18,7 +18,7 @@ High-level view of the **Autonomous DevOps Incident Response System**: alerts an
 | RAG + logs & runbooks + vector store | Phase 3: `app/rag/` + corpora under `data/` and `data/runbooks/` |
 | Response API | Phase 5: structured triage JSON over HTTP |
 | n8n workflows | Phase 6: `workflows/n8n/` |
-| AWS (ECS Fargate, S3/CloudFront UI, CloudWatch, etc.) | Phases 9–12: `Dockerfile`, `infra/terraform/` (API on Fargate; static triage UI on S3 ± CloudFront) |
+| AWS (ECS Fargate, S3/CloudFront UI, CloudWatch, etc.) | Phases 9–13: `Dockerfile`, `infra/terraform/` (Fargate API, static UI, CloudWatch dashboard/alarms + triage log metrics) |
 
 Aligns with the five layers in the maintainer’s local `execution.md` (ingress, reasoning, retrieval, workflow, deployment), if present.
 

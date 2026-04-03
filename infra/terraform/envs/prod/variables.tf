@@ -110,3 +110,21 @@ variable "enable_triage_ui_cloudfront" {
   default     = false
   description = "If true, private S3 + CloudFront (HTTPS). If false, S3 static website (HTTP) — for accounts where CloudFront is not yet enabled."
 }
+
+variable "observability_create_dashboard" {
+  type        = bool
+  default     = true
+  description = "Create CloudWatch dashboard (ALB + ECS + triage log metrics)"
+}
+
+variable "observability_alarm_sns_topic_arns" {
+  type        = list(string)
+  default     = []
+  description = "SNS topic ARNs for ALB 5xx and unhealthy-target alarms (optional)"
+}
+
+variable "observability_alb_target_5xx_threshold" {
+  type        = number
+  default     = 10
+  description = "Sum of target 5xx per evaluation period before alarm fires"
+}

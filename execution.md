@@ -20,6 +20,7 @@ This document is the single source of truth for build order, scope, and mileston
 | **10** | **Done** | `infra/terraform/modules/*`, `infra/terraform/envs/dev`, `envs/prod` — VPC, ECR, ALB, ECS Fargate, IAM, logs, SSM-ready |
 | **11** | **Done** | `docs/deploy/aws-ecs.md`, `scripts/aws/push_api_to_ecr.sh`, `infra/terraform/bootstrap/` — ECR digest pinning, merged SSM secrets, Dockerfile bakes `.rag_index`, remote state S3+DynamoDB |
 | **12** | **Done** | `frontend/` (Next.js static export), `infra/terraform/modules/frontend_static_cdn/`, `cors_origins` → `CORS_ORIGINS` on ECS, FastAPI `CORSMiddleware`, `scripts/aws/deploy_frontend_cdn.sh`, `verify_triage_cors_preflight.sh` |
+| **13** | **Done** | `infra/terraform/modules/monitoring/` — CloudWatch dashboard, ALB 5xx + unhealthy-target alarms, log metric filters; `app/api/metrics_log.py` + triage duration/success logs; [`docs/deploy/observability.md`](docs/deploy/observability.md) |
 
 ---
 
@@ -255,8 +256,12 @@ N8N_BASIC_AUTH_PASSWORD=
 
 ### Phase 13 — Observability
 
-- [ ] API latency, errors, tokens, workflow success, container logs, triage duration
-- **Deliverable:** CloudWatch logs for services + at least one dashboard or alarm path
+- [x] **Container logs:** ECS → CloudWatch Logs (`/ecs/<stack>-api`; existing Phase 10–11)
+- [x] **ALB + ECS metrics:** dashboard widgets (requests, latency, 4xx/5xx, healthy hosts, CPU/memory)
+- [x] **Triage duration / success / graph errors:** one JSON line per triage → metric filters (`TriageDurationMs`, success/failure counts); **tokens** field reserved (`tokens_total: null`) for future LangChain usage
+- [x] **Alarms:** ALB target 5xx; unhealthy targets (optional SNS)
+- [ ] **n8n workflow success:** track in n8n UI / external metrics (not in this module)
+- **Deliverable:** [`docs/deploy/observability.md`](docs/deploy/observability.md), Terraform `module.monitoring`, `terraform output cloudwatch_*`
 
 ### Phase 14 — CI/CD
 
@@ -290,7 +295,7 @@ Use this as the default execution order:
 - [x] **Milestone 10** — Terraform dev environment *(+ prod env root; apply when ready)*
 - [x] **Milestone 11** — ECS Fargate deploy *(image push + `update-service`; see `docs/deploy/aws-ecs.md`)*
 - [x] **Milestone 12** — Next.js triage UI *(S3/CloudFront, API CORS; see `frontend/README.md`)*
-- [ ] **Milestone 13** — CloudWatch observability
+- [x] **Milestone 13** — CloudWatch observability *(dashboard + alarms + triage metrics; see `docs/deploy/observability.md`)*
 - [ ] **Milestone 14** — CI/CD
 
 ---
@@ -314,8 +319,8 @@ At completion you should be able to demonstrate:
 
 1. Keep **problem definition** and **sample runbooks** current as the source of truth for what “good” looks like.
 2. Do not skip **Phase 2** data; retrieval quality depends on it.
-3. Treat **Phase 13+** (observability, TLS, CI/CD) as the next slices after the API and hosted UI are wired.
+3. Treat **Phase 14+** (CI/CD, TLS hardening) as the next slices after observability is wired.
 
 ---
 
-*Last updated: 2026-04-02 — Phase 12 complete: Next.js triage console, S3/CloudFront static hosting, ECS `CORS_ORIGINS`. Next: Phase 13 (observability).*
+*Last updated: 2026-04-02 — Phase 13 complete: CloudWatch dashboard, alarms, triage log metrics. Next: Phase 14 (CI/CD).*

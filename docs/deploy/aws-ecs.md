@@ -2,6 +2,8 @@
 
 This path assumes **Phase 10** is applied: ECR repository, ECS cluster/service, ALB, and **AWS Systems Manager Parameter Store** for sensitive env vars. **n8n** is not part of this Terraform stack; only the triage API is deployed here.
 
+**Phase 13:** after apply, open the CloudWatch dashboard and alarms from Terraform outputs — see **[`docs/deploy/observability.md`](observability.md)**.
+
 ### Secrets in Parameter Store
 
 Terraform wires **ECS container secrets** so each value lives in **SSM** as a **SecureString** and is injected at task start as a normal **environment variable** (never stored in the task definition JSON as plain text).
