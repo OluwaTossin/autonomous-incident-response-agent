@@ -8,7 +8,8 @@ Local **[n8n](https://n8n.io/)** workflows that react to **triage-shaped JSON** 
    - **Phase 6 (this file):** API on the host (`uv run serve-api`, default `http://127.0.0.1:8000`).
    - **Phase 9 (full stack):** use repo-root **`docker compose up`** — n8n gets **`TRIAGE_API_BASE=http://api:8000`** automatically; no `host.docker.internal` needed.
 2. **Docker** (for n8n)
-3. Optional: **Slack Incoming Webhook** — in the **repository root** `.env` (same file as API keys; **gitignored**), set:
+3. If the API uses **`API_KEY`** (repo-root `.env`), any n8n **HTTP Request** node that calls **`POST /triage`** or **`POST /ingest-incident`** must send header **`x-api-key: <same value>`**. **`/n8n/*`** routes do not require this key.
+4. Optional: **Slack Incoming Webhook** — in the **repository root** `.env` (same file as API keys; **gitignored**), set:
    ```env
    SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/PATH
    ```

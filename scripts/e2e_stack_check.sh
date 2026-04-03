@@ -11,6 +11,7 @@
 #   SKIP_TRIAGE=1 skip live LLM call (health + n8n only)
 #   SKIP_N8N=1    skip webhook call (health + triage only)
 #   STRICT_RAG_EVIDENCE=1  require ≥1 evidence source under data/ (stricter)
+#   API_KEY       when set, sent as x-api-key on POST /triage (must match server API_KEY)
 #
 set -euo pipefail
 
@@ -20,6 +21,11 @@ N8N_BASE="${N8N_BASE:-http://127.0.0.1:5678}"
 SKIP_TRIAGE="${SKIP_TRIAGE:-0}"
 SKIP_N8N="${SKIP_N8N:-0}"
 STRICT_RAG_EVIDENCE="${STRICT_RAG_EVIDENCE:-0}"
+
+API_KEY_HDR=()
+if [[ -n "${API_KEY:-}" ]]; then
+  API_KEY_HDR=(-H "x-api-key: ${API_KEY}")
+fi
 
 echo "== 1) Health: GET ${API_BASE}/health"
 curl -fsS "${API_BASE}/health" >/dev/null
@@ -35,6 +41,7 @@ if [[ "${SKIP_TRIAGE}" != "1" ]]; then
   fi
   curl -fsS -X POST "${API_BASE}/triage" \
     -H "Content-Type: application/json" \
+    "${API_KEY_HDR[@]}" \
     -d @"${PAYLOAD}" \
     | python3 -c "
 import json, os, sys

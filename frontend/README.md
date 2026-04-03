@@ -14,7 +14,8 @@ rm -rf .next && npm run dev
 ## Run locally
 
 1. **API** (from repo root): `uv sync --extra dev`, `uv run rag-build`, `uv run serve-api` → API on **http://127.0.0.1:8000**  
-   FastAPI enables **CORS** for `http://localhost:3000` and `http://127.0.0.1:3000` by default (`CORS_ORIGINS` in repo-root `.env` — see [`.env.example`](../.env.example)).
+   FastAPI enables **CORS** for `http://localhost:3000` and `http://127.0.0.1:3000` by default (`CORS_ORIGINS` in repo-root `.env` — see [`.env.example`](../.env.example)).  
+   If you set **`API_KEY`** on the API, add **`NEXT_PUBLIC_TRIAGE_API_KEY`** with the same value in **`.env.local`** (see [`.env.example`](.env.example)) so the UI sends **`x-api-key`**.
 
 2. **Frontend** (this directory):
    ```bash

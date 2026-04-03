@@ -39,3 +39,9 @@ export function runbookDocsBaseUrl(): string | null {
   const raw = process.env.NEXT_PUBLIC_RUNBOOK_DOCS_BASE?.trim();
   return raw ? stripTrailingSlash(raw) : null;
 }
+
+/** Matches API ``API_KEY`` when the server enforces ``x-api-key`` (embedded at build time; demo-only). */
+export function publicTriageApiKey(): string | null {
+  const raw = process.env.NEXT_PUBLIC_TRIAGE_API_KEY?.trim();
+  return raw || null;
+}

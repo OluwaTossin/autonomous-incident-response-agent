@@ -7,12 +7,26 @@ import os
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import Body, FastAPI, HTTPException, Request
+from fastapi import Body, Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import RedirectResponse
+from starlette.responses import JSONResponse, RedirectResponse
 from starlette.routing import Mount
+
+from app.agent.nodes import parse_incident_payload
+from app.api.n8n_routes import router as n8n_router
+from app.api.security import (
+    client_api_key,
+    ingest_rate_limit_string,
+    rate_limit_disabled,
+    require_api_key_if_configured,
+    triage_rate_limit_string,
+)
+from app.api.triage_execution import run_full_triage
 
 _log = logging.getLogger(__name__)
 
@@ -24,9 +38,14 @@ def _cors_allowlist() -> list[str]:
     return [o.strip() for o in raw.split(",") if o.strip()]
 
 
-from app.agent.nodes import parse_incident_payload
-from app.api.n8n_routes import router as n8n_router
-from app.api.triage_execution import run_full_triage
+def _rate_limit_key(request: Request) -> str:
+    ck = client_api_key(request)
+    if ck:
+        return f"key:{ck}"
+    return get_remote_address(request)
+
+
+_limiter = Limiter(key_func=_rate_limit_key, enabled=not rate_limit_disabled())
 
 # Keep in sync with pyproject [project].version
 SERVICE_VERSION = "0.1.0"
@@ -36,6 +55,8 @@ app = FastAPI(
     version=SERVICE_VERSION,
     description="Incident ingest and LangGraph triage with RAG (Phase 5–7).",
 )
+
+app.state.limiter = _limiter
 
 app.include_router(n8n_router)
 
@@ -91,7 +112,9 @@ def _validate_incident_body(body: Any) -> dict[str, Any]:
 
 
 @app.post("/ingest-incident")
+@_limiter.limit(ingest_rate_limit_string())
 def ingest_incident(
+    request: Request,
     body: dict[str, Any] = Body(
         ...,
         examples={
@@ -101,6 +124,7 @@ def ingest_incident(
             },
         },
     ),
+    _auth: None = Depends(require_api_key_if_configured),
 ) -> dict[str, Any]:
     """
     Validate and normalize an incident payload (webhook-style intake).
@@ -115,7 +139,9 @@ def ingest_incident(
 
 
 @app.post("/triage")
+@_limiter.limit(triage_rate_limit_string())
 def post_triage(
+    request: Request,
     body: dict[str, Any] = Body(
         ...,
         examples={
@@ -132,6 +158,7 @@ def post_triage(
             },
         },
     ),
+    _auth: None = Depends(require_api_key_if_configured),
 ) -> dict[str, Any]:
     """Run retrieval + LangGraph agent; return structured triage JSON with ``triage_id`` for feedback join."""
     incident = _validate_incident_body(body)
@@ -154,6 +181,17 @@ def _with_optional_gradio(application: FastAPI) -> FastAPI:
 
 
 app = _with_optional_gradio(app)
+app.state.limiter = _limiter
+
+
+async def _rate_limit_exceeded_handler(_request: Request, _exc: RateLimitExceeded) -> JSONResponse:
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Rate limit exceeded"},
+    )
+
+
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 class _RedirectUiSlashMiddleware(BaseHTTPMiddleware):

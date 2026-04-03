@@ -6,6 +6,7 @@
 # Env:
 #   API_BASE  default http://127.0.0.1:18080
 #   N         default 5 (overrides first arg)
+#   API_KEY   optional x-api-key header when server enforces API_KEY
 #
 set -euo pipefail
 
@@ -13,6 +14,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 API_BASE="${API_BASE:-http://127.0.0.1:18080}"
 RUNS="${1:-${N:-5}}"
 PAYLOAD="${2:-${ROOT}/examples/sample_incident_payload.json}"
+
+API_KEY_HDR=()
+if [[ -n "${API_KEY:-}" ]]; then
+  API_KEY_HDR=(-H "x-api-key: ${API_KEY}")
+fi
 
 if [[ ! -f "${PAYLOAD}" ]]; then
   echo "Missing payload: ${PAYLOAD}" >&2
@@ -26,6 +32,7 @@ trap 'rm -f "${TIMES_FILE}"' EXIT
 for _ in $(seq 1 "${RUNS}"); do
   curl -sS -o /dev/null -w "%{time_total}\n" -X POST "${API_BASE}/triage" \
     -H "Content-Type: application/json" \
+    "${API_KEY_HDR[@]}" \
     -d @"${PAYLOAD}" >>"${TIMES_FILE}" || exit 1
 done
 

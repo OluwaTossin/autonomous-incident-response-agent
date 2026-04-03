@@ -81,6 +81,7 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 - **Run:** `uv run serve-api` or `uvicorn app.api.main:app` (optional `API_HOST`, `API_PORT`). OpenAPI: `/docs`.
 - **Audit log:** Each `POST /triage` appends one line to `data/logs/triage_outputs.jsonl` (**gitignored**): **`triage_id`**, `timestamp`, `input`, `output` (includes the same **`triage_id`**), **`retrieved_context`**, **`top_k_sources`**. Env: `TRIAGE_AUDIT_DISABLE`, `TRIAGE_AUDIT_JSONL`, `TRIAGE_AUDIT_MAX_RAG_CHARS`. How to validate: [`docs/decisions/triage-audit-validation.md`](docs/decisions/triage-audit-validation.md).
 - **Feedback join:** Send **`triage_id`** from the triage response on **`POST /n8n/triage-feedback`**; feedback JSONL lines include top-level **`triage_id`** for correlation with the audit file.
+- **Optional hardening:** Set **`API_KEY`** in the environment to require matching header **`x-api-key`** on **`POST /ingest-incident`** and **`POST /triage`** ( **`401`** otherwise). **`GET /health`** and **`/n8n/*`** stay open for ALB checks and n8n glue. **slowapi** enforces **`10/minute`** (triage) and **`30/minute`** (ingest) per client IP, or per **`x-api-key`** when present (**`429`** on excess). Tune with **`API_RATE_LIMIT_TRIAGE`**, **`API_RATE_LIMIT_INGEST`**; **`API_RATE_LIMIT_DISABLED=1`** for tests.
 
 ### Phase 6 — n8n execution layer
 
@@ -254,6 +255,7 @@ curl -s -X POST http://127.0.0.1:8000/ingest-incident -H "Content-Type: applicat
   -d @examples/sample_incident_payload.json
 curl -s -X POST http://127.0.0.1:8000/triage -H "Content-Type: application/json" \
   -d @examples/sample_incident_payload.json
+# When API_KEY is set on the server, add: -H "x-api-key: <same value>"
 ```
 
 OpenAPI: `http://127.0.0.1:8000/docs`

@@ -1,7 +1,18 @@
 import { ApiFailure } from "./api-errors";
-import { publicFeedbackTimeoutMs, publicTriageTimeoutMs } from "./config";
+import {
+  publicFeedbackTimeoutMs,
+  publicTriageApiKey,
+  publicTriageTimeoutMs,
+} from "./config";
 import type { TriageResponse } from "./types";
 import { isTriageResponse } from "./types";
+
+function jsonHeaders(): Record<string, string> {
+  const h: Record<string, string> = { "Content-Type": "application/json" };
+  const key = publicTriageApiKey();
+  if (key) h["x-api-key"] = key;
+  return h;
+}
 
 function formatErrorDetail(data: unknown): string {
   if (!data || typeof data !== "object") return "Request failed";
@@ -32,7 +43,7 @@ export async function postTriage(
   try {
     r = await fetch(`${baseUrl}/triage`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: jsonHeaders(),
       body: JSON.stringify(incident),
       signal: controller.signal,
     });
@@ -94,7 +105,7 @@ export async function postTriageFeedback(
   try {
     r = await fetch(`${baseUrl}/n8n/triage-feedback`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: jsonHeaders(),
       body: JSON.stringify(payload),
       signal: controller.signal,
     });
