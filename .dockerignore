@@ -1,0 +1,16 @@
+.git
+.github
+.venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.rag_index
+*.egg-info
+data/eval/reports
+.cursor
+*.md
+!README.md
+execution.md
+.env
+.env.*
+!.env.example

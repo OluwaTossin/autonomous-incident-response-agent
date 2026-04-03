@@ -45,6 +45,10 @@ def run_suite(
             elapsed_ms = (time.perf_counter() - t0) * 1000.0
             ev = evaluate_case(case.id, result, meta, case.expect, latency_ms=elapsed_ms)
             ev["case_id"] = case.id
+            if case.tags:
+                ev["tags"] = case.tags
+            if case.notes:
+                ev["notes"] = case.notes
             rows.append(ev)
     finally:
         if disable_audit:

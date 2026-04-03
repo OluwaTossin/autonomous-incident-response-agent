@@ -1,0 +1,63 @@
+# Phase 9 — full local stack: triage API (+ Gradio /ui) + n8n.
+#
+# Prerequisites:
+#   1. Copy `.env.example` → `.env` and set OPENAI_API_KEY (and SLACK_WEBHOOK_URL if using Slack nodes).
+#   2. On the host: `uv run rag-build` so `./.rag_index` exists (mounted read-only into the API).
+#
+# Usage (repo root):
+#   docker compose up -d --build
+#   open http://127.0.0.1:8000/docs  and  http://127.0.0.1:8000/ui
+#   open http://localhost:5678  → import workflows from workflows/n8n/
+#
+# n8n reaches the API via Docker DNS (`api:8000`). Do not set TRIAGE_API_BASE to host.docker.internal
+# when using this file.
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      API_HOST: "0.0.0.0"
+      API_PORT: "8000"
+      ENABLE_GRADIO_UI: "${ENABLE_GRADIO_UI:-1}"
+    volumes:
+      # Pre-built FAISS index from host (`uv run rag-build`)
+      - ./.rag_index:/app/.rag_index:ro
+      # Writable JSONL logs (triage audit, n8n helpers)
+      - ./data/logs:/app/data/logs
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  n8n:
+    image: n8nio/n8n:1.73.1
+    ports:
+      - "5678:5678"
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678/
+      - GENERIC_TIMEZONE=UTC
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      - TRIAGE_API_BASE=http://api:8000
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+volumes:
+  n8n_data:

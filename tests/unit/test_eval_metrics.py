@@ -2,8 +2,15 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from app.eval.metrics import evaluate_case, evidence_grounding_ratio
-from app.eval.schema import GoldExpect
+from app.eval.schema import GoldCase, GoldExpect
+
+ROOT = Path(__file__).resolve().parents[2]
+GOLD = ROOT / "data" / "eval" / "gold.jsonl"
 
 
 def test_evaluate_severity_any_of_pass() -> None:
@@ -57,3 +64,43 @@ def test_graph_error_fails() -> None:
     )
     assert not r["passed"]
     assert "graph_error" in r["failures"][0]
+
+
+def test_strict_keyword_and_retrieval_checks() -> None:
+    hits = [{"source": "data/logs/app.log", "score": 0.2}]
+    r = evaluate_case(
+        "k",
+        {
+            "severity": "HIGH",
+            "recommended_actions": ["a"],
+            "incident_summary": "CPU spike on payment service",
+            "likely_root_cause": "High CPU due to hot path",
+        },
+        {"retrieval_hits": hits},
+        GoldExpect(
+            summary_contains_all=["CPU", "payment"],
+            root_cause_contains_any=["cpu", "memory"],
+            retrieval_source_contains_any=["data/"],
+            min_top_retrieval_score=0.05,
+        ),
+        latency_ms=1.0,
+    )
+    assert r["passed"]
+    ch = r["checks"]
+    assert ch["summary_keywords_ok"] is True
+    assert ch["root_cause_hint_ok"] is True
+    assert ch["retrieval_source_ok"] is True
+    assert ch["min_top_score_ok"] is True
+
+
+@pytest.mark.skipif(not GOLD.is_file(), reason="gold.jsonl not present")
+def test_gold_jsonl_parses() -> None:
+    n = 0
+    with GOLD.open(encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            GoldCase.model_validate_json(line)
+            n += 1
+    assert n >= 20

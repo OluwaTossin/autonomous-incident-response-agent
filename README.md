@@ -5,7 +5,7 @@
 Operational scope today: ingest alerts (JSON), retrieve knowledge, return structured triage JSON over HTTP, optional **Gradio** at `/ui`, **n8n** webhooks (Slack + mock ticketing), and an **offline eval harness** (`triage-eval`). Later: full stack Docker, AWS deploy. For an explicit capability breakdown and the **~10% roadmap** (evidence attribution, contradiction handling, timelines), see [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md).
 
 **Owner:** Oluwatosin Jegede  
-**Status:** Phases **1–8** shipped (through **offline evaluation**). **Phase 9** next: full local `docker-compose` (API + n8n + optional index story).
+**Status:** Phases **1–9** shipped for **local Docker Compose** (API + Gradio + n8n). **Phase 10+** next: AWS/Terraform, CI/CD.
 
 **Plan:** Detailed phase notes below; optional private checklist in root **`execution.md`** (gitignored — mirror milestones here if you need them in git).
 
@@ -16,8 +16,8 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 1. `uv sync --extra dev` (add `--extra ui` for Gradio at `/ui`).
 2. `uv run rag-build` — build FAISS index under `.rag_index/` (needs `OPENAI_API_KEY` in `.env`).
 3. `uv run serve-api` — API + optional `/ui` → [`/docs`](http://127.0.0.1:8000/docs).
-4. `docker compose -f docker-compose.n8n.yml up -d` — n8n; import workflows from [`workflows/n8n/`](workflows/n8n/) ([runbook](workflows/n8n/README.md)).
-5. `uv run triage-eval` — regression-style eval over [`data/eval/gold.jsonl`](data/eval/gold.jsonl) (live LLM, ~8 cases).
+4. **Stack in Docker:** `docker compose up -d --build` — API on **:8000** + n8n on **:5678** ([Phase 9](#phase-9--docker-compose-full-stack)). *Or* run the API on the host and use `docker compose -f docker-compose.n8n.yml up -d` for n8n only.
+5. `uv run triage-eval` — regression-style eval over [`data/eval/gold.jsonl`](data/eval/gold.jsonl) (live LLM, ~27 cases; regenerate via `python3 scripts/generate_eval_gold.py`).
 
 | Command | Role |
 |---------|------|
@@ -39,7 +39,8 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 | **5** — HTTP API | Done | [`app/api/`](app/api/) · FastAPI + JSONL audit log |
 | **6** — n8n execution layer | Done | [`workflows/n8n/`](workflows/n8n/) · [`docker-compose.n8n.yml`](docker-compose.n8n.yml) · `POST /n8n/*` helpers |
 | **7** — Minimal UI | Done | [`app/ui/`](app/ui/) · Gradio at **`/ui`** (`uv sync --extra ui`) |
-| **8** — Evaluation | Done | [`app/eval/`](app/eval/) · [`data/eval/gold.jsonl`](data/eval/gold.jsonl) · `uv run triage-eval` |
+| **8** — Evaluation | Done | [`app/eval/`](app/eval/) · [`data/eval/gold.jsonl`](data/eval/gold.jsonl) · `scripts/generate_eval_gold.py` · `uv run triage-eval` |
+| **9** — Docker Compose | Done | [`Dockerfile`](Dockerfile) · [`docker-compose.yml`](docker-compose.yml) · n8n + API on one network |
 
 ### Phase 1 — Problem definition
 
@@ -104,16 +105,29 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 
 ### Phase 8 — Evaluation
 
-- **Deliverable:** Gold JSONL (**8** seed cases, grow toward 20–30 per `execution.md`), CLI **`uv run triage-eval`**, Markdown report (stdout or `--out`).
-- **Metrics:** Severity / escalate / action-count vs gold; optional retrieval substring + score checks; per-case latency (mean, p95); evidence–retrieval overlap heuristic (grounding signal, not a full hallucination judge).
+- **Deliverable:** Gold JSONL (**~27** cases; regenerate with `python3 scripts/generate_eval_gold.py`), CLI **`uv run triage-eval`**, Markdown report (stdout or `--out`).
+- **Metrics:** Severity / escalate / action-count vs gold; optional summary keywords, root-cause phrases, retrieval substring + score checks; per-case latency (mean, p95); evidence–retrieval overlap heuristic (grounding signal, not a full hallucination judge). Rows omitting those `expect` fields show `None` for the corresponding check in the report.
 - **Paths:** [`data/eval/README.md`](data/eval/README.md) (format), [`data/eval/gold.jsonl`](data/eval/gold.jsonl), [`app/eval/`](app/eval/) (runner, metrics, report).
 - **Run:** Same prerequisites as triage (`.env`, built index, LLM). By default **`TRIAGE_AUDIT_DISABLE`** is set for the run so eval does not flood `triage_outputs.jsonl`; use **`--keep-audit`** to append audit lines.
 - **Reports:** `uv run triage-eval --out data/eval/reports/latest.md` — the **`data/eval/reports/`** contents are **gitignored** (local runs); only a **`.gitkeep`** is kept so the folder exists.
 
-### Next (Phase 9+)
+### Phase 9 — Docker Compose (full stack)
 
-- **Phase 9 — Containerise:** Single **`docker-compose.yml`** (or compose profile) to run API (+ optional Gradio), n8n, and documented volume mounts for `.rag_index` / `.env` — see your local **`execution.md`** (gitignored) or this README as the in-repo checklist.
-- **Phase 10+:** AWS/Terraform, CI/CD, observability — same roadmap.
+- **Deliverable:** One command brings up **FastAPI + Gradio** and **n8n** on a shared Docker network.
+- **Files:** [`Dockerfile`](Dockerfile) (Python 3.12, `uv sync --frozen`, UI extra), [`docker-compose.yml`](docker-compose.yml), [`.dockerignore`](.dockerignore).
+- **Prerequisites:** `.env` with `OPENAI_API_KEY`; on the host run **`uv run rag-build`** once so **`./.rag_index`** exists (mounted **read-only** into the API container). Optional `SLACK_WEBHOOK_URL` for n8n (same as Phase 6).
+- **Run:**
+  ```bash
+  docker compose up -d --build
+  ```
+  - API: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs), UI: [http://127.0.0.1:8000/ui](http://127.0.0.1:8000/ui)
+  - n8n: [http://localhost:5678](http://localhost:5678) — import and activate workflows from [`workflows/n8n/`](workflows/n8n/). **`TRIAGE_API_BASE`** is set to **`http://api:8000`** inside Compose (do not override to `host.docker.internal` for this stack).
+- **Logs:** `./data/logs` is mounted writable for triage audit and n8n JSONL helpers.
+- **n8n-only** (API on host): keep using [`docker-compose.n8n.yml`](docker-compose.n8n.yml) and `TRIAGE_API_BASE=http://host.docker.internal:8000`.
+
+### Next (Phase 10+)
+
+- **AWS/Terraform, CI/CD, observability** — same roadmap.
 
 ---
 
@@ -135,7 +149,9 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 | [`data/eval/`](data/eval/) | Gold JSONL + eval README |
 | [`examples/sample_incident_payload.json`](examples/sample_incident_payload.json) | Sample JSON for `triage` CLI |
 | [`workflows/n8n/`](workflows/n8n/) | n8n workflow JSON + Phase 6 runbook |
-| [`docker-compose.n8n.yml`](docker-compose.n8n.yml) | Local n8n service (Phase 6) |
+| [`docker-compose.yml`](docker-compose.yml) | Phase 9 — API + n8n |
+| [`docker-compose.n8n.yml`](docker-compose.n8n.yml) | Phase 6 — n8n only |
+| [`Dockerfile`](Dockerfile) | Phase 9 — API image |
 | `infra/terraform/` | *(Phase 10+)* |
 
 ---
@@ -211,7 +227,14 @@ uv run serve-api
 # Browser: http://127.0.0.1:8000/ui
 ```
 
-**Phase 6 — n8n (parallel terminal, API must still be running):**
+**Phase 9 — full stack (API + n8n in Docker):**
+
+```bash
+# After: uv run rag-build  and  .env with OPENAI_API_KEY
+docker compose up -d --build
+```
+
+**Phase 6 — n8n only (API on host in another terminal):**
 
 ```bash
 docker compose -f docker-compose.n8n.yml up -d

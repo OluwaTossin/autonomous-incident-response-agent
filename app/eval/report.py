@@ -38,6 +38,10 @@ def render_markdown(
         cid = r.get("case_id", "?")
         ok = "✅ pass" if r.get("passed") else "❌ fail"
         lines.append(f"### `{cid}` — {ok}")
+        if r.get("tags"):
+            lines.append(f"*Tags:* `{', '.join(r['tags'])}`")
+        if r.get("notes"):
+            lines.append(f"*Notes:* {r['notes']}")
         ch = r.get("checks") or {}
         lines.append("")
         lines.append("| Check | Value |")
@@ -58,8 +62,10 @@ def render_markdown(
             "## Notes",
             "",
             "- **Classification** uses gold `expect` fields; tune `severity_any_of` if your model is calibrated differently.",
-            "- **Retrieval** checks are substring-based on hit `source` paths.",
+            "- **`None` in a check** means that assertion was not requested for that row (add `summary_contains_all`, `root_cause_contains_any`, `retrieval_source_contains_any`, etc. in `expect` to enforce).",
+            "- **Retrieval** checks are substring-based on hit `source` paths; requires a built index for meaningful scores.",
             "- **Evidence grounding** is a cheap overlap heuristic vs retrieval hits (not a full hallucination judge).",
+            "- **Tags** (`ambiguous`, `misleading_alert`, …) are documentation for humans; they do not change pass/fail logic.",
             "",
         ]
     )

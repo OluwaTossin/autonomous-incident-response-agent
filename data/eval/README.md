@@ -9,6 +9,8 @@ One JSON object per line (JSONL). Lines starting with `#` or empty lines are ski
 | `id` | Stable case id (used in reports). |
 | `incident` | Same object you would send to `POST /triage`. |
 | `expect` | Optional assertions (all omitted → no checks beyond “no graph error”). |
+| `tags` | Optional labels for humans (e.g. `ambiguous`, `misleading_alert`, `over_escalate_risk`); not used in pass/fail. |
+| `notes` | Optional free text for eval readers; not asserted. |
 
 ### `expect` fields (all optional)
 
@@ -41,9 +43,20 @@ uv run triage-eval --keep-audit --out data/eval/reports/latest.md
 
 Exit code **0** if all cases pass, **1** if any fail, **2** if gold file missing.
 
+## Current gold set
+
+- **27** rows in `gold.jsonl`, covering CPU variants, DB, network, auth, disk, ambiguous/misleading signals, thin logs, and escalation traps (under/over).
+- Regenerate from the canonical Python list (easier than hand-editing JSON):
+
+```bash
+python3 scripts/generate_eval_gold.py
+```
+
+Most rows enable **`summary_contains_all`**, **`root_cause_contains_any`**, **`retrieval_source_contains_any`** (`data/`), and **`min_top_retrieval_score`** (0.05) so reports show real values for `summary_keywords_ok`, `root_cause_hint_ok`, and `retrieval_source_ok` instead of `None`. Keywords are chosen to match **incident text and normal operator paraphrases** (e.g. pool/connection vs literal “database”). **`root_cause_contains_any`** is satisfied if **any** listed phrase appears (OR). Tune further if your model’s vocabulary still drifts.
+
 ## Growing the set
 
-Target **20–30** incidents for regression confidence (`execution.md`). Copy a line in `gold.jsonl`, change `id` and `incident`, and set `expect` loosely at first (e.g. `severity_any_of` only), then tighten after you see stable model behavior.
+Add cases in `scripts/generate_eval_gold.py`, re-run the script, then commit `data/eval/gold.jsonl`. Start loose (`severity_any_of` only), then tighten once behavior is stable.
 
 ## Metrics (report)
 

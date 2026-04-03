@@ -32,5 +32,13 @@ class GoldCase(BaseModel):
     id: str = Field(..., min_length=1)
     incident: dict[str, Any]
     expect: GoldExpect = Field(default_factory=GoldExpect)
+    tags: list[str] | None = Field(
+        default=None,
+        description="e.g. ambiguous, mixed_signals, misleading_alert, under_escalate_trap",
+    )
+    notes: str | None = Field(
+        default=None,
+        description="Human context for eval readers (not asserted by the harness)",
+    )
 
     model_config = {"extra": "ignore"}

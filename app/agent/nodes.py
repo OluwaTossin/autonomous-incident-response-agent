@@ -9,6 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import ValidationError
 
+from app.agent.operational_policy import apply_operational_policy
 from app.agent.prompts import TRIAGE_SYSTEM
 from app.agent.signal_reasoning import (
     build_programmatic_timeline,
@@ -222,6 +223,8 @@ def node_decision(state: TriageState) -> dict[str, Any]:
     draft = state.get("draft")
     if not draft:
         return {"error": "No draft triage from analysis step"}
+    incident = state.get("incident") if isinstance(state.get("incident"), dict) else {}
+    draft = apply_operational_policy(incident, draft if isinstance(draft, dict) else {})
     sev = str(draft.get("severity", "")).upper()
     if sev == "CRITICAL":
         draft = {**draft, "escalate": True}

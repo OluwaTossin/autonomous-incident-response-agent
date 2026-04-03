@@ -1,4 +1,5 @@
 # Phase 6 — n8n only (run API separately: uv run serve-api)
+# Phase 9 — for API + n8n together use repo-root `docker compose up` (see `docker-compose.yml`).
 #
 # Secrets: put SLACK_WEBHOOK_URL (and optional TRIAGE_API_BASE) in repo-root `.env`.
 # Compose loads `.env` automatically for ${VAR} substitution — never commit real webhooks.
