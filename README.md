@@ -121,6 +121,8 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
   docker compose up -d --build
   ```
   - API: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs), UI: [http://127.0.0.1:8000/ui](http://127.0.0.1:8000/ui)
+  - If **port 8000 is already allocated** (local `uv run serve-api`, another container, OrbStack):  
+    `COMPOSE_API_PORT=18080 docker compose up -d --build` → open **http://127.0.0.1:18080/docs** (n8n still uses `http://api:8000` on the Docker network).
   - n8n: [http://localhost:5678](http://localhost:5678) — import and activate workflows from [`workflows/n8n/`](workflows/n8n/). **`TRIAGE_API_BASE`** is set to **`http://api:8000`** inside Compose (do not override to `host.docker.internal` for this stack).
 - **Logs:** `./data/logs` is mounted writable for triage audit and n8n JSONL helpers.
 - **n8n-only** (API on host): keep using [`docker-compose.n8n.yml`](docker-compose.n8n.yml) and `TRIAGE_API_BASE=http://host.docker.internal:8000`.
