@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import Body, FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException, Request
 from pydantic import ValidationError
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import RedirectResponse
+from starlette.routing import Mount
+
+_log = logging.getLogger(__name__)
 
 from app.agent.nodes import parse_incident_payload
 from app.api.n8n_routes import router as n8n_router
@@ -25,8 +31,13 @@ app = FastAPI(
 app.include_router(n8n_router)
 
 
+def _gradio_ui_mounted(application: FastAPI) -> bool:
+    """True if Gradio is mounted at ``/ui`` (``uv sync --extra ui`` + ENABLE_GRADIO_UI)."""
+    return any(isinstance(r, Mount) and getattr(r, "path", None) == "/ui" for r in application.routes)
+
+
 @app.get("/")
-def root() -> dict[str, Any]:
+def root(request: Request) -> dict[str, Any]:
     """Helps confirm you hit this app (not another process on :8000)."""
     return {
         "service": "autonomous-incident-response-agent",
@@ -40,6 +51,7 @@ def root() -> dict[str, Any]:
         "n8n_workflow_log": "POST /n8n/workflow-log",
         "n8n_triage_feedback": "POST /n8n/triage-feedback",
         "gradio_ui": "/ui",
+        "gradio_ui_mounted": _gradio_ui_mounted(request.app),
     }
 
 
@@ -124,8 +136,27 @@ def _with_optional_gradio(application: FastAPI) -> FastAPI:
         from app.ui.gradio_app import with_gradio_ui
 
         return with_gradio_ui(application)
-    except ImportError:
+    except ImportError as e:
+        _log.warning("Gradio UI skipped — run `uv sync --extra ui`. (%s)", e)
+        return application
+    except Exception:
+        _log.exception("Gradio UI failed to mount; REST API still available.")
         return application
 
 
 app = _with_optional_gradio(app)
+
+
+class _RedirectUiSlashMiddleware(BaseHTTPMiddleware):
+    """Gradio static assets expect ``/ui/``; browsers often open ``/ui`` first."""
+
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        if request.scope.get("path") == "/ui":
+            base = str(request.base_url)
+            if not base.endswith("/"):
+                base = base + "/"
+            return RedirectResponse(url=f"{base}ui/", status_code=307)
+        return await call_next(request)
+
+
+app.add_middleware(_RedirectUiSlashMiddleware)

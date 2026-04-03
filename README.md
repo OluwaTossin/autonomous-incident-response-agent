@@ -99,7 +99,7 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 
 - **Deliverable:** Browser console on the **same process** as the API — paste incident JSON, run triage (same graph + audit as `POST /triage`), copy **`triage_id`**, submit **feedback** rows to `triage_feedback.jsonl`.
 - **Install:** `uv sync --extra ui` (adds Gradio).
-- **Run:** `uv run serve-api` → open **http://127.0.0.1:8000/ui** (with default host/port). Disable the mount with **`ENABLE_GRADIO_UI=0`** (pytest sets this automatically).
+- **Run:** `uv run serve-api` → open **http://127.0.0.1:8000/ui/** (with default host/port). **`GET /`** includes **`gradio_ui_mounted`** — if `false`, run **`uv sync --extra ui`** or check **`ENABLE_GRADIO_UI=0`**. If **:8000** is another app (e.g. a different Docker project), use this API’s real port (Compose default **:18080** → **http://127.0.0.1:18080/ui/**). Disable the mount with **`ENABLE_GRADIO_UI=0`** (pytest sets this automatically).
 - **Code:** [`app/ui/gradio_app.py`](app/ui/gradio_app.py) · display helpers [`app/ui/triage_display.py`](app/ui/triage_display.py) · shared runner [`app/api/triage_execution.py`](app/api/triage_execution.py).
 - **UX:** Severity badge, color-coded confidence bar, sectioned summary / root cause / actions / timeline, evidence grouped (logs · incidents · metrics · runbooks/knowledge) in `<details>`, collapsible raw JSON, links to `/docs`, copy **`triage_id`**, Gradio toasts (`Success` / `Warning`), feedback button re-enabled on each new triage run.
 

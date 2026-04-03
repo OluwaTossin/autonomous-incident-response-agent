@@ -20,6 +20,8 @@ def test_root_lists_endpoints() -> None:
     assert data["triage"] == "POST /triage"
     assert data["docs"] == "/docs"
     assert data["gradio_ui"] == "/ui"
+    assert "gradio_ui_mounted" in data
+    assert isinstance(data["gradio_ui_mounted"], bool)
 
 
 def test_health() -> None:
