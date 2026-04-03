@@ -5,7 +5,7 @@
 Operational scope today: ingest alerts (JSON), retrieve knowledge, return structured triage JSON over HTTP, optional **Gradio** at `/ui`, **Phase 12** **Next.js** triage console (local or static export to **S3** / optional **CloudFront**), **n8n** webhooks (Slack + mock ticketing), an **offline eval harness** (`triage-eval`), **Docker Compose** for local full stack, **Terraform** for **AWS** (dev/prod), **Phase 11** — **ECR push + ECS Fargate** behind an ALB with **`.rag_index` baked** in the image and **remote state** (S3 + DynamoDB), and **Phase 14** — **GitHub Actions** CI (see [`docs/deploy/ci.md`](docs/deploy/ci.md)). For capability depth and the **~10% roadmap**, see [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md).
 
 **Owner:** Oluwatosin Jegede  
-**Status:** Phases **1–14** shipped in-repo (API on ECS **dev/prod**; browser UI + **CORS**; **CloudWatch** observability; **GitHub Actions** CI — ruff, pytest, Terraform validate, frontend + Docker builds, optional **`OPENAI_API_KEY`** eval smoke; optional **workflow_dispatch** deploy to dev via OIDC — see [`docs/deploy/ci.md`](docs/deploy/ci.md)). **Next:** TLS, richer release automation.
+**Status:** Phases **1–14** shipped in-repo (API on ECS **dev/prod**; browser UI + **CORS**; **CloudWatch** observability; **GitHub Actions** CI — see [`docs/deploy/ci.md`](docs/deploy/ci.md)). **Planned extensions** (TLS, Phase 15 backlog, deeper n8n metrics) are **out of scope for the current closure** — see [`execution.md`](execution.md) and a future writeup.
 
 **Plan:** Detailed phase notes below; maintainer checklist in root [`execution.md`](execution.md) (tracked in git). **Branches:** work on **`dev`**, merge to **`main`** via PR — see [`docs/contributing.md`](docs/contributing.md).
 
@@ -170,9 +170,10 @@ Before AWS, run through **[`docs/validation/pre-cloud-validation.md`](docs/valid
 - **Deliverable:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) on PR/`main`; optional [`.github/workflows/deploy-dev.yml`](.github/workflows/deploy-dev.yml) (`workflow_dispatch`); runbook [`docs/deploy/ci.md`](docs/deploy/ci.md).
 - **Eval subset:** `uv run triage-eval --limit N` for fast / CI-sized runs.
 
-### Next (Phase 15+)
+### Future (not in current closure)
 
-- **TLS** in front of ALB; optional release tagging / prod deploy symmetry with dev.
+- **Phase 15** idea list and extended stories live in [`execution.md`](execution.md) (optional / writeup later).
+- Typical follow-ons when you resume: **TLS** in front of ALB; release tagging; prod/deploy symmetry with dev.
 
 ---
 

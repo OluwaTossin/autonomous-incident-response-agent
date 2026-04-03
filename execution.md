@@ -261,7 +261,7 @@ N8N_BASIC_AUTH_PASSWORD=
 - [x] **Triage duration / success / graph errors:** one JSON line per triage → metric filters (`TriageDurationMs`, success/failure counts); **tokens** field reserved (`tokens_total: null`) for future LangChain usage
 - [x] **Alarms:** ALB target 5xx; unhealthy targets; **ALB p95 latency**; **ECS CPU**; **triage max duration** (optional SNS)
 - [x] **LLM tokens:** LangChain usage metadata → JSON + **TriageTokensTotal** metric (when `tokens_total >= 1`)
-- [ ] **n8n workflow success:** track in n8n UI / external metrics (not in this module)
+- [x] **n8n workflow success metrics:** *Closed for this delivery* — operators use **n8n → Executions** (and optional `POST /n8n/workflow-log` later). Deliberately **not** folded into the API Terraform monitoring module; a fuller metrics story can appear in a **future writeup** if needed.
 - **Deliverable:** [`docs/deploy/observability.md`](docs/deploy/observability.md), Terraform `module.monitoring`, `terraform output cloudwatch_*`
 
 ### Phase 14 — CI/CD
@@ -271,13 +271,15 @@ N8N_BASIC_AUTH_PASSWORD=
 - [x] **Branch policy:** integration on **`dev`**, **`main`** via PR only — [`docs/contributing.md`](docs/contributing.md)
 - **Deliverable:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml), [`.github/workflows/deploy-dev.yml`](.github/workflows/deploy-dev.yml), [`docs/deploy/ci.md`](docs/deploy/ci.md), [`docs/contributing.md`](docs/contributing.md)
 
-### Phase 15 — Extensions (optional)
+### Phase 15 — Extensions (optional, future)
 
-- [ ] **A:** Slack incident intake
-- [ ] **B:** Similar past incidents before remediation
-- [ ] **C:** Structured reports for Jira/ServiceNow-style systems
-- [ ] **D:** Human approval for high-risk automation
-- [ ] **E:** Cost/model routing (cheap vs strong models)
+*Not part of the current closure. The bullets below are a **backlog / idea list** for a later writeup or roadmap — no ordering, dates, or commitment. They will be discussed when you pick that work up.*
+
+- **A:** Slack incident intake  
+- **B:** Similar past incidents before remediation  
+- **C:** Structured reports for Jira/ServiceNow-style systems  
+- **D:** Human approval for high-risk automation  
+- **E:** Cost/model routing (cheap vs strong models)
 
 ---
 
@@ -323,7 +325,8 @@ At completion you should be able to demonstrate:
 1. Keep **problem definition** and **sample runbooks** current as the source of truth for what “good” looks like.
 2. Do not skip **Phase 2** data; retrieval quality depends on it.
 3. **Phase 14 (CI/CD)** is in-repo; treat **TLS** and richer deploy automation as follow-on slices.
+4. **Current closure:** Phases **1–14** are complete in-repo. **Phase 15** and deeper n8n metrics are **deferred** to a future writeup (see Phase 15 section).
 
 ---
 
-*Last updated: 2026-04-03 — Phase 14 complete: GitHub Actions CI (lint, tests, Terraform, Docker, optional eval); optional OIDC deploy workflow for dev.*
+*Last updated: 2026-04-03 — **Build closure:** Phases 1–14 shipped (including CI/CD on `dev`/`main`). Phase 15 + extended n8n observability deferred to a future writeup.*
