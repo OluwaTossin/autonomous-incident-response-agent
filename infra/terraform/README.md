@@ -9,6 +9,7 @@ Modular layout under [`modules/`](modules/) and **environment roots** [`envs/dev
 | `ecr` | API image repository + lifecycle |
 | `alb` | Internet ALB, target group (`ip`), health check `GET /health` |
 | `ecs_fargate_api` | ECS cluster, Fargate service, task + execution IAM, CloudWatch logs, **SSM Parameter Store** secrets as container env (see `ssm_secrets` / `openai_api_key_ssm_parameter` in each env) |
+| `frontend_static_cdn` | Phase 12 — S3 bucket for Next.js static export; optional CloudFront (HTTPS) vs S3 website (HTTP) via `enable_triage_ui_cloudfront` |
 | `monitoring` | Placeholder for Phase 13 observability (dashboards / alarms) |
 
 ## Credentials

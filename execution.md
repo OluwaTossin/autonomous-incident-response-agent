@@ -19,6 +19,7 @@ This document is the single source of truth for build order, scope, and mileston
 | **9** | **Done** | `Dockerfile`, `docker-compose.yml` — API + n8n full stack locally |
 | **10** | **Done** | `infra/terraform/modules/*`, `infra/terraform/envs/dev`, `envs/prod` — VPC, ECR, ALB, ECS Fargate, IAM, logs, SSM-ready |
 | **11** | **Done** | `docs/deploy/aws-ecs.md`, `scripts/aws/push_api_to_ecr.sh`, `infra/terraform/bootstrap/` — ECR digest pinning, merged SSM secrets, Dockerfile bakes `.rag_index`, remote state S3+DynamoDB |
+| **12** | **Done** | `frontend/` (Next.js static export), `infra/terraform/modules/frontend_static_cdn/`, `cors_origins` → `CORS_ORIGINS` on ECS, FastAPI `CORSMiddleware`, `scripts/aws/deploy_frontend_cdn.sh`, `verify_triage_cors_preflight.sh` |
 
 ---
 
@@ -246,17 +247,23 @@ N8N_BASIC_AUTH_PASSWORD=
 - [x] Push images to ECR; run services *(script + runbook; execute in your account after `terraform apply`)*
 - **Deliverable:** Usable URL (dev/prod separated from day one) — ALB DNS from Terraform outputs; `curl …/health` after push + rollout
 
-### Phase 12 — Observability
+### Phase 12 — Presentation triage UI (Next.js)
+
+- [x] Next.js app router console: incident JSON, `POST /triage`, evidence, feedback; static export to S3 (optional CloudFront)
+- [x] Terraform `frontend_static_cdn` + `cors_origins` / `CORS_ORIGINS` for browser → ALB API
+- **Deliverable:** [`frontend/README.md`](frontend/README.md), deploy script, CORS verification script
+
+### Phase 13 — Observability
 
 - [ ] API latency, errors, tokens, workflow success, container logs, triage duration
 - **Deliverable:** CloudWatch logs for services + at least one dashboard or alarm path
 
-### Phase 13 — CI/CD
+### Phase 14 — CI/CD
 
 - [ ] GitHub Actions: lint, unit tests, eval subset, docker build, push ECR, deploy trigger (dev)
 - **Deliverable:** Working workflow for dev
 
-### Phase 14 — Extensions (optional)
+### Phase 15 — Extensions (optional)
 
 - [ ] **A:** Slack incident intake
 - [ ] **B:** Similar past incidents before remediation
@@ -282,8 +289,9 @@ Use this as the default execution order:
 - [x] **Milestone 9** — Full docker-compose
 - [x] **Milestone 10** — Terraform dev environment *(+ prod env root; apply when ready)*
 - [x] **Milestone 11** — ECS Fargate deploy *(image push + `update-service`; see `docs/deploy/aws-ecs.md`)*
-- [ ] **Milestone 12** — CloudWatch observability
-- [ ] **Milestone 13** — CI/CD
+- [x] **Milestone 12** — Next.js triage UI *(S3/CloudFront, API CORS; see `frontend/README.md`)*
+- [ ] **Milestone 13** — CloudWatch observability
+- [ ] **Milestone 14** — CI/CD
 
 ---
 
@@ -306,8 +314,8 @@ At completion you should be able to demonstrate:
 
 1. Keep **problem definition** and **sample runbooks** current as the source of truth for what “good” looks like.
 2. Do not skip **Phase 2** data; retrieval quality depends on it.
-3. Treat **Phase 12+** (presentation UI, observability, TLS, CI/CD) as the next slices after the API is reachable on the ALB.
+3. Treat **Phase 13+** (observability, TLS, CI/CD) as the next slices after the API and hosted UI are wired.
 
 ---
 
-*Last updated: 2026-04-03 — Phase 11 complete: ECR push, ECS digest pinning, baked RAG index, deploy runbook. Next: Phase 12+ (UI, observability).*
+*Last updated: 2026-04-02 — Phase 12 complete: Next.js triage console, S3/CloudFront static hosting, ECS `CORS_ORIGINS`. Next: Phase 13 (observability).*

@@ -98,3 +98,15 @@ variable "ecs_health_check_grace_period_seconds" {
   default     = 90
   description = "ALB target health ignored briefly after task start (see ECS service)"
 }
+
+variable "cors_origins" {
+  type        = string
+  default     = ""
+  description = "Comma-separated browser origins allowed for CORS (Phase 12 triage UI). Injected as CORS_ORIGINS on the API task. Include triage_ui_url from terraform output after UI deploy."
+}
+
+variable "enable_triage_ui_cloudfront" {
+  type        = bool
+  default     = false
+  description = "If true, private S3 + CloudFront (HTTPS). If false, S3 static website (HTTP) — for accounts where CloudFront is not yet enabled."
+}

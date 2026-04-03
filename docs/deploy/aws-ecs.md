@@ -107,6 +107,7 @@ Use **`dev`** or **`prod`** as the script argument so Terraform outputs resolve 
 - **TLS:** the ALB listener is HTTP **:80** in the lean module. Add HTTPS (ACM + listener) before serious production use.
 - **Triage audit JSONL:** the container has no bind-mounted `data/` volume; audit files are ephemeral unless you add EFS or ship logs elsewhere. Consider `TRIAGE_AUDIT_DISABLE=1` in `extra_task_environment` in `terraform.tfvars` if you want to avoid writing under `/app/data` on Fargate.
 - **Re-deploy after index changes:** run `rag-build`, then `./scripts/aws/push_api_to_ecr.sh <env>` again.
+- **Phase 12 — hosted triage UI:** Next.js static export under [`frontend/`](../../frontend/) → S3 (optional CloudFront). After `terraform apply`, run **`./scripts/aws/deploy_frontend_cdn.sh <env>`** from repo root. Copy **`terraform output -raw triage_ui_url`** into **`cors_origins`** in **`terraform.tfvars`**, **`terraform apply`**, then rebuild/push the API image so the task picks up **`CORS_ORIGINS`**. See [`frontend/README.md`](../../frontend/README.md).
 
 ## 7. Troubleshooting (from real deploys)
 
@@ -116,3 +117,5 @@ Use **`dev`** or **`prod`** as the script argument so Terraform outputs resolve 
 | `runningCount: 0`, many failed tasks | Same as above, or bad image / crash loop | After push, check **CloudWatch Logs** → log group from `terraform output cloudwatch_log_group`. |
 | `GET /health` OK, `POST /triage` errors on API key | `openai_api_key_ssm_parameter` empty or SSM missing / wrong name | Set tfvars, create SSM SecureString, `terraform apply`, force new deployment. |
 | 502 from ALB briefly | Target warming up | Wait; ECS **health check grace period** (default 90s, set in Terraform) reduces premature draining. |
+| Browser UI: CORS / OPTIONS **405** on **`POST /triage`** | UI origin not in **`cors_origins`** or stale API image | Set **`cors_origins`** to include the exact **`triage_ui_url`** (and local dev origins if needed), **`terraform apply`**, then **`./scripts/aws/push_api_to_ecr.sh <env>`**. Verify: **`./scripts/aws/verify_triage_cors_preflight.sh <env>`**. |
+| UI loads but API calls fail cross-origin | Mismatched scheme/host vs **`CORS_ORIGINS`** | Origins must match the browser bar exactly (e.g. `http://` vs `https://`, trailing slash usually omitted). |

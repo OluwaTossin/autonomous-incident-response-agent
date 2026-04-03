@@ -31,3 +31,7 @@ openai_api_key_ssm_parameter = "/aira/prod/openai_api_key"
 
 enable_container_insights = true
 enable_execute_command    = false
+
+# Phase 12 — browser triage UI. After UI deploy, add triage_ui_url to cors_origins and re-apply.
+# cors_origins = "http://localhost:3000,https://<cloudfront-or-s3-website>"
+# enable_triage_ui_cloudfront = true

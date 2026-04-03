@@ -8,12 +8,21 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import Body, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import RedirectResponse
 from starlette.routing import Mount
 
 _log = logging.getLogger(__name__)
+
+
+def _cors_allowlist() -> list[str]:
+    raw = os.environ.get("CORS_ORIGINS", "").strip()
+    if not raw:
+        return ["http://localhost:3000", "http://127.0.0.1:3000"]
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
 
 from app.agent.nodes import parse_incident_payload
 from app.api.n8n_routes import router as n8n_router
@@ -160,3 +169,10 @@ class _RedirectUiSlashMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(_RedirectUiSlashMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_allowlist(),
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)

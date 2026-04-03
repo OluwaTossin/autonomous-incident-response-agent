@@ -27,6 +27,7 @@ locals {
       { name = "API_PORT", value = tostring(var.api_container_port) },
       { name = "ENABLE_GRADIO_UI", value = "1" },
     ],
+    var.cors_origins != "" ? [{ name = "CORS_ORIGINS", value = var.cors_origins }] : [],
     var.extra_task_environment
   )
 }

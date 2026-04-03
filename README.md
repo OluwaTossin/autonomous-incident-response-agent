@@ -2,10 +2,10 @@
 
 **What this is:** an **AI-powered incident triage and diagnosis engine** — RAG over runbooks/incidents/logs, multi-source context fusion with the alert payload, heuristic guardrails plus LLM structured reasoning, and an action / escalation layer. That pattern matches **AIOps** assistants, **SRE copilots**, and internal reliability tooling at large shops.
 
-Operational scope today: ingest alerts (JSON), retrieve knowledge, return structured triage JSON over HTTP, optional **Gradio** at `/ui`, **n8n** webhooks (Slack + mock ticketing), an **offline eval harness** (`triage-eval`), **Docker Compose** for local full stack, **Terraform** for **AWS** (dev/prod), and **Phase 11** — **ECR push + ECS Fargate** behind an ALB with **`.rag_index` baked** in the image and **remote state** (S3 + DynamoDB). For capability depth and the **~10% roadmap**, see [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md).
+Operational scope today: ingest alerts (JSON), retrieve knowledge, return structured triage JSON over HTTP, optional **Gradio** at `/ui`, **Phase 12** **Next.js** triage console (local or static export to **S3** / optional **CloudFront**), **n8n** webhooks (Slack + mock ticketing), an **offline eval harness** (`triage-eval`), **Docker Compose** for local full stack, **Terraform** for **AWS** (dev/prod), and **Phase 11** — **ECR push + ECS Fargate** behind an ALB with **`.rag_index` baked** in the image and **remote state** (S3 + DynamoDB). For capability depth and the **~10% roadmap**, see [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md).
 
 **Owner:** Oluwatosin Jegede  
-**Status:** Phases **1–11** shipped in-repo (API on ECS **dev/prod**). **Phase 12+**: presentation-layer UI, observability, TLS, CI/CD.
+**Status:** Phases **1–12** shipped in-repo (API on ECS **dev/prod**; browser UI + **CORS**). **Phase 13+**: observability, TLS, CI/CD.
 
 **Plan:** Detailed phase notes below; maintainer checklist in root [`execution.md`](execution.md) (tracked in git).
 
@@ -28,7 +28,7 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 
 ---
 
-## Build progress: Phases 1–11
+## Build progress: Phases 1–12
 
 | Phase | Status | Primary artifacts |
 |-------|--------|---------------------|
@@ -43,6 +43,7 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 | **9** — Docker Compose | Done | [`Dockerfile`](Dockerfile) · [`docker-compose.yml`](docker-compose.yml) · n8n + API on one network |
 | **10** — AWS / Terraform | Done | [`infra/terraform/`](infra/terraform/) · modules + [`envs/dev`](infra/terraform/envs/dev/) & [`envs/prod`](infra/terraform/envs/prod/) |
 | **11** — Deploy to AWS | Done | [`docs/deploy/aws-ecs.md`](docs/deploy/aws-ecs.md) · [`scripts/aws/push_api_to_ecr.sh`](scripts/aws/push_api_to_ecr.sh) · **ECR digest of `:latest`** · image bakes **`.rag_index`** · SSM secret merge · [`infra/terraform/bootstrap/`](infra/terraform/bootstrap/) |
+| **12** — Triage UI (Next.js) | Done | [`frontend/`](frontend/) · [`infra/terraform/modules/frontend_static_cdn/`](infra/terraform/modules/frontend_static_cdn/) · **`cors_origins`** → **`CORS_ORIGINS`** · [`scripts/aws/deploy_frontend_cdn.sh`](scripts/aws/deploy_frontend_cdn.sh) |
 
 ### Phase 1 — Problem definition
 
@@ -149,9 +150,15 @@ Before AWS, run through **[`docs/validation/pre-cloud-validation.md`](docs/valid
 - **Runbook:** [`docs/deploy/aws-ecs.md`](docs/deploy/aws-ecs.md) — SSM for secrets (`openai_api_key_ssm_parameter` / `ssm_secrets`), **`uv run rag-build`**, then **`./scripts/aws/push_api_to_ecr.sh dev`** or **`prod`** (immutable tag + **`:latest`**, **`terraform apply`** pins digest; **`linux/amd64`** for Fargate).
 - **RAG on Fargate:** the **Docker image bakes `.rag_index/`**; Compose still **bind-mounts** a host-built index for local dev.
 
-### Next (Phase 12+)
+### Phase 12 — Triage console (Next.js)
 
-- **Presentation-layer UI** (e.g. Next.js), **observability**, **TLS** in front of ALB, **CI/CD**.
+- **Deliverable:** Portfolio-style **incident triage UI** — Monaco JSON editor, `POST /triage`, evidence and feedback panels; **`output: 'export'`** for static hosting.
+- **Local:** [`frontend/README.md`](frontend/README.md) — `npm run dev` with repo-root API (`CORS_ORIGINS` / defaults for `localhost:3000`).
+- **AWS:** Terraform creates S3 (and optional CloudFront); **`./scripts/aws/deploy_frontend_cdn.sh dev|prod`** builds with **`NEXT_PUBLIC_API_BASE_URL`** from **`alb_url`**. Add **`triage_ui_url`** to **`cors_origins`**, **`terraform apply`**, then **push API image** so ECS sees **`CORS_ORIGINS`**.
+
+### Next (Phase 13+)
+
+- **Observability**, **TLS** in front of ALB, **CI/CD**.
 
 ---
 
@@ -179,9 +186,12 @@ Before AWS, run through **[`docs/validation/pre-cloud-validation.md`](docs/valid
 | [`docker-compose.yml`](docker-compose.yml) | Phase 9 — API + n8n |
 | [`docker-compose.n8n.yml`](docker-compose.n8n.yml) | Phase 6 — n8n only |
 | [`Dockerfile`](Dockerfile) | Phase 9 — API image |
-| [`infra/terraform/`](infra/terraform/) | Phase 10–11 — modular Terraform, remote state bootstrap, `envs/dev` & `envs/prod` |
-| [`docs/deploy/aws-ecs.md`](docs/deploy/aws-ecs.md) | Phase 11 — ECR push, ECS rollout, SSM, smoke tests |
+| [`infra/terraform/`](infra/terraform/) | Phase 10–12 — modular Terraform, remote state bootstrap, `envs/dev` & `envs/prod`, static UI bucket |
+| [`frontend/`](frontend/) | Phase 12 — Next.js triage console (static export → S3) |
+| [`docs/deploy/aws-ecs.md`](docs/deploy/aws-ecs.md) | Phase 11–12 — ECR push, ECS rollout, SSM, hosted UI + CORS |
 | [`scripts/aws/push_api_to_ecr.sh`](scripts/aws/push_api_to_ecr.sh) | Phase 11 — build/push + **`terraform apply`** (ECS pins **`:latest`** digest) |
+| [`scripts/aws/deploy_frontend_cdn.sh`](scripts/aws/deploy_frontend_cdn.sh) | Phase 12 — static build + **`aws s3 sync`** |
+| [`scripts/aws/verify_triage_cors_preflight.sh`](scripts/aws/verify_triage_cors_preflight.sh) | Phase 12 — **`OPTIONS /triage`** CORS smoke test |
 
 ---
 

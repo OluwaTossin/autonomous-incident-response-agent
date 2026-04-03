@@ -31,3 +31,7 @@ openai_api_key_ssm_parameter = "/aira/dev/openai_api_key"
 
 enable_container_insights = false
 enable_execute_command    = false
+
+# Phase 12 — browser triage UI (Next.js static export → S3). After first UI deploy, add triage_ui_url:
+# cors_origins = "http://localhost:3000,http://127.0.0.1:3000,<paste terraform output -raw triage_ui_url>"
+# enable_triage_ui_cloudfront = true   # private S3 + HTTPS (requires CloudFront-capable account)

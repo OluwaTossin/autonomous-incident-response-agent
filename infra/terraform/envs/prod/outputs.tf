@@ -58,3 +58,19 @@ output "openai_ssm_parameter_arn" {
   description = "OpenAI key ARN when openai_api_key_ssm_parameter is set"
   value       = var.openai_api_key_ssm_parameter != "" ? "arn:aws:ssm:${var.aws_region}:${local.account_id}:parameter${var.openai_api_key_ssm_parameter}" : "(not configured — set openai_api_key_ssm_parameter and/or ssm_secrets)"
 }
+
+# Phase 12 — Next.js static export (S3 ± CloudFront)
+output "triage_ui_s3_bucket_id" {
+  description = "S3 bucket for static triage UI (`aws s3 sync` / deploy script)"
+  value       = module.triage_ui_cdn.s3_bucket_id
+}
+
+output "triage_ui_cloudfront_distribution_id" {
+  description = "Empty when enable_triage_ui_cloudfront is false"
+  value       = module.triage_ui_cdn.cloudfront_distribution_id
+}
+
+output "triage_ui_url" {
+  description = "Browser URL for the static triage UI (add to cors_origins for API CORS)"
+  value       = module.triage_ui_cdn.ui_url
+}
