@@ -1,0 +1,83 @@
+# Optional Phase 14 — manual deploy to dev: ECR push + ECS force-new-deployment (no Terraform in CI).
+#
+# Run from branch **dev** only (Actions → Run workflow → select **dev**). Pushing code happens on **dev**;
+# **main** is updated via PR merge — see docs/contributing.md.
+#
+# Prerequisites (repository Settings → Secrets and variables):
+#   - Secret: AWS_DEPLOY_ROLE_ARN — IAM role for GitHub OIDC (trust: repo + workflow).
+#   - Variables: AWS_REGION, DEV_ECR_REPOSITORY_URL (e.g. 123.dkr.ecr.eu-west-1.amazonaws.com/aira-dev-api),
+#              DEV_ECS_CLUSTER_NAME, DEV_ECS_SERVICE_NAME
+#
+# IAM: allow ecr:GetAuthorizationToken; ecr:BatchCheckLayerAvailability, PutImage, InitiateLayerUpload,
+#      UploadLayerPart, CompleteLayerUpload; ecs:UpdateService, DescribeServices on the dev service.
+
+name: Deploy API (dev)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require branch dev
+        run: |
+          if [ "${GITHUB_REF}" != "refs/heads/dev" ]; then
+            echo "::error::Run this workflow from branch **dev** (Use workflow from branch → dev)."
+            exit 1
+          fi
+
+  deploy:
+    needs: gate
+    runs-on: ubuntu-latest
+    if: vars.DEV_ECR_REPOSITORY_URL != '' && secrets.AWS_DEPLOY_ROLE_ARN != ''
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECR_URL: ${{ vars.DEV_ECR_REPOSITORY_URL }}
+      ECS_CLUSTER: ${{ vars.DEV_ECS_CLUSTER_NAME }}
+      ECS_SERVICE: ${{ vars.DEV_ECS_SERVICE_NAME }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Sync
+        run: uv sync --frozen --extra dev
+
+      - name: Stub RAG index
+        run: uv run python scripts/ci/stub_rag_index.py
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & push
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          docker build --platform linux/amd64 -f Dockerfile -t "aira-api:dev" .
+          docker tag "aira-api:dev" "${ECR_URL}:${IMAGE_TAG}"
+          docker push "${ECR_URL}:${IMAGE_TAG}"
+          docker tag "aira-api:dev" "${ECR_URL}:latest"
+          docker push "${ECR_URL}:latest"
+
+      - name: ECS rollout
+        run: |
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --force-new-deployment \
+            --region "$AWS_REGION" \
+            --no-cli-pager

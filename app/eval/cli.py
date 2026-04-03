@@ -33,6 +33,13 @@ def main(args: list[str] | None = None) -> int:
         action="store_true",
         help="Do not force TRIAGE_AUDIT_DISABLE (each run still appends audit lines if enabled)",
     )
+    p.add_argument(
+        "--limit",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Run at most N gold cases (0 = all). Useful for CI smoke runs.",
+    )
     ns = p.parse_args(args=args)
 
     gold = ns.gold
@@ -40,7 +47,7 @@ def main(args: list[str] | None = None) -> int:
         print(f"Gold file not found: {gold}", file=sys.stderr)
         return 2
 
-    rows = run_suite(gold, disable_audit=not ns.keep_audit)
+    rows = run_suite(gold, disable_audit=not ns.keep_audit, limit=ns.limit)
     summ = aggregate(rows)
     md = render_markdown(rows, summ, gold_path=str(gold.resolve()))
 

@@ -21,6 +21,8 @@ Terraform and the AWS provider **do not read** repo-root `.env`. Either:
 
 Same variables are documented in [`.env.example`](../../.env.example) for convenience; load them into your shell before `terraform` commands.
 
+**CI:** `terraform fmt -check` and `terraform validate` run in GitHub Actions — see [`docs/deploy/ci.md`](../../docs/deploy/ci.md).
+
 ## Remote state (S3 + DynamoDB)
 
 1. **Once per account/region** — create the bucket and lock table (bootstrap keeps **local** state):

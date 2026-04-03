@@ -6,7 +6,6 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from app.rag.chunking import TextChunk
 from app.rag.config import rag_index_dir
 from app.rag.embeddings import embed_texts
 from app.rag.index_store import load_index_bundle

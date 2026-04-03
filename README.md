@@ -2,12 +2,12 @@
 
 **What this is:** an **AI-powered incident triage and diagnosis engine** — RAG over runbooks/incidents/logs, multi-source context fusion with the alert payload, heuristic guardrails plus LLM structured reasoning, and an action / escalation layer. That pattern matches **AIOps** assistants, **SRE copilots**, and internal reliability tooling at large shops.
 
-Operational scope today: ingest alerts (JSON), retrieve knowledge, return structured triage JSON over HTTP, optional **Gradio** at `/ui`, **Phase 12** **Next.js** triage console (local or static export to **S3** / optional **CloudFront**), **n8n** webhooks (Slack + mock ticketing), an **offline eval harness** (`triage-eval`), **Docker Compose** for local full stack, **Terraform** for **AWS** (dev/prod), and **Phase 11** — **ECR push + ECS Fargate** behind an ALB with **`.rag_index` baked** in the image and **remote state** (S3 + DynamoDB). For capability depth and the **~10% roadmap**, see [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md).
+Operational scope today: ingest alerts (JSON), retrieve knowledge, return structured triage JSON over HTTP, optional **Gradio** at `/ui`, **Phase 12** **Next.js** triage console (local or static export to **S3** / optional **CloudFront**), **n8n** webhooks (Slack + mock ticketing), an **offline eval harness** (`triage-eval`), **Docker Compose** for local full stack, **Terraform** for **AWS** (dev/prod), **Phase 11** — **ECR push + ECS Fargate** behind an ALB with **`.rag_index` baked** in the image and **remote state** (S3 + DynamoDB), and **Phase 14** — **GitHub Actions** CI (see [`docs/deploy/ci.md`](docs/deploy/ci.md)). For capability depth and the **~10% roadmap**, see [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md).
 
 **Owner:** Oluwatosin Jegede  
-**Status:** Phases **1–13** shipped in-repo (API on ECS **dev/prod**; browser UI + **CORS**; **CloudWatch** dashboard/alarms, triage log metrics with **Environment** alignment via **`AIRA_ENV`**, **severity/escalate** breakdowns, and a dashboard **Logs Insights** strip for **`triage_id`**). **Phase 14+**: CI/CD, TLS.
+**Status:** Phases **1–14** shipped in-repo (API on ECS **dev/prod**; browser UI + **CORS**; **CloudWatch** observability; **GitHub Actions** CI — ruff, pytest, Terraform validate, frontend + Docker builds, optional **`OPENAI_API_KEY`** eval smoke; optional **workflow_dispatch** deploy to dev via OIDC — see [`docs/deploy/ci.md`](docs/deploy/ci.md)). **Next:** TLS, richer release automation.
 
-**Plan:** Detailed phase notes below; maintainer checklist in root [`execution.md`](execution.md) (tracked in git).
+**Plan:** Detailed phase notes below; maintainer checklist in root [`execution.md`](execution.md) (tracked in git). **Branches:** work on **`dev`**, merge to **`main`** via PR — see [`docs/contributing.md`](docs/contributing.md).
 
 Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_dotenv` only reads `.env`**. Never commit `.env` or real keys in `.env.example`.
 
@@ -28,7 +28,7 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 
 ---
 
-## Build progress: Phases 1–13
+## Build progress: Phases 1–14
 
 | Phase | Status | Primary artifacts |
 |-------|--------|---------------------|
@@ -45,6 +45,7 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 | **11** — Deploy to AWS | Done | [`docs/deploy/aws-ecs.md`](docs/deploy/aws-ecs.md) · [`scripts/aws/push_api_to_ecr.sh`](scripts/aws/push_api_to_ecr.sh) · **ECR digest of `:latest`** · image bakes **`.rag_index`** · SSM secret merge · [`infra/terraform/bootstrap/`](infra/terraform/bootstrap/) |
 | **12** — Triage UI (Next.js) | Done | [`frontend/`](frontend/) · [`infra/terraform/modules/frontend_static_cdn/`](infra/terraform/modules/frontend_static_cdn/) · **`cors_origins`** → **`CORS_ORIGINS`** · [`scripts/aws/deploy_frontend_cdn.sh`](scripts/aws/deploy_frontend_cdn.sh) |
 | **13** — Observability | Done | [`infra/terraform/modules/monitoring/`](infra/terraform/modules/monitoring/) · [`docs/deploy/observability.md`](docs/deploy/observability.md) · structured **triage_metrics** JSON ( **`triage_id`**, **`stack_environment`**, duration, **LLM tokens**, **severity_metric** / **escalate_str**) → log metric filters + dashboard (**SEARCH** panels + **Logs Insights**); alarms scoped by **Environment**; wire **`observability_alarm_sns_topic_arns`** for notifications |
+| **14** — CI/CD | Done | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) · [`.github/workflows/deploy-dev.yml`](.github/workflows/deploy-dev.yml) · [`docs/deploy/ci.md`](docs/deploy/ci.md) · [`scripts/ci/stub_rag_index.py`](scripts/ci/stub_rag_index.py) |
 
 ### Phase 1 — Problem definition
 
@@ -164,9 +165,14 @@ Before AWS, run through **[`docs/validation/pre-cloud-validation.md`](docs/valid
 - **App:** Each triage emits one JSON line to stdout and **`aira.triage`** — **`triage_id`**, **`stack_environment`** (from **`AIRA_ENV`**, default `local`), **`outcome`**, **`duration_ms`**, **`severity`** / **`severity_metric`**, **`escalate`** / **`escalate_str`**, **LLM token counts**. **ECS** tasks set **`AIRA_ENV`** from Terraform **`var.environment`** so metrics match dashboard dimensions. **`triage_id`** is not a metric dimension (cardinality); use logs and **Logs Insights** for correlation. Disable emission with **`TRIAGE_METRICS_LOG_DISABLE=1`**.
 - **Alerts:** Set **`observability_alarm_sns_topic_arns`** in **`terraform.tfvars`** so alarms are not dashboard-only.
 
-### Next (Phase 14+)
+### Phase 14 — CI/CD (GitHub Actions)
 
-- **CI/CD**, **TLS** in front of ALB.
+- **Deliverable:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) on PR/`main`; optional [`.github/workflows/deploy-dev.yml`](.github/workflows/deploy-dev.yml) (`workflow_dispatch`); runbook [`docs/deploy/ci.md`](docs/deploy/ci.md).
+- **Eval subset:** `uv run triage-eval --limit N` for fast / CI-sized runs.
+
+### Next (Phase 15+)
+
+- **TLS** in front of ALB; optional release tagging / prod deploy symmetry with dev.
 
 ---
 
@@ -175,6 +181,7 @@ Before AWS, run through **[`docs/validation/pre-cloud-validation.md`](docs/valid
 | Path | Purpose |
 |------|---------|
 | [`execution.md`](execution.md) | Build order, phases, milestones |
+| [`docs/contributing.md`](docs/contributing.md) | **`dev` / `main`** workflow, GitHub secrets checklist |
 | [`docs/decisions/`](docs/decisions/) | ADRs / product definition |
 | [`docs/validation/pre-cloud-validation.md`](docs/validation/pre-cloud-validation.md) | Manual checks before cloud (triage, n8n, resilience, latency) |
 | [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md) | Accurate product classification + elite-system roadmap |
@@ -198,6 +205,7 @@ Before AWS, run through **[`docs/validation/pre-cloud-validation.md`](docs/valid
 | [`frontend/`](frontend/) | Phase 12 — Next.js triage console (static export → S3) |
 | [`docs/deploy/aws-ecs.md`](docs/deploy/aws-ecs.md) | Phase 11–12 — ECR push, ECS rollout, SSM, hosted UI + CORS |
 | [`docs/deploy/observability.md`](docs/deploy/observability.md) | Phase 13 — CloudWatch dashboard, alarms, triage log metrics |
+| [`docs/deploy/ci.md`](docs/deploy/ci.md) | Phase 14 — GitHub Actions CI and optional dev deploy |
 | [`scripts/aws/push_api_to_ecr.sh`](scripts/aws/push_api_to_ecr.sh) | Phase 11 — build/push + **`terraform apply`** (ECS pins **`:latest`** digest) |
 | [`scripts/aws/deploy_frontend_cdn.sh`](scripts/aws/deploy_frontend_cdn.sh) | Phase 12 — static build + **`aws s3 sync`** |
 | [`scripts/aws/verify_triage_cors_preflight.sh`](scripts/aws/verify_triage_cors_preflight.sh) | Phase 12 — **`OPTIONS /triage`** CORS smoke test |

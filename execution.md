@@ -266,8 +266,10 @@ N8N_BASIC_AUTH_PASSWORD=
 
 ### Phase 14 — CI/CD
 
-- [ ] GitHub Actions: lint, unit tests, eval subset, docker build, push ECR, deploy trigger (dev)
-- **Deliverable:** Working workflow for dev
+- [x] GitHub Actions: **lint** (ruff), **unit + integration tests**, **Terraform fmt + validate**, **frontend build**, **Docker build** (stub `.rag_index`), optional **eval smoke** (`OPENAI_API_KEY` + `triage-eval --limit 3`)
+- [x] Optional **workflow_dispatch** deploy to dev: ECR push + ECS `force-new-deployment` (OIDC + repo variables; see [`docs/deploy/ci.md`](docs/deploy/ci.md)); deploy workflow **must run from branch `dev`**
+- [x] **Branch policy:** integration on **`dev`**, **`main`** via PR only — [`docs/contributing.md`](docs/contributing.md)
+- **Deliverable:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml), [`.github/workflows/deploy-dev.yml`](.github/workflows/deploy-dev.yml), [`docs/deploy/ci.md`](docs/deploy/ci.md), [`docs/contributing.md`](docs/contributing.md)
 
 ### Phase 15 — Extensions (optional)
 
@@ -297,7 +299,7 @@ Use this as the default execution order:
 - [x] **Milestone 11** — ECS Fargate deploy *(image push + `update-service`; see `docs/deploy/aws-ecs.md`)*
 - [x] **Milestone 12** — Next.js triage UI *(S3/CloudFront, API CORS; see `frontend/README.md`)*
 - [x] **Milestone 13** — CloudWatch observability *(dashboard + alarms + triage metrics; see `docs/deploy/observability.md`)*
-- [ ] **Milestone 14** — CI/CD
+- [x] **Milestone 14** — CI/CD *(GitHub Actions: see [`docs/deploy/ci.md`](docs/deploy/ci.md))*
 
 ---
 
@@ -320,8 +322,8 @@ At completion you should be able to demonstrate:
 
 1. Keep **problem definition** and **sample runbooks** current as the source of truth for what “good” looks like.
 2. Do not skip **Phase 2** data; retrieval quality depends on it.
-3. Treat **Phase 14+** (CI/CD, TLS hardening) as the next slices after observability is wired.
+3. **Phase 14 (CI/CD)** is in-repo; treat **TLS** and richer deploy automation as follow-on slices.
 
 ---
 
-*Last updated: 2026-04-02 — Phase 13 complete: CloudWatch dashboard, alarms, triage log metrics. Next: Phase 14 (CI/CD).*
+*Last updated: 2026-04-03 — Phase 14 complete: GitHub Actions CI (lint, tests, Terraform, Docker, optional eval); optional OIDC deploy workflow for dev.*

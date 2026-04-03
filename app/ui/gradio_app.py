@@ -175,7 +175,7 @@ def with_gradio_ui(app: FastAPI) -> FastAPI:
             actions = gr.Checkbox(label="Actions useful", value=True)
         notes = gr.Textbox(label="Notes", lines=2, placeholder="Optional context for your team / eval set…")
         fb_btn = gr.Button("Submit feedback", variant="primary", interactive=False)
-        fb_hint = gr.Markdown(
+        gr.Markdown(
             value='<p style="color:#9ca3af;font-size:12px;margin:0;">'
             "After submit, the button locks until you run triage again.</p>"
         )

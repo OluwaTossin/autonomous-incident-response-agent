@@ -4,6 +4,8 @@ This path assumes **Phase 10** is applied: ECR repository, ECS cluster/service, 
 
 **Phase 13:** after apply, open the CloudWatch dashboard and alarms from Terraform outputs — see **[`docs/deploy/observability.md`](observability.md)**.
 
+**Phase 14:** GitHub Actions CI and optional workflow deploy — see **[`docs/deploy/ci.md`](ci.md)**.
+
 ### Secrets in Parameter Store
 
 Terraform wires **ECS container secrets** so each value lives in **SSM** as a **SecureString** and is injected at task start as a normal **environment variable** (never stored in the task definition JSON as plain text).

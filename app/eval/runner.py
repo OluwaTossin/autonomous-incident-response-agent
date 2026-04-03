@@ -31,6 +31,7 @@ def run_suite(
     gold_path: Path,
     *,
     disable_audit: bool = True,
+    limit: int = 0,
 ) -> list[dict[str, Any]]:
     """Run each gold case; return list of evaluate_case outputs + case id."""
     prev_audit = os.environ.get("TRIAGE_AUDIT_DISABLE")
@@ -39,7 +40,9 @@ def run_suite(
 
     rows: list[dict[str, Any]] = []
     try:
-        for case in iter_gold_cases(gold_path):
+        for i, case in enumerate(iter_gold_cases(gold_path)):
+            if limit > 0 and i >= limit:
+                break
             t0 = time.perf_counter()
             result, meta = run_triage_with_audit(case.incident)
             elapsed_ms = (time.perf_counter() - t0) * 1000.0

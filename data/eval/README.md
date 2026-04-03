@@ -33,6 +33,9 @@ Requires `.env` (API keys), built RAG index (same as triage CLI), and network fo
 # Does not append triage audit lines by default
 uv run triage-eval
 
+# First N cases only (CI smoke, quick checks)
+uv run triage-eval --limit 3
+
 # Markdown under data/eval/reports/ is gitignored (only .gitkeep is tracked)
 # Custom gold file + Markdown report
 uv run triage-eval --gold data/eval/gold.jsonl --out data/eval/reports/latest.md
