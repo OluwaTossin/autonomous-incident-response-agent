@@ -5,7 +5,7 @@
 Operational scope today: ingest alerts (JSON), retrieve knowledge, return structured triage JSON over HTTP, optional **Gradio** at `/ui`, **Phase 12** **Next.js** triage console (local or static export to **S3** / optional **CloudFront**), **n8n** webhooks (Slack + mock ticketing), an **offline eval harness** (`triage-eval`), **Docker Compose** for local full stack, **Terraform** for **AWS** (dev/prod), and **Phase 11** — **ECR push + ECS Fargate** behind an ALB with **`.rag_index` baked** in the image and **remote state** (S3 + DynamoDB). For capability depth and the **~10% roadmap**, see [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md).
 
 **Owner:** Oluwatosin Jegede  
-**Status:** Phases **1–13** shipped in-repo (API on ECS **dev/prod**; browser UI + **CORS**; **CloudWatch** dashboard/alarms + triage metrics). **Phase 14+**: CI/CD, TLS.
+**Status:** Phases **1–13** shipped in-repo (API on ECS **dev/prod**; browser UI + **CORS**; **CloudWatch** dashboard/alarms, triage log metrics with **Environment** alignment via **`AIRA_ENV`**, **severity/escalate** breakdowns, and a dashboard **Logs Insights** strip for **`triage_id`**). **Phase 14+**: CI/CD, TLS.
 
 **Plan:** Detailed phase notes below; maintainer checklist in root [`execution.md`](execution.md) (tracked in git).
 
@@ -44,7 +44,7 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 | **10** — AWS / Terraform | Done | [`infra/terraform/`](infra/terraform/) · modules + [`envs/dev`](infra/terraform/envs/dev/) & [`envs/prod`](infra/terraform/envs/prod/) |
 | **11** — Deploy to AWS | Done | [`docs/deploy/aws-ecs.md`](docs/deploy/aws-ecs.md) · [`scripts/aws/push_api_to_ecr.sh`](scripts/aws/push_api_to_ecr.sh) · **ECR digest of `:latest`** · image bakes **`.rag_index`** · SSM secret merge · [`infra/terraform/bootstrap/`](infra/terraform/bootstrap/) |
 | **12** — Triage UI (Next.js) | Done | [`frontend/`](frontend/) · [`infra/terraform/modules/frontend_static_cdn/`](infra/terraform/modules/frontend_static_cdn/) · **`cors_origins`** → **`CORS_ORIGINS`** · [`scripts/aws/deploy_frontend_cdn.sh`](scripts/aws/deploy_frontend_cdn.sh) |
-| **13** — Observability | Done | [`infra/terraform/modules/monitoring/`](infra/terraform/modules/monitoring/) · [`docs/deploy/observability.md`](docs/deploy/observability.md) · triage JSON + **LLM tokens** → log metrics; **p95** dashboards + **SNS-ready** alarms |
+| **13** — Observability | Done | [`infra/terraform/modules/monitoring/`](infra/terraform/modules/monitoring/) · [`docs/deploy/observability.md`](docs/deploy/observability.md) · structured **triage_metrics** JSON ( **`triage_id`**, **`stack_environment`**, duration, **LLM tokens**, **severity_metric** / **escalate_str**) → log metric filters + dashboard (**SEARCH** panels + **Logs Insights**); alarms scoped by **Environment**; wire **`observability_alarm_sns_topic_arns`** for notifications |
 
 ### Phase 1 — Problem definition
 
@@ -160,8 +160,9 @@ Before AWS, run through **[`docs/validation/pre-cloud-validation.md`](docs/valid
 
 ### Phase 13 — Observability (CloudWatch)
 
-- **Deliverable:** Dashboard (ALB **rpm**, latency **avg+p95**, **4xx/5xx** split, ECS, triage outcomes + **tokens**, triage duration **avg+p95**), **alarms** (5xx, unhealthy, **p95 latency**, **ECS CPU**, **triage max duration**). Runbook: [`docs/deploy/observability.md`](docs/deploy/observability.md).
-- **App:** Each triage emits one JSON line to stdout and **`aira.triage`** (`triage_id`, `outcome`, `duration_ms`, `severity`, **LLM token counts**). Disable with **`TRIAGE_METRICS_LOG_DISABLE=1`**.
+- **Deliverable:** Dashboard (ALB **rpm**, latency **avg+p95**, **4xx/5xx** split, ECS, triage outcomes + **tokens**, triage duration **avg+p95**, **severity/escalate** time series via metric math **SEARCH**, optional **Logs Insights** widget listing recent **`triage_id`** rows). **Alarms:** target **5xx**, unhealthy hosts, ALB **p95** latency, **ECS CPU**, **triage duration** maximum (aligned with **Environment** on log-derived triage metrics). Runbook: [`docs/deploy/observability.md`](docs/deploy/observability.md).
+- **App:** Each triage emits one JSON line to stdout and **`aira.triage`** — **`triage_id`**, **`stack_environment`** (from **`AIRA_ENV`**, default `local`), **`outcome`**, **`duration_ms`**, **`severity`** / **`severity_metric`**, **`escalate`** / **`escalate_str`**, **LLM token counts**. **ECS** tasks set **`AIRA_ENV`** from Terraform **`var.environment`** so metrics match dashboard dimensions. **`triage_id`** is not a metric dimension (cardinality); use logs and **Logs Insights** for correlation. Disable emission with **`TRIAGE_METRICS_LOG_DISABLE=1`**.
+- **Alerts:** Set **`observability_alarm_sns_topic_arns`** in **`terraform.tfvars`** so alarms are not dashboard-only.
 
 ### Next (Phase 14+)
 
