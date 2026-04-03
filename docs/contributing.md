@@ -33,7 +33,7 @@ feature work → commit → push origin dev
               → merge (CI should pass on the PR)
 ```
 
-**Deploy API (dev)** workflow: in Actions, choose branch **`dev`** when using **Run workflow**, so the image matches the integration branch.
+**Deploy API (dev)** workflow: in Actions, choose branch **`dev`** when using **Run workflow** (dropdown “Use workflow from”). If you run it from **`main`**, the **gate** job fails on purpose — that email is expected until you re-run from **`dev`**.
 
 ---
 
@@ -49,9 +49,11 @@ The **CI** workflow needs **no** secrets to run **lint**, **tests**, **Terraform
 
 | Secret | Used by | Purpose |
 |--------|---------|---------|
-| **`OPENAI_API_KEY`** | `CI` → job **eval-smoke** | Real **`rag-build`** + **`triage-eval --limit 3`** on each run (API cost). Omit if you do not want live LLM in CI. |
+| **`OPENAI_API_KEY`** | `CI` → job **eval-smoke** | If unset, that job still runs but **skips** `rag-build` / `triage-eval` (no cost). Add the secret only if you want live LLM checks in CI. |
 
-| **`AWS_DEPLOY_ROLE_ARN`** | `Deploy API (dev)` | IAM role ARN for **OIDC** (`sts:AssumeRoleWithWebIdentity` trusted to GitHub). Omit if you only deploy with **`./scripts/aws/push_api_to_ecr.sh`** from your machine. |
+| **`AWS_DEPLOY_ROLE_ARN`** | `Deploy API (dev)` | IAM role ARN for **OIDC**. Required **only** when you use the deploy workflow **and** have set the **DEV_\*** variables. Omit if you deploy only via **`./scripts/aws/push_api_to_ecr.sh`**. |
+
+**Note:** GitHub does not allow **`secrets.*` inside job-level `if:`** expressions. Workflows use branch checks / variables at the job level and read secrets inside **steps** (or skip in shell) instead.
 
 ### Optional repository variables
 

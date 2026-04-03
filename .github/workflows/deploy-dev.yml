@@ -31,10 +31,11 @@ jobs:
             exit 1
           fi
 
+  # Job-level `if` cannot use `secrets.*`. Gate on vars only; verify OIDC secret in first step.
   deploy:
     needs: gate
+    if: vars.DEV_ECR_REPOSITORY_URL != ''
     runs-on: ubuntu-latest
-    if: vars.DEV_ECR_REPOSITORY_URL != '' && secrets.AWS_DEPLOY_ROLE_ARN != ''
     env:
       AWS_REGION: ${{ vars.AWS_REGION }}
       ECR_URL: ${{ vars.DEV_ECR_REPOSITORY_URL }}
@@ -42,6 +43,15 @@ jobs:
       ECS_SERVICE: ${{ vars.DEV_ECS_SERVICE_NAME }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Require AWS_DEPLOY_ROLE_ARN secret
+        env:
+          ROLE: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          if [ -z "${ROLE}" ]; then
+            echo "::error::Set repository secret **AWS_DEPLOY_ROLE_ARN** (OIDC role) to deploy."
+            exit 1
+          fi
 
       - name: Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4

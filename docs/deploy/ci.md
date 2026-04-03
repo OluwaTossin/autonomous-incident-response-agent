@@ -43,9 +43,13 @@ uv sync --frozen --extra dev
 uv run ruff check app tests scripts/ci
 uv run pytest tests/unit tests/integration -q
 terraform fmt -check -recursive infra/terraform
-(cd infra/terraform/envs/dev && terraform init -backend=false && terraform validate)
+(cd infra/terraform/envs/dev && rm -rf .terraform && terraform init -backend=false -lockfile=readonly && terraform validate)
 uv run python scripts/ci/stub_rag_index.py && docker build -f Dockerfile -t aira-api:local .
 ```
+
+**Terraform lock file:** CI uses **Terraform 1.9.4** (pinned in the workflow). The committed **`.terraform.lock.hcl`** must include **multiple `h1:`** hashes (registry signing) or Linux **`terraform validate`** can fail with “cached package does not match checksums”. Refresh from any env root:
+
+`terraform init -backend=false` then commit changes, or run `terraform providers lock -platform=linux_amd64 -platform=darwin_amd64 -platform=darwin_arm64` with the same Terraform version as CI.
 
 ## Manual deploy to dev (`/.github/workflows/deploy-dev.yml`)
 
