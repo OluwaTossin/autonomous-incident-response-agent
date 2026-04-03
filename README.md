@@ -11,6 +11,7 @@ AI-assisted **incident triage**: RAG over runbooks, incidents, and logs; LangGra
 ## Table of contents
 
 - [Overview](#overview)
+- [Architecture](#architecture)
 - [Features](#features)
 - [Prerequisites](#prerequisites)
 - [Quick start](#quick-start)
@@ -33,6 +34,14 @@ The service ingests **alert-style JSON**, retrieves relevant operational context
 **Current closure:** Phases **1–14** are implemented (local dev through **AWS ECS**, **CloudWatch**, **GitHub Actions**). Optional extensions (e.g. TLS, Phase 15 backlog) are **out of scope for this closure** — see [`execution.md`](execution.md).
 
 Deeper product framing: [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md).
+
+---
+
+## Architecture
+
+![Logical architecture — ingress, triage API, RAG, LangGraph, n8n, AWS, CI/CD (Phases 1–14)](architectural-diagram.png)
+
+Layered diagrams, sequence views, and CI/CD detail (Mermaid): **[`docs/architecture/system-architecture.md`](docs/architecture/system-architecture.md)** · index [`docs/architecture/README.md`](docs/architecture/README.md)
 
 ---
 
@@ -89,6 +98,7 @@ uv run serve-api             # http://127.0.0.1:8000/docs
 
 | Topic | Link |
 |-------|------|
+| Architecture (Mermaid diagrams, PNG exports) | [`docs/architecture/system-architecture.md`](docs/architecture/system-architecture.md) |
 | Phased build log, milestones, closure | [`execution.md`](execution.md) |
 | Branches (`dev` / `main`), GitHub secrets | [`docs/contributing.md`](docs/contributing.md) |
 | Deploy API to ECS / ECR / SSM | [`docs/deploy/aws-ecs.md`](docs/deploy/aws-ecs.md) |
@@ -141,7 +151,7 @@ uv run serve-api             # http://127.0.0.1:8000/docs
 | [`execution.md`](execution.md) | Build order, detailed phases, milestones |
 | [`docs/contributing.md`](docs/contributing.md) | Branching & GitHub Actions secrets |
 | [`docs/decisions/`](docs/decisions/) | ADRs, problem definition, roadmap |
-| [`docs/architecture/`](docs/architecture/) | Architecture diagram |
+| [`docs/architecture/`](docs/architecture/) | [`system-architecture.md`](docs/architecture/system-architecture.md), [`architecture-overview.mmd`](docs/architecture/architecture-overview.mmd); overview PNG at repo root [`architectural-diagram.png`](architectural-diagram.png) |
 | [`app/`](app/) | `rag`, `agent`, `api`, `models`, `ui`, `eval` |
 | [`data/`](data/) | Runbooks, incidents, logs, eval gold set |
 | [`frontend/`](frontend/) | Next.js triage console |

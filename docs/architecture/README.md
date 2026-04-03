@@ -2,11 +2,10 @@
 
 High-level view of the **Autonomous DevOps Incident Response System**: alerts and users → core incident stack (API, LLM agent, RAG, response API) → n8n automation → AWS deployment, with observability feeding back.
 
-## Diagram
+## Diagrams
 
-![Autonomous DevOps Incident Response System — logical architecture](../../architectural-diagram.png)
-
-*Source file (repo root): [`architectural-diagram.png`](../../architectural-diagram.png)*
+- **One-page PNG** (generated): [`architecture-overview.png`](architecture-overview.png) — source [`architecture-overview.mmd`](architecture-overview.mmd).
+- **Full Mermaid set** (layers, components, AWS, sequences, CI/CD): [`system-architecture.md`](system-architecture.md) — preview in the IDE or on GitHub; re-export via [mermaid.live](https://mermaid.live) or `@mermaid-js/mermaid-cli`.
 
 ## How this maps to the repo
 
