@@ -14,9 +14,12 @@ on:
       - dev
       - main
 
+# On main, do not cancel in-progress runs: merge + duplicate webhooks can start two
+# runs for the same ref and cancel the first mid-job (red X on the default branch).
+# On dev / PRs, cancel superseded runs so rapid pushes do not pile up.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
