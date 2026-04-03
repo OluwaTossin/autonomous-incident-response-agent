@@ -59,7 +59,7 @@
 | **Package/cache** | Image build residue, `apt` cache in long-lived VMs (less common in containers). |
 | **Inodes** | Millions of tiny files (temp, metrics shards). |
 
-Use **largest directory** tools appropriate to your environment (`ncdu`, cloud console volume metrics, CSI metrics).
+Use **largest directory** tools appropriate to the environment (`ncdu`, cloud console volume metrics, CSI metrics).
 
 ---
 

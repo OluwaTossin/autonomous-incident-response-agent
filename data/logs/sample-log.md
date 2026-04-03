@@ -23,10 +23,10 @@
 
 ## Real cloud log formats (what production looks like)
 
-These files **intentionally** read like **merged narratives** (app + platform + “metrics” pseudo-lines). In production you usually have:
+These files **intentionally** read like **merged narratives** (app + platform + “metrics” pseudo-lines). In production, logs typically look like:
 
 - **AWS ALB:** Access logs (S3) — tab-delimited fields, `elb_status_code`, `target_status_code`, `request_processing_time`, not prose.
-- **CloudWatch Logs:** Often **JSON** per line from Lambda/ECS, or **container stdout** with your app’s format.
+- **CloudWatch Logs:** Often **JSON** per line from Lambda/ECS, or **container stdout** in the application’s format.
 - **Kubernetes:** `kubectl logs` = container stdout; **events** from `kubectl get events` are a separate stream (`FailedMount`, `Failed`, `PullBackOff`).
 - **RDS / Postgres:** `FATAL`, `ERROR` in PostgreSQL CSV/text logs; connection counts from **Performance Insights / CloudWatch metrics**, not always inline with app logs.
 

@@ -1,6 +1,6 @@
 # Phase 6 — n8n execution layer
 
-Local **[n8n](https://n8n.io/)** workflows that react to **triage-shaped JSON** (same structure as `POST /triage` responses). They call your FastAPI app for a **mock Jira** create and an optional **workflow event log**.
+Local **[n8n](https://n8n.io/)** workflows that react to **triage-shaped JSON** (same structure as `POST /triage` responses). They call this repo’s FastAPI app for a **mock Jira** create and an optional **workflow event log**.
 
 ## Prerequisites
 
@@ -13,7 +13,7 @@ Local **[n8n](https://n8n.io/)** workflows that react to **triage-shaped JSON** 
    ```env
    SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/PATH
    ```
-   Do **not** put the real URL in `.env.example` or commit it. When you run `docker compose -f docker-compose.n8n.yml up` from the repo root, Compose injects that value into the n8n container as `$env.SLACK_WEBHOOK_URL`. After changing `.env`, recreate: `docker compose -f docker-compose.n8n.yml up -d --force-recreate`.
+   Do **not** put the real URL in `.env.example` or commit it. When running `docker compose -f docker-compose.n8n.yml up` from the repo root, Compose injects that value into the n8n container as `$env.SLACK_WEBHOOK_URL`. After changing `.env`, recreate: `docker compose -f docker-compose.n8n.yml up -d --force-recreate`.
 
 ## Start n8n
 
@@ -51,7 +51,7 @@ docker compose -f docker-compose.n8n.yml up -d
 1. **Webhook** accepts JSON in the **HTTP body** (same shape as `POST /triage` returns). n8n exposes that payload as **`$json.body`** in expressions — the workflows use `body.severity`, `body.confidence`, etc.
 2. If **`body.severity !== "CRITICAL"`** — respond `action: no_notification`.
 3. If **CRITICAL**, **confidence tiers** (numeric `body.confidence`, missing treated as `0`):
-   - **`confidence > 0.85`** — **Build Slack payload** (Code node) → rich Slack attachment (service, likely root cause, confidence, actions, evidence summary) → **Notify Slack** → **Workflow log** (`tier: high_confidence`) → respond `action: slack_and_page`, `tier: high` (wire PagerDuty/Opsgenie on this branch if you use them).
+   - **`confidence > 0.85`** — **Build Slack payload** (Code node) → rich Slack attachment (service, likely root cause, confidence, actions, evidence summary) → **Notify Slack** → **Workflow log** (`tier: high_confidence`) → respond `action: slack_and_page`, `tier: high` (wire PagerDuty/Opsgenie on this branch if needed).
    - **`0.6 ≤ confidence ≤ 0.85`** — same Slack formatting → **Slack only** (no workflow log) → respond `action: slack_only`, `tier: medium`.
    - **`< 0.6`** — **Workflow log** only (`tier: log_review`) → respond `action: log_review`, `tier: low`.
 
@@ -108,9 +108,9 @@ curl -s -X POST http://localhost:5678/webhook/triage-escalation -H "Content-Type
 
 Workflows were authored for **n8n 1.73.x** (see `docker-compose.n8n.yml` image tag). If import errors appear on a newer n8n, recreate the same graph in the UI from this README or adjust node type versions in the JSON.
 
-If **IF** conditions never match (e.g. always `not_escalated` / `no_notification`), your editor may be using old expressions: ensure **Is CRITICAL** uses `$json.body.severity` and **Should escalate** uses `$json.body.escalate` — re-import the JSON from this repo or fix the expressions in the UI.
+If **IF** conditions never match (e.g. always `not_escalated` / `no_notification`), the n8n editor may be using old expressions: ensure **Is CRITICAL** uses `$json.body.severity` and **Should escalate** uses `$json.body.escalate` — re-import the JSON from this repo or fix the expressions in the UI.
 
-**`triage-feedback` → `{"message":"Error in workflow"}`** — Usually the **POST triage-feedback** HTTP node failed (connection refused, or **404**). From the host, `curl -s http://127.0.0.1:8000/ | jq .n8n_triage_feedback` must show `POST /n8n/triage-feedback`; if you get **404** on that path, restart the API from this repo (`uv run serve-api`) so it loads the current `n8n_routes`. From inside Docker, the URL must be reachable (`TRIAGE_API_BASE`, default `http://host.docker.internal:8000`).
+**`triage-feedback` → `{"message":"Error in workflow"}`** — Usually the **POST triage-feedback** HTTP node failed (connection refused, or **404**). From the host, `curl -s http://127.0.0.1:8000/ | jq .n8n_triage_feedback` must show `POST /n8n/triage-feedback`; if that path returns **404**, restart the API from this repo (`uv run serve-api`) so it loads the current `n8n_routes`. From inside Docker, the URL must be reachable (`TRIAGE_API_BASE`, default `http://host.docker.internal:8000`).
 
 ## End-to-end with real triage
 

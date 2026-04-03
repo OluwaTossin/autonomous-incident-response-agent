@@ -73,7 +73,7 @@ The audit file **does not** add API keys or tokens from server env vars. It **do
 
 ## 4. Evaluation roadmap (inputs + outputs + time)
 
-With `timestamp`, `input`, and `output`, you can add a parallel **gold** dataset, e.g.:
+With `timestamp`, `input`, and `output`, a parallel **gold** dataset can be added, e.g.:
 
 ```json
 { "incident_id": "...", "expected_severity": "HIGH", "expected_escalate": true }
@@ -87,7 +87,7 @@ The repo ships **`uv run triage-eval`** (see [`data/eval/README.md`](../../data/
 
 ## 5. RAG debugging
 
-`retrieved_context` and `top_k_sources` exist so you can answer:
+`retrieved_context` and `top_k_sources` exist to answer:
 
 - What did retrieval return for this failure?
 - Did the wrong doc rank high?

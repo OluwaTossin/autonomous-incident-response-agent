@@ -1,6 +1,6 @@
 # Observability (Phase 13 — CloudWatch)
 
-After **`terraform apply`** in `infra/terraform/envs/dev` or `envs/prod`, you get:
+After **`terraform apply`** in `infra/terraform/envs/dev` or `envs/prod`, the stack exposes:
 
 1. **ECS → CloudWatch Logs** — log group `/ecs/<name_prefix>-api`; container stdout/stderr (including uvicorn access logs).
 2. **Dashboard** `<name_prefix>-api-observability` — ALB (request rate/min, latency **avg + p95**, **4xx** and **5xx** split, health), ECS CPU/memory, **triage** outcomes + **token sum**, triage duration **avg + p95**, **severity / escalate** breakdowns (log-derived metrics via SEARCH), and a **Logs Insights** table of recent rows with **`triage_id`** for traceability.
@@ -20,7 +20,7 @@ terraform output cloudwatch_alarm_ecs_cpu_high
 terraform output cloudwatch_alarm_triage_duration_max
 ```
 
-Tune thresholds by passing variables into `module.monitoring` from `monitoring.tf` (or extend `variables.tf` / `terraform.tfvars` if you expose them at the env layer).
+Tune thresholds by passing variables into `module.monitoring` from `monitoring.tf` (or extend `variables.tf` / `terraform.tfvars` when exposing them at the env layer).
 
 ## Application metrics & structured logging
 
@@ -42,7 +42,7 @@ Example:
 | `severity_metric` / `escalate_str` | Normalized strings for **log metric filter dimensions** (avoid `null` / non-string dimensions) |
 | `tokens_*` | From LangChain `UsageMetadataCallbackHandler` on the structured chat call (`0` when no usage recorded) |
 
-**EMF vs log metric filters:** this stack uses **structured JSON logs + metric filters** (not Embedded Metric Format). That avoids duplicate publishing if you later add EMF; if you switch to EMF-only, remove or disable the corresponding filters so the same custom namespace is not counted twice.
+**EMF vs log metric filters:** this stack uses **structured JSON logs + metric filters** (not Embedded Metric Format). That avoids duplicate publishing when EMF is added later; when switching to EMF-only, remove or disable the corresponding filters so the same custom namespace is not counted twice.
 
 Disable stdout + `aira.triage` emission with **`TRIAGE_METRICS_LOG_DISABLE=1`**.
 

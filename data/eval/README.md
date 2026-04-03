@@ -7,7 +7,7 @@ One JSON object per line (JSONL). Lines starting with `#` or empty lines are ski
 | Field | Meaning |
 |-------|---------|
 | `id` | Stable case id (used in reports). |
-| `incident` | Same object you would send to `POST /triage`. |
+| `incident` | Same object as a `POST /triage` body. |
 | `expect` | Optional assertions (all omitted → no checks beyond “no graph error”). |
 | `tags` | Optional labels for humans (e.g. `ambiguous`, `misleading_alert`, `over_escalate_risk`); not used in pass/fail. |
 | `notes` | Optional free text for eval readers; not asserted. |
@@ -55,7 +55,7 @@ Exit code **0** if all cases pass, **1** if any fail, **2** if gold file missing
 python3 scripts/generate_eval_gold.py
 ```
 
-Most rows enable **`summary_contains_all`**, **`root_cause_contains_any`**, **`retrieval_source_contains_any`** (`data/`), and **`min_top_retrieval_score`** (0.05) so reports show real values for `summary_keywords_ok`, `root_cause_hint_ok`, and `retrieval_source_ok` instead of `None`. Keywords are chosen to match **incident text and normal operator paraphrases** (e.g. pool/connection vs literal “database”). **`root_cause_contains_any`** is satisfied if **any** listed phrase appears (OR). Tune further if your model’s vocabulary still drifts.
+Most rows enable **`summary_contains_all`**, **`root_cause_contains_any`**, **`retrieval_source_contains_any`** (`data/`), and **`min_top_retrieval_score`** (0.05) so reports show real values for `summary_keywords_ok`, `root_cause_hint_ok`, and `retrieval_source_ok` instead of `None`. Keywords are chosen to match **incident text and normal operator paraphrases** (e.g. pool/connection vs literal “database”). **`root_cause_contains_any`** is satisfied if **any** listed phrase appears (OR). Tune further if the model’s vocabulary still drifts.
 
 ## Growing the set
 
@@ -65,5 +65,5 @@ Add cases in `scripts/generate_eval_gold.py`, re-run the script, then commit `da
 
 - **Classification:** severity / escalate / action count vs gold.
 - **Latency:** mean and p95 wall time per case (includes LLM + retrieval).
-- **Retrieval:** optional substring / score checks when you enable them in `expect`.
+- **Retrieval:** optional substring / score checks when enabled in `expect`.
 - **Evidence grounding:** share of evidence `source` strings overlapping retrieval hit paths (heuristic, not a full hallucination detector).

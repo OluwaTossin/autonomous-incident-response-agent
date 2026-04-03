@@ -1,6 +1,6 @@
 # Escalation matrix (sample)
 
-Synthetic template aligned with [`docs/decisions/problem-definition.md`](../../docs/decisions/problem-definition.md). Replace with your org’s real matrix.
+Synthetic template aligned with [`docs/decisions/problem-definition.md`](../../docs/decisions/problem-definition.md). Replace with an organization-specific real matrix.
 
 ## Severity → response
 

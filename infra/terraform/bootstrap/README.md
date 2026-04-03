@@ -1,12 +1,12 @@
 # Bootstrap — remote Terraform state (S3 + DynamoDB)
 
-Creates **one S3 bucket** (versioned, encrypted, private) and **one DynamoDB table** for state locking. Intended to run **once per AWS account** (per region if you isolate by region).
+Creates **one S3 bucket** (versioned, encrypted, private) and **one DynamoDB table** for state locking. Intended to run **once per AWS account** (per region if isolating by region).
 
 **This stack uses local state** (not the bucket it creates). Do not add `backend.hcl` here — put **`backend.hcl` in `../envs/dev/` or `../envs/prod/`** (next to that env’s `providers.tf`) before `terraform init -backend-config=backend.hcl`.
 
 ## Prerequisites
 
-- AWS credentials with permission to create S3 buckets and DynamoDB tables in **`eu-west-1`** (or your chosen `aws_region`).
+- AWS credentials with permission to create S3 buckets and DynamoDB tables in **`eu-west-1`** (or the chosen `aws_region`).
 
 ## Apply
 
@@ -31,7 +31,7 @@ Prod therefore has its **own** remote state file; it is not overwritten by dev.
 
 ### Renaming an existing dev state object (optional)
 
-If you already stored state at the legacy key `aira/dev/terraform.tfstate`, move it before changing `key` in `backend.hcl`:
+If state was already stored at the legacy key `aira/dev/terraform.tfstate`, move it before changing `key` in `backend.hcl`:
 
 ```bash
 BUCKET="aira-tf-state-YOUR_ACCOUNT_ID"
@@ -44,6 +44,6 @@ Then set `key` in **`envs/dev/backend.hcl`** to `aira/terraform/state/developmen
 
 ## Destroy
 
-Removing the bucket risks **losing all infrastructure state**. The S3 bucket has **`prevent_destroy`**; remove that lifecycle block only if you intentionally tear down remote state (after migrating elsewhere).
+Removing the bucket risks **losing all infrastructure state**. The S3 bucket has **`prevent_destroy`**; remove that lifecycle block only when intentionally tearing down remote state (after migrating elsewhere).
 
-To delete the DynamoDB lock table and bucket after emptying versions/objects, use the AWS console or CLI per your retention policy.
+To delete the DynamoDB lock table and bucket after emptying versions/objects, use the AWS console or CLI per the retention policy.

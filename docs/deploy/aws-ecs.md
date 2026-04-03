@@ -19,9 +19,9 @@ Rules:
 
 - **`parameter_name`** must be the full path starting with **`/`** (Standard tier is fine for typical API keys).
 - Do **not** set the same **`env_name`** twice (including `OPENAI_API_KEY` in both the shorthand and `ssm_secrets`); `terraform plan` will fail the uniqueness check.
-- The **task execution role** is granted **`ssm:GetParameter`** / **`GetParameters`** only on the ARNs Terraform builds from your list.
+- The **task execution role** is granted **`ssm:GetParameter`** / **`GetParameters`** only on the ARNs Terraform builds from the configured list.
 
-After apply, **`terraform output ssm_container_secrets`** lists each **`environment_variable`**, **`parameter_name`**, and **`arn`** you must create in SSM.
+After apply, **`terraform output ssm_container_secrets`** lists each **`environment_variable`**, **`parameter_name`**, and **`arn`** that must exist in SSM.
 
 If **no** parameters are configured, `terraform apply` still succeeds, but **`POST /triage`** will fail without **`OPENAI_API_KEY`** (while **`GET /health`** may still return 200).
 
@@ -42,7 +42,7 @@ REGION=eu-west-1   # example: match var.aws_region
 aws ssm put-parameter --region "$REGION" --name /aira/dev/openai_api_key --type SecureString --value "$(printf %s "$OPENAI_API_KEY")"
 ```
 
-Then **`terraform apply`** (if you changed tfvars only). To ship a **new container image**, use the push script: it pushes an **immutable tag** (default **git short SHA**) **and** **`:latest`**, then runs **`terraform apply`**. Terraform reads the **digest** of **`:latest`** and pins **`repository@digest`** on the ECS task definition — no **`api_image_tag`** in **`terraform.tfvars`**.
+Then **`terraform apply`** (after tfvars-only changes). To ship a **new container image**, use the push script: it pushes an **immutable tag** (default **git short SHA**) **and** **`:latest`**, then runs **`terraform apply`**. Terraform reads the **digest** of **`:latest`** and pins **`repository@digest`** on the ECS task definition — no **`api_image_tag`** in **`terraform.tfvars`**.
 
 ```bash
 ./scripts/aws/push_api_to_ecr.sh dev
@@ -75,7 +75,7 @@ Environment knobs:
 |----------|--------|
 | `IMAGE_TAG` | Override immutable tag (default: **git short SHA**, else `build-UTCtimestamp`); **`:latest`** is always updated too. |
 | `TF_APPLY_AUTO_APPROVE=1` | Non-interactive `terraform apply` after push. |
-| `PUSH_ONLY=1` | Build/push only; run **`terraform apply`** yourself when you want ECS to pick up the new **`:latest`** digest. |
+| `PUSH_ONLY=1` | Build/push only; run **`terraform apply`** manually when ECS should pick up the new **`:latest`** digest. |
 | `SKIP_TERRAFORM_APPLY=1` | Push only + prints **`terraform apply`** hint (legacy **`SKIP_ECS_ROLLOUT=1`** alias). |
 | `DOCKER_BUILD_PLATFORM` | Default `linux/amd64`; set `linux/arm64` only if Fargate uses ARM. |
 
@@ -109,10 +109,10 @@ Use **`dev`** or **`prod`** as the script argument so Terraform outputs resolve 
 ## 6. Operational notes
 
 - **TLS:** the ALB listener is HTTP **:80** in the lean module. Add HTTPS (ACM + listener) before serious production use.
-- **Triage audit JSONL:** the container has no bind-mounted `data/` volume; audit files are ephemeral unless you add EFS or ship logs elsewhere. Consider `TRIAGE_AUDIT_DISABLE=1` in `extra_task_environment` in `terraform.tfvars` if you want to avoid writing under `/app/data` on Fargate.
+- **Triage audit JSONL:** the container has no bind-mounted `data/` volume; audit files are ephemeral unless EFS or another log sink is added. Consider `TRIAGE_AUDIT_DISABLE=1` in `extra_task_environment` in `terraform.tfvars` to avoid writing under `/app/data` on Fargate.
 - **Re-deploy after index changes:** run `rag-build`, then `./scripts/aws/push_api_to_ecr.sh <env>` again.
 - **Phase 12 — hosted triage UI:** Next.js static export under [`frontend/`](../../frontend/) → S3 (optional CloudFront). After `terraform apply`, run **`./scripts/aws/deploy_frontend_cdn.sh <env>`** from repo root. Copy **`terraform output -raw triage_ui_url`** into **`cors_origins`** in **`terraform.tfvars`**, **`terraform apply`**, then rebuild/push the API image so the task picks up **`CORS_ORIGINS`**. See [`frontend/README.md`](../../frontend/README.md).
-- **Optional `API_KEY`:** add `{ name = "API_KEY", value = "…" }` to **`extra_task_environment`** in **`terraform.tfvars`** (or map a **SecureString** through **`ssm_secrets`** if you prefer not to put the key in tfvars). Clients send **`x-api-key`**. Pair the static UI with **`NEXT_PUBLIC_TRIAGE_API_KEY`** at **`next build`** time when using the deploy script (bake via env before `npm run build`, or use **`.env.production`** locally).
+- **Optional `API_KEY`:** add `{ name = "API_KEY", value = "…" }` to **`extra_task_environment`** in **`terraform.tfvars`** (or map a **SecureString** through **`ssm_secrets`** to keep the key out of tfvars). Clients send **`x-api-key`**. Pair the static UI with **`NEXT_PUBLIC_TRIAGE_API_KEY`** at **`next build`** time when using the deploy script (bake via env before `npm run build`, or use **`.env.production`** locally).
 
 ## 7. Troubleshooting (from real deploys)
 

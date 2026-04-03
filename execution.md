@@ -26,7 +26,7 @@ This document is the single source of truth for build order, scope, and mileston
 
 ## 1. Project goal
 
-Build an AI-powered incident response system that can:
+I'm building an AI-powered incident response system that can:
 
 - Receive operational alerts
 - Retrieve relevant runbook knowledge
@@ -39,7 +39,7 @@ Build an AI-powered incident response system that can:
 
 ---
 
-## 2. What you are building (five parts)
+## 2. What I am building (five parts)
 
 **Visual:** [`docs/architecture/README.md`](docs/architecture/README.md) (diagram: `architectural-diagram.png`).
 
@@ -131,14 +131,14 @@ autonomous-incident-response-agent/
 Do not commit real secrets. Expected keys:
 
 ```env
-# LLM (you have these today)
+# LLM (available from day one)
 OPENAI_API_KEY=
 OPENROUTER_API_KEY=
 
 # Optional: OpenAI-compatible base URL when calling models via OpenRouter
 # OPENAI_API_BASE=https://openrouter.ai/api/v1
 
-# Cloud / integrations (add when you reach those phases)
+# Cloud / integrations (add when I reach those phases)
 AWS_REGION=
 AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
@@ -241,11 +241,11 @@ N8N_BASIC_AUTH_PASSWORD=
 
 - [x] Layout: `infra/terraform/modules/` (vpc, ecs, alb, iam, ecr, monitoring) + `envs/dev`, `envs/prod`
 - [x] Lean first cut: VPC, subnets, SGs, ECR, ECS cluster/services, ALB, IAM, CloudWatch logs, SSM parameters; **ECS on Fargate**
-- **Deliverable:** `terraform init`, `plan`, `apply` for dev *(IaC in repo; run `apply` in your AWS account — see `infra/terraform/README.md`)*
+- **Deliverable:** `terraform init`, `plan`, `apply` for dev *(IaC in repo; run `apply` in an AWS account — see `infra/terraform/README.md`)*
 
 ### Phase 11 — Deploy to AWS
 
-- [x] Push images to ECR; run services *(script + runbook; execute in your account after `terraform apply`)*
+- [x] Push images to ECR; run services *(script + runbook; execute after `terraform apply` in the target AWS account)*
 - **Deliverable:** Usable URL (dev/prod separated from day one) — ALB DNS from Terraform outputs; `curl …/health` after push + rollout
 
 ### Phase 12 — Presentation triage UI (Next.js)
@@ -273,7 +273,7 @@ N8N_BASIC_AUTH_PASSWORD=
 
 ### Phase 15 — Extensions (optional, future)
 
-*Not part of the current closure. The bullets below are a **backlog / idea list** for a later writeup or roadmap — no ordering, dates, or commitment. They will be discussed when you pick that work up.*
+*Not part of the current closure. The bullets below are a **backlog / idea list** for a later writeup or roadmap — no ordering, dates, or commitment. I'll revisit them when I pick that work up.*
 
 - **A:** Slack incident intake  
 - **B:** Similar past incidents before remediation  
@@ -307,7 +307,7 @@ Use this as the default execution order:
 
 ## 7. Definition of done (portfolio / JD alignment)
 
-At completion you should be able to demonstrate:
+On completion, I can demonstrate:
 
 - LangChain / LangGraph agent design
 - RAG pipeline (chunking, embeddings, vector search)

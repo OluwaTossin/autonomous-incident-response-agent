@@ -111,7 +111,7 @@ Incident ticket + chat; **15-minute** updates while SEV active. Note whether imp
 ## Recovery verification
 
 - [ ] CPU and latency within baseline for load.  
-- [ ] No throttling alerts for **two** evaluation periods (tune to your stack).  
+- [ ] No throttling alerts for **two** evaluation periods (tune to the stack).  
 - [ ] Autoscaler stable (no flapping).
 
 ---

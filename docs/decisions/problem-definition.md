@@ -64,7 +64,7 @@ The system shall return a **structured triage result** suitable for display, log
 | **Contradiction / multi-cause** *(extended)* | Optional summary when signals imply more than one primary failure mode. |
 | **Timeline** *(extended)* | Ordered event strings (relative or ISO) for temporal orientation. |
 
-The canonical Pydantic schema lives in [`app/models/triage.py`](../../app/models/triage.py). Product framing and roadmap for the extended fields are in [`capabilities-and-roadmap.md`](capabilities-and-roadmap.md). This document defines **semantic** requirements; keep a private root `execution.md` for personal phase checklists if you use one.
+The canonical Pydantic schema lives in [`app/models/triage.py`](../../app/models/triage.py). Product framing and roadmap for the extended fields are in [`capabilities-and-roadmap.md`](capabilities-and-roadmap.md). This document defines **semantic** requirements; the root `execution.md` in this repo is the phased build log and checklist I maintain alongside it.
 
 ---
 
@@ -81,7 +81,7 @@ The canonical Pydantic schema lives in [`app/models/triage.py`](../../app/models
 
 ## Explicit non-goals (initial version)
 
-- Fully automated remediation without human review (unless later gated in your local execution plan).
+- Fully automated remediation without human review (unless later gated in `execution.md` or another explicit execution plan).
 - Guaranteed root-cause correctness (LLM + RAG produce **hypotheses**; humans verify).
 - Replacement of the authoritative monitoring or ticketing system of record.
 
