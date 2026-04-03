@@ -32,7 +32,7 @@ jobs:
       - name: Sync (dev tools)
         run: uv sync --frozen --extra dev
       - name: Ruff
-        run: uv run ruff check app tests
+        run: uv run ruff check app tests scripts/ci
 
   terraform:
     runs-on: ubuntu-latest
@@ -98,9 +98,10 @@ jobs:
       - name: Docker build
         run: docker build -f Dockerfile -t aira-api:ci .
 
+  # Job-level `if` cannot use `secrets.*` (GitHub rejects it). Optional OpenAI steps run in shell.
   eval-smoke:
     needs: test
-    if: github.event.repository.fork == false && secrets.OPENAI_API_KEY != ''
+    if: github.event.repository.fork == false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -109,12 +110,14 @@ jobs:
           version: "latest"
       - name: Sync
         run: uv sync --frozen --extra dev
-      - name: Build RAG index
-        run: uv run rag-build
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      - name: Eval subset (3 cases)
-        run: uv run triage-eval --limit 3
+      - name: RAG build + triage-eval (skipped if no OPENAI_API_KEY secret)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           TRIAGE_AUDIT_DISABLE: "1"
+        run: |
+          if [ -z "${OPENAI_API_KEY}" ]; then
+            echo "Skipping eval-smoke: add repository secret OPENAI_API_KEY to run live LLM checks."
+            exit 0
+          fi
+          uv run rag-build
+          uv run triage-eval --limit 3
