@@ -1,320 +1,228 @@
 # Autonomous DevOps Incident Response Agent
 
-**What this is:** an **AI-powered incident triage and diagnosis engine** — RAG over runbooks/incidents/logs, multi-source context fusion with the alert payload, heuristic guardrails plus LLM structured reasoning, and an action / escalation layer. That pattern matches **AIOps** assistants, **SRE copilots**, and internal reliability tooling at large shops.
+[![CI](https://github.com/OluwaTossin/autonomous-incident-response-agent/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/OluwaTossin/autonomous-incident-response-agent/actions/workflows/ci.yml)
 
-Operational scope today: ingest alerts (JSON), retrieve knowledge, return structured triage JSON over HTTP, optional **Gradio** at `/ui`, **Phase 12** **Next.js** triage console (local or static export to **S3** / optional **CloudFront**), **n8n** webhooks (Slack + mock ticketing), an **offline eval harness** (`triage-eval`), **Docker Compose** for local full stack, **Terraform** for **AWS** (dev/prod), **Phase 11** — **ECR push + ECS Fargate** behind an ALB with **`.rag_index` baked** in the image and **remote state** (S3 + DynamoDB), and **Phase 14** — **GitHub Actions** CI (see [`docs/deploy/ci.md`](docs/deploy/ci.md)). For capability depth and the **~10% roadmap**, see [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md).
+AI-assisted **incident triage**: RAG over runbooks, incidents, and logs; LangGraph agent with guardrails; structured JSON over HTTP; optional UIs and n8n automation. Aligned with **AIOps** / **SRE copilot** patterns.
 
-**Owner:** Oluwatosin Jegede  
-**Status:** Phases **1–14** shipped in-repo (API on ECS **dev/prod**; browser UI + **CORS**; **CloudWatch** observability; **GitHub Actions** CI — see [`docs/deploy/ci.md`](docs/deploy/ci.md)). **Planned extensions** (TLS, Phase 15 backlog, deeper n8n metrics) are **out of scope for the current closure** — see [`execution.md`](execution.md) and a future writeup.
+**Maintainer:** Oluwatosin Jegede
 
-**Plan:** Detailed phase notes below; maintainer checklist in root [`execution.md`](execution.md) (tracked in git). **Branches:** work on **`dev`**, merge to **`main`** via PR — see [`docs/contributing.md`](docs/contributing.md).
+---
 
-Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_dotenv` only reads `.env`**. Never commit `.env` or real keys in `.env.example`.
+## Table of contents
 
-### Quick start (happy path)
+- [Overview](#overview)
+- [Features](#features)
+- [Prerequisites](#prerequisites)
+- [Quick start](#quick-start)
+- [Documentation](#documentation)
+- [Project status & branches](#project-status--branches)
+- [Build phases (summary)](#build-phases-summary)
+- [Repository layout](#repository-layout)
+- [Development](#development)
+- [Testing](#testing)
+- [Docker Compose & n8n](#docker-compose--n8n)
+- [Contributing](#contributing)
+- [Disclaimer](#disclaimer)
 
-1. `uv sync --extra dev` (add `--extra ui` for Gradio at `/ui`).
-2. `uv run rag-build` — build FAISS index under `.rag_index/` (needs `OPENAI_API_KEY` in `.env`).
-3. `uv run serve-api` — API + optional `/ui` → [`/docs`](http://127.0.0.1:8000/docs).
-4. **Stack in Docker:** `docker compose up -d --build` — API on host **:18080** + n8n on **:5678** ([Phase 9](#phase-9--docker-compose-full-stack)). *Or* run the API on the host and use `docker compose -f docker-compose.n8n.yml up -d` for n8n only.
-5. `uv run triage-eval` — regression-style eval over [`data/eval/gold.jsonl`](data/eval/gold.jsonl) (live LLM, ~27 cases; regenerate via `python3 scripts/generate_eval_gold.py`).
+---
 
-| Command | Role |
-|---------|------|
+## Overview
+
+The service ingests **alert-style JSON**, retrieves relevant operational context, and returns **structured triage** (summary, severity, hypothesis, actions, escalation). Sample data and runbooks are **synthetic** (see [Disclaimer](#disclaimer)).
+
+**Current closure:** Phases **1–14** are implemented (local dev through **AWS ECS**, **CloudWatch**, **GitHub Actions**). Optional extensions (e.g. TLS, Phase 15 backlog) are **out of scope for this closure** — see [`execution.md`](execution.md).
+
+Deeper product framing: [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md).
+
+---
+
+## Features
+
+- **RAG** — FAISS index over runbooks, incidents, logs, knowledge base (`uv run rag-build`)
+- **Agent** — LangGraph pipeline: normalize → retrieve → analyze → enrich → decide → format
+- **API** — FastAPI: `POST /triage`, `POST /ingest-incident`, OpenAPI at `/docs`, optional `API_KEY` + rate limits
+- **Audit & feedback** — JSONL audit; `triage_id` for joins; n8n + Gradio feedback paths
+- **UIs** — Gradio at `/ui`; Next.js triage console in [`frontend/`](frontend/) (static export → S3)
+- **Automation** — n8n workflows (Slack, mock Jira) — [`workflows/n8n/`](workflows/n8n/)
+- **Eval** — Gold set + `uv run triage-eval` — [`data/eval/`](data/eval/)
+- **AWS** — Terraform **dev/prod**, ECS Fargate, ALB, ECR, SSM secrets, optional static UI CDN
+- **Observability** — CloudWatch dashboard, triage log metrics, alarms — [`docs/deploy/observability.md`](docs/deploy/observability.md)
+- **CI/CD** — GitHub Actions (lint, tests, Terraform validate, frontend + Docker builds) — [`docs/deploy/ci.md`](docs/deploy/ci.md)
+
+---
+
+## Prerequisites
+
+| Requirement | Notes |
+|-------------|--------|
+| **Python** | 3.11+ (see [`pyproject.toml`](pyproject.toml)) |
+| **uv** | [Install uv](https://docs.astral.sh/uv/) — package manager and virtualenv |
+| **OpenAI (or compatible)** | `OPENAI_API_KEY` in `.env` for embeddings + chat |
+| **Docker** | Optional; for Compose (API + n8n) and local n8n |
+| **AWS CLI / Terraform** | For deploy paths — see deploy docs |
+
+Copy [`.env.example`](.env.example) → **`.env`**. Only **`.env`** is loaded by the app (never commit secrets).
+
+---
+
+## Quick start
+
+```bash
+uv sync --extra dev          # add --extra ui for Gradio at /ui
+cp .env.example .env         # set OPENAI_API_KEY
+uv run rag-build             # builds .rag_index/ (gitignored)
+uv run serve-api             # http://127.0.0.1:8000/docs
+```
+
+| Command | Purpose |
+|---------|---------|
 | `uv run rag-build` / `rag-query` | Index + ad-hoc retrieval |
 | `uv run triage -f …` | One-shot triage CLI |
 | `uv run serve-api` | FastAPI + OpenAPI |
-| `uv run triage-eval` | Gold JSONL → Markdown report |
+| `uv run triage-eval` | Gold JSONL → report (~27 cases; live LLM) |
+
+**Full stack (API + n8n):** after `rag-build`, `docker compose up -d --build` — API **:18080**, n8n **:5678**. See [Docker Compose & n8n](#docker-compose--n8n).
 
 ---
 
-## Build progress: Phases 1–14
+## Documentation
+
+| Topic | Link |
+|-------|------|
+| Phased build log, milestones, closure | [`execution.md`](execution.md) |
+| Branches (`dev` / `main`), GitHub secrets | [`docs/contributing.md`](docs/contributing.md) |
+| Deploy API to ECS / ECR / SSM | [`docs/deploy/aws-ecs.md`](docs/deploy/aws-ecs.md) |
+| CloudWatch dashboard & triage metrics | [`docs/deploy/observability.md`](docs/deploy/observability.md) |
+| GitHub Actions CI & optional deploy | [`docs/deploy/ci.md`](docs/deploy/ci.md) |
+| Terraform layout & remote state | [`infra/terraform/README.md`](infra/terraform/README.md) |
+| n8n workflows & webhooks | [`workflows/n8n/README.md`](workflows/n8n/README.md) |
+| Next.js triage UI | [`frontend/README.md`](frontend/README.md) |
+| Pre-cloud validation | [`docs/validation/pre-cloud-validation.md`](docs/validation/pre-cloud-validation.md) |
+| Problem definition / ADRs | [`docs/decisions/`](docs/decisions/) |
+| Data corpus layout | [`data/README.md`](data/README.md) |
+
+---
+
+## Project status & branches
+
+- **Shipped:** Phases **1–14** (see [Build phases (summary)](#build-phases-summary)).
+- **Workflow:** develop on **`dev`**, promote via **PR → `main`** — [`docs/contributing.md`](docs/contributing.md).
+- **Future:** TLS, Phase 15 ideas, deeper n8n metrics — tracked in [`execution.md`](execution.md), not part of the current closure.
+
+---
+
+## Build phases (summary)
 
 | Phase | Status | Primary artifacts |
-|-------|--------|---------------------|
+|-------|--------|-------------------|
 | **1** — Problem definition | Done | [`docs/decisions/problem-definition.md`](docs/decisions/problem-definition.md) |
 | **2** — Knowledge & sample data | Done | [`data/runbooks/`](data/runbooks/), [`data/incidents/`](data/incidents/), [`data/logs/`](data/logs/), [`data/knowledge_base/`](data/knowledge_base/) |
-| **3** — Local RAG | Done | [`app/rag/`](app/rag/) · FAISS index under `.rag_index/` (gitignored) |
-| **4** — LangGraph triage agent | Done | [`app/agent/`](app/agent/), [`app/models/`](app/models/) |
-| **5** — HTTP API | Done | [`app/api/`](app/api/) · FastAPI + JSONL audit log |
-| **6** — n8n execution layer | Done | [`workflows/n8n/`](workflows/n8n/) · [`docker-compose.n8n.yml`](docker-compose.n8n.yml) · `POST /n8n/*` helpers |
-| **7** — Minimal UI | Done | [`app/ui/`](app/ui/) · Gradio at **`/ui`** (`uv sync --extra ui`) |
-| **8** — Evaluation | Done | [`app/eval/`](app/eval/) · [`data/eval/gold.jsonl`](data/eval/gold.jsonl) · `scripts/generate_eval_gold.py` · `uv run triage-eval` |
-| **9** — Docker Compose | Done | [`Dockerfile`](Dockerfile) · [`docker-compose.yml`](docker-compose.yml) · n8n + API on one network |
-| **10** — AWS / Terraform | Done | [`infra/terraform/`](infra/terraform/) · modules + [`envs/dev`](infra/terraform/envs/dev/) & [`envs/prod`](infra/terraform/envs/prod/) |
-| **11** — Deploy to AWS | Done | [`docs/deploy/aws-ecs.md`](docs/deploy/aws-ecs.md) · [`scripts/aws/push_api_to_ecr.sh`](scripts/aws/push_api_to_ecr.sh) · **ECR digest of `:latest`** · image bakes **`.rag_index`** · SSM secret merge · [`infra/terraform/bootstrap/`](infra/terraform/bootstrap/) |
-| **12** — Triage UI (Next.js) | Done | [`frontend/`](frontend/) · [`infra/terraform/modules/frontend_static_cdn/`](infra/terraform/modules/frontend_static_cdn/) · **`cors_origins`** → **`CORS_ORIGINS`** · [`scripts/aws/deploy_frontend_cdn.sh`](scripts/aws/deploy_frontend_cdn.sh) |
-| **13** — Observability | Done | [`infra/terraform/modules/monitoring/`](infra/terraform/modules/monitoring/) · [`docs/deploy/observability.md`](docs/deploy/observability.md) · structured **triage_metrics** JSON ( **`triage_id`**, **`stack_environment`**, duration, **LLM tokens**, **severity_metric** / **escalate_str**) → log metric filters + dashboard (**SEARCH** panels + **Logs Insights**); alarms scoped by **Environment**; wire **`observability_alarm_sns_topic_arns`** for notifications |
-| **14** — CI/CD | Done | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) · [`.github/workflows/deploy-dev.yml`](.github/workflows/deploy-dev.yml) · [`docs/deploy/ci.md`](docs/deploy/ci.md) · [`scripts/ci/stub_rag_index.py`](scripts/ci/stub_rag_index.py) |
+| **3** — Local RAG | Done | [`app/rag/`](app/rag/) · `.rag_index/` (gitignored) |
+| **4** — LangGraph agent | Done | [`app/agent/`](app/agent/), [`app/models/`](app/models/) |
+| **5** — HTTP API | Done | [`app/api/`](app/api/) |
+| **6** — n8n | Done | [`workflows/n8n/`](workflows/n8n/), [`docker-compose.n8n.yml`](docker-compose.n8n.yml) |
+| **7** — Gradio UI | Done | [`app/ui/`](app/ui/) · `/ui` |
+| **8** — Evaluation | Done | [`app/eval/`](app/eval/), [`data/eval/gold.jsonl`](data/eval/gold.jsonl) |
+| **9** — Docker Compose | Done | [`Dockerfile`](Dockerfile), [`docker-compose.yml`](docker-compose.yml) |
+| **10** — Terraform | Done | [`infra/terraform/`](infra/terraform/) |
+| **11** — ECS / ECR | Done | [`docs/deploy/aws-ecs.md`](docs/deploy/aws-ecs.md), [`scripts/aws/push_api_to_ecr.sh`](scripts/aws/push_api_to_ecr.sh) |
+| **12** — Next.js UI | Done | [`frontend/`](frontend/), [`scripts/aws/deploy_frontend_cdn.sh`](scripts/aws/deploy_frontend_cdn.sh) |
+| **13** — Observability | Done | [`docs/deploy/observability.md`](docs/deploy/observability.md), [`infra/terraform/modules/monitoring/`](infra/terraform/modules/monitoring/) |
+| **14** — CI/CD | Done | [`.github/workflows/ci.yml`](.github/workflows/ci.yml), [`docs/deploy/ci.md`](docs/deploy/ci.md) |
 
-### Phase 1 — Problem definition
-
-- **Deliverable:** Product boundary and I/O semantics — who triggers the system, minimum incident payload fields, required triage outputs (summary, severity, hypothesis, actions, escalation).
-- **Doc:** [`docs/decisions/problem-definition.md`](docs/decisions/problem-definition.md) (also references extended schema in code).
-
-### Phase 2 — Knowledge & sample data
-
-- **Deliverable:** Synthetic **operational corpus** for retrieval and demos (not production data).
-- **Layout:** Runbooks under `data/runbooks/` (RAG corpus; procedures with `RB-*` IDs). Incidents under `data/incidents/` (`incident-*.md` narratives). Log bundles under `data/logs/` (`*.log` + conventions in `sample-log.md`). Supplementary ops context in `data/knowledge_base/` (escalation, ownership, first-response).
-- **Reference:** [`data/README.md`](data/README.md) for globs and counts.
-
-### Phase 3 — Local RAG
-
-- **Deliverable:** Chunk → embed → FAISS index; top‑k retrieval with scores, `doc_type`, and `source` paths.
-- **Code:** [`app/rag/`](app/rag/) (`config`, loader, chunking, embeddings, index, [`retrieve`](app/rag/retrieve.py)).
-- **Corpus globs (repo root):** `data/runbooks/**/*.md`, `data/incidents/incident-*.md`, `data/logs/*.log`, `data/knowledge_base/**/*.md`, `docs/decisions/**/*.md`.
-- **Commands:** `uv run rag-build` / `uv run python -m app.rag.cli build-index`; `uv run rag-query "…"` or `query` subcommand.
-- **Config:** `OPENAI_API_KEY` (or OpenRouter + base URL), `EMBEDDING_MODEL`, `RAG_INDEX_DIR` (see `.env.example`).
-
-### Phase 4 — LangGraph triage agent
-
-- **Deliverable:** Incident JSON → normalized narrative → **same retrieval query as RAG** → LLM structured triage + guardrails.
-- **Graph (nodes):** `normalize_input` → `retrieval` → `analysis` → `enrich_triage` → `decision` → `output_formatter`.
-- **Models:** [`app/models/incident.py`](app/models/incident.py) (payload), [`app/models/triage.py`](app/models/triage.py) — `TriageOutput` includes optional `service_name`, `evidence[]`, `conflicting_signals_summary`, `timeline` (plus core fields).
-- **Deterministic layer:** [`app/agent/signal_reasoning.py`](app/agent/signal_reasoning.py) merges **programmatic evidence** from retrieval hits, **multi-signal contradiction** heuristics on the payload, and **programmatic timeline** extraction; merged with the LLM draft in `enrich_triage`.
-- **API for automation:** `run_triage(incident)` and `run_triage_with_audit(incident)` → `(result, {rag_context, retrieval_hits})` in [`app/agent/graph.py`](app/agent/graph.py).
-- **CLI:** `uv run triage -f examples/sample_incident_payload.json` (needs `.env`, built index, chat-capable model).
-- **Product framing:** [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md).
-
-### Phase 5 — HTTP API (FastAPI)
-
-- **Deliverable:** Local backend for ingest validation and full triage over HTTP.
-- **Endpoints:** `GET /` (service discovery), `GET /health`, `GET /version`, `POST /ingest-incident` (validate + normalize only), `POST /triage` (full pipeline; response is triage fields plus **`triage_id`** (UUID) for feedback and eval joins).
-- **Run:** `uv run serve-api` or `uvicorn app.api.main:app` (optional `API_HOST`, `API_PORT`). OpenAPI: `/docs`.
-- **Audit log:** Each `POST /triage` appends one line to `data/logs/triage_outputs.jsonl` (**gitignored**): **`triage_id`**, `timestamp`, `input`, `output` (includes the same **`triage_id`**), **`retrieved_context`**, **`top_k_sources`**. Env: `TRIAGE_AUDIT_DISABLE`, `TRIAGE_AUDIT_JSONL`, `TRIAGE_AUDIT_MAX_RAG_CHARS`. How to validate: [`docs/decisions/triage-audit-validation.md`](docs/decisions/triage-audit-validation.md).
-- **Feedback join:** Send **`triage_id`** from the triage response on **`POST /n8n/triage-feedback`**; feedback JSONL lines include top-level **`triage_id`** for correlation with the audit file.
-- **Optional hardening:** Set **`API_KEY`** in the environment to require matching header **`x-api-key`** on **`POST /ingest-incident`** and **`POST /triage`** ( **`401`** otherwise). **`GET /health`** and **`/n8n/*`** stay open for ALB checks and n8n glue. **slowapi** enforces **`10/minute`** (triage) and **`30/minute`** (ingest) per client IP, or per **`x-api-key`** when present (**`429`** on excess). Tune with **`API_RATE_LIMIT_TRIAGE`**, **`API_RATE_LIMIT_INGEST`**; **`API_RATE_LIMIT_DISABLED=1`** for tests.
-
-### Phase 6 — n8n execution layer
-
-- **Deliverable:** Run **n8n in Docker**; two **importable workflows** driven by **webhooks**; FastAPI **mock Jira** + **workflow event log** for automation glue.
-- **Docker:** [`docker-compose.n8n.yml`](docker-compose.n8n.yml) — `docker compose -f docker-compose.n8n.yml up -d` → UI at **http://localhost:5678**. Uses `host.docker.internal` + `TRIAGE_API_BASE` (default `http://host.docker.internal:8000`) to reach the API from the container. Set **`SLACK_WEBHOOK_URL`** in repo-root **`.env`** (gitignored); Compose injects it into n8n — never commit the real URL.
-- **Workflows (import JSON in n8n, then activate):**
-  - **`incident-triage-escalation`** — `POST …/webhook/triage-escalation` with **flat triage JSON**; if `severity === CRITICAL`, routes by **`confidence`** (Slack + log vs Slack-only vs log-only) and sends a **rich Slack attachment** (service, root cause, actions, evidence). See [`workflows/n8n/README.md`](workflows/n8n/README.md).
-  - **`incident-ticket-creation`** — `POST …/webhook/ticket-creation` with flat triage JSON; if `escalate === true`, **`POST /n8n/mock-jira/issue`** and returns a mock `MOCK-*` key.
-  - **`incident-triage-feedback`** (optional) — `POST …/webhook/triage-feedback` → **`POST /n8n/triage-feedback`**; include **`triage_id`** from **`POST /triage`** plus labels (`diagnosis_correct`, `actions_useful`, etc.).
-- **API helpers:** [`app/api/n8n_routes.py`](app/api/n8n_routes.py) — `POST /n8n/mock-jira/issue`, `POST /n8n/workflow-log`, `POST /n8n/triage-feedback` (append-only logs under `data/logs/`, gitignored; see env vars in [`workflows/n8n/README.md`](workflows/n8n/README.md)).
-- **Guide:** [`workflows/n8n/README.md`](workflows/n8n/README.md) (curl examples, pipe `POST /triage` → ticket webhook).
-
-### Tests
-
-- **Command:** `uv sync --extra dev` then `uv run pytest` (unit + integration; integration mocks LLM where needed).
-- **Layout:** `tests/unit/` (includes `test_eval_metrics.py` for Phase 8 metrics), `tests/integration/`.
-
-### Phase 7 — Minimal UI (Gradio)
-
-- **Deliverable:** Browser console on the **same process** as the API — paste incident JSON, run triage (same graph + audit as `POST /triage`), copy **`triage_id`**, submit **feedback** rows to `triage_feedback.jsonl`.
-- **Install:** `uv sync --extra ui` (adds Gradio).
-- **Run:** `uv run serve-api` → open **http://127.0.0.1:8000/ui/** (with default host/port). **`GET /`** includes **`gradio_ui_mounted`** — if `false`, run **`uv sync --extra ui`** or check **`ENABLE_GRADIO_UI=0`**. If **:8000** is another app (e.g. a different Docker project), use this API’s real port (Compose default **:18080** → **http://127.0.0.1:18080/ui/**). Disable the mount with **`ENABLE_GRADIO_UI=0`** (pytest sets this automatically).
-- **Code:** [`app/ui/gradio_app.py`](app/ui/gradio_app.py) · display helpers [`app/ui/triage_display.py`](app/ui/triage_display.py) · shared runner [`app/api/triage_execution.py`](app/api/triage_execution.py).
-- **UX:** Severity badge, color-coded confidence bar, sectioned summary / root cause / actions / timeline, evidence grouped (logs · incidents · metrics · runbooks/knowledge) in `<details>`, collapsible raw JSON, links to `/docs`, copy **`triage_id`**, Gradio toasts (`Success` / `Warning`), feedback button re-enabled on each new triage run.
-
-### Phase 8 — Evaluation
-
-- **Deliverable:** Gold JSONL (**~27** cases; regenerate with `python3 scripts/generate_eval_gold.py`), CLI **`uv run triage-eval`**, Markdown report (stdout or `--out`).
-- **Metrics:** Severity / escalate / action-count vs gold; optional summary keywords, root-cause phrases, retrieval substring + score checks; per-case latency (mean, p95); evidence–retrieval overlap heuristic (grounding signal, not a full hallucination judge). Rows omitting those `expect` fields show `None` for the corresponding check in the report.
-- **Paths:** [`data/eval/README.md`](data/eval/README.md) (format), [`data/eval/gold.jsonl`](data/eval/gold.jsonl), [`app/eval/`](app/eval/) (runner, metrics, report).
-- **Run:** Same prerequisites as triage (`.env`, built index, LLM). By default **`TRIAGE_AUDIT_DISABLE`** is set for the run so eval does not flood `triage_outputs.jsonl`; use **`--keep-audit`** to append audit lines.
-- **Reports:** `uv run triage-eval --out data/eval/reports/latest.md` — the **`data/eval/reports/`** contents are **gitignored** (local runs); only a **`.gitkeep`** is kept so the folder exists.
-
-### Phase 9 — Docker Compose (full stack)
-
-- **Deliverable:** One command brings up **FastAPI + Gradio** and **n8n** on a shared Docker network.
-- **Files:** [`Dockerfile`](Dockerfile) (Python 3.12, `uv sync --frozen`, UI extra, **`curl` + explicit `HEALTHCHECK`** for ALB/ECS-style probes), [`docker-compose.yml`](docker-compose.yml), [`.dockerignore`](.dockerignore).
-- **Prerequisites:** `.env` with `OPENAI_API_KEY`; on the host run **`uv run rag-build`** once so **`./.rag_index`** exists (mounted **read-only** into the API container). Optional `SLACK_WEBHOOK_URL` for n8n (same as Phase 6).
-- **Persistence (not ephemeral on rebuild):** **`./data:/app/data`** (corpus paths, `data/logs` JSONL, eval outputs under `data/eval/` if written) and **`./.rag_index`** (FAISS) are bind-mounted from the host.
-- **Run:**
-  ```bash
-  docker compose up -d --build
-  ```
-  - API: [http://127.0.0.1:18080/docs](http://127.0.0.1:18080/docs), UI: [http://127.0.0.1:18080/ui](http://127.0.0.1:18080/ui) — **default host port `18080`** avoids clashes with local **`serve-api`** on **:8000**.
-  - To publish the API on host **:8000** instead: `COMPOSE_API_PORT=8000 docker compose up -d --build`.
-  - n8n: [http://localhost:5678](http://localhost:5678) — import and activate workflows from [`workflows/n8n/`](workflows/n8n/). **`TRIAGE_API_BASE`** is set to **`http://api:8000`** inside Compose (do not override to `host.docker.internal` for this stack).
-- **End-to-end check (definition of done before Phase 10):** With Compose up and **n8n workflow `incident-ticket-creation` imported + active**, run from repo root:
-  ```bash
-  ./scripts/e2e_stack_check.sh
-  ```
-  Default `API_BASE` is **http://127.0.0.1:18080** (Compose default). For a host-only API on **:8000**, run `API_BASE=http://127.0.0.1:8000 ./scripts/e2e_stack_check.sh`. The script: **`GET /health`** → **`POST /triage`** (validates `triage_id`, severity, actions, non-empty **evidence**; optional **`STRICT_RAG_EVIDENCE=1`** requires a `data/` source in evidence) → **`POST …/webhook/ticket-creation`** (mock Jira path). **`SKIP_TRIAGE=1`** or **`SKIP_N8N=1`** to isolate steps.
-- **n8n-only** (API on host): keep using [`docker-compose.n8n.yml`](docker-compose.n8n.yml) and `TRIAGE_API_BASE=http://host.docker.internal:8000`.
-
-### Pre-cloud manual validation
-
-Before AWS, run through **[`docs/validation/pre-cloud-validation.md`](docs/validation/pre-cloud-validation.md)** (triage quality, n8n, failure modes, latency). Use **`scripts/benchmark_triage_latency.sh`** to compare host vs Docker wall time for `/triage`.
-
-### Phase 10 — AWS with Terraform
-
-- **Deliverable:** `terraform init` / `plan` / `apply` per environment; VPC, subnets, security groups, ECR, ALB, ECS on **Fargate**, IAM, CloudWatch logs, optional **SSM** for `OPENAI_API_KEY`.
-- **Guide:** [`infra/terraform/README.md`](infra/terraform/README.md).
-- **Layouts:** [`infra/terraform/modules/`](infra/terraform/modules/) · [`infra/terraform/envs/dev/`](infra/terraform/envs/dev/) · [`infra/terraform/envs/prod/`](infra/terraform/envs/prod/). Copy `terraform.tfvars.example` → `terraform.tfvars` (gitignored).
-
-### Phase 11 — Deploy API to AWS (ECR + ECS)
-
-- **Deliverable:** Push API image to **ECR**, ECS **Fargate** service behind **ALB**, **`GET /health`** via Terraform **`alb_url`** (separate **dev** / **prod** stacks).
-- **Runbook:** [`docs/deploy/aws-ecs.md`](docs/deploy/aws-ecs.md) — SSM for secrets (`openai_api_key_ssm_parameter` / `ssm_secrets`), **`uv run rag-build`**, then **`./scripts/aws/push_api_to_ecr.sh dev`** or **`prod`** (immutable tag + **`:latest`**, **`terraform apply`** pins digest; **`linux/amd64`** for Fargate).
-- **RAG on Fargate:** the **Docker image bakes `.rag_index/`**; Compose still **bind-mounts** a host-built index for local dev.
-
-### Phase 12 — Triage console (Next.js)
-
-- **Deliverable:** Portfolio-style **incident triage UI** — Monaco JSON editor, `POST /triage`, evidence and feedback panels; **`output: 'export'`** for static hosting.
-- **Local:** [`frontend/README.md`](frontend/README.md) — `npm run dev` with repo-root API (`CORS_ORIGINS` / defaults for `localhost:3000`).
-- **AWS:** Terraform creates S3 (and optional CloudFront); **`./scripts/aws/deploy_frontend_cdn.sh dev|prod`** builds with **`NEXT_PUBLIC_API_BASE_URL`** from **`alb_url`**. Add **`triage_ui_url`** to **`cors_origins`**, **`terraform apply`**, then **push API image** so ECS sees **`CORS_ORIGINS`**.
-
-### Phase 13 — Observability (CloudWatch)
-
-- **Deliverable:** Dashboard (ALB **rpm**, latency **avg+p95**, **4xx/5xx** split, ECS, triage outcomes + **tokens**, triage duration **avg+p95**, **severity/escalate** time series via metric math **SEARCH**, optional **Logs Insights** widget listing recent **`triage_id`** rows). **Alarms:** target **5xx**, unhealthy hosts, ALB **p95** latency, **ECS CPU**, **triage duration** maximum (aligned with **Environment** on log-derived triage metrics). Runbook: [`docs/deploy/observability.md`](docs/deploy/observability.md).
-- **App:** Each triage emits one JSON line to stdout and **`aira.triage`** — **`triage_id`**, **`stack_environment`** (from **`AIRA_ENV`**, default `local`), **`outcome`**, **`duration_ms`**, **`severity`** / **`severity_metric`**, **`escalate`** / **`escalate_str`**, **LLM token counts**. **ECS** tasks set **`AIRA_ENV`** from Terraform **`var.environment`** so metrics match dashboard dimensions. **`triage_id`** is not a metric dimension (cardinality); use logs and **Logs Insights** for correlation. Disable emission with **`TRIAGE_METRICS_LOG_DISABLE=1`**.
-- **Alerts:** Set **`observability_alarm_sns_topic_arns`** in **`terraform.tfvars`** so alarms are not dashboard-only.
-
-### Phase 14 — CI/CD (GitHub Actions)
-
-- **Deliverable:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) on PR/`main`; optional [`.github/workflows/deploy-dev.yml`](.github/workflows/deploy-dev.yml) (`workflow_dispatch`); runbook [`docs/deploy/ci.md`](docs/deploy/ci.md).
-- **Eval subset:** `uv run triage-eval --limit N` for fast / CI-sized runs.
-
-### Future (not in current closure)
-
-- **Phase 15** idea list and extended stories live in [`execution.md`](execution.md) (optional / writeup later).
-- Typical follow-ons when you resume: **TLS** in front of ALB; release tagging; prod/deploy symmetry with dev.
+**Per-phase narrative** (endpoints, env vars, n8n behaviour, AWS steps): see **[`execution.md`](execution.md)** — kept there to avoid duplicating a long spec in this file.
 
 ---
 
-## Repository layout (high level)
+## Repository layout
 
 | Path | Purpose |
 |------|---------|
-| [`execution.md`](execution.md) | Build order, phases, milestones |
-| [`docs/contributing.md`](docs/contributing.md) | **`dev` / `main`** workflow, GitHub secrets checklist |
-| [`docs/decisions/`](docs/decisions/) | ADRs / product definition |
-| [`docs/validation/pre-cloud-validation.md`](docs/validation/pre-cloud-validation.md) | Manual checks before cloud (triage, n8n, resilience, latency) |
-| [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md) | Accurate product classification + elite-system roadmap |
-| [`docs/decisions/triage-audit-validation.md`](docs/decisions/triage-audit-validation.md) | JSONL audit checks, leakage, eval roadmap |
-| [`docs/architecture/`](docs/architecture/) | **[Architecture diagram](docs/architecture/README.md)** (`architectural-diagram.png` at repo root) |
-| [`data/runbooks/`](data/runbooks/) | SRE-style procedural runbooks (`RB-*` IDs) |
-| [`data/incidents/`](data/incidents/) | Synthetic postmortem-style incidents (`INC-*`) |
-| [`data/logs/`](data/logs/) | Synthetic log bundles + [`sample-log.md`](data/logs/sample-log.md) |
-| [`data/knowledge_base/`](data/knowledge_base/) | Escalation, ownership, tiers, first-response notes |
-| [`data/README.md`](data/README.md) | Data layout and ingestion globs |
-| `app/` | `app/rag/`, `app/agent/`, `app/api/` (FastAPI), `app/models/`, `app/ui/` (Gradio), `app/eval/` (Phase 8) |
-| [`data/eval/`](data/eval/) | Gold JSONL + eval README |
-| [`examples/sample_incident_payload.json`](examples/sample_incident_payload.json) | Sample JSON for `triage` CLI |
-| [`scripts/e2e_stack_check.sh`](scripts/e2e_stack_check.sh) | Health + `/triage` + n8n webhook smoke test |
-| [`scripts/benchmark_triage_latency.sh`](scripts/benchmark_triage_latency.sh) | Repeated `POST /triage` timings (mean / p95) |
-| [`workflows/n8n/`](workflows/n8n/) | n8n workflow JSON + Phase 6 runbook |
-| [`docker-compose.yml`](docker-compose.yml) | Phase 9 — API + n8n |
-| [`docker-compose.n8n.yml`](docker-compose.n8n.yml) | Phase 6 — n8n only |
-| [`Dockerfile`](Dockerfile) | Phase 9 — API image |
-| [`infra/terraform/`](infra/terraform/) | Phase 10–12 — modular Terraform, remote state bootstrap, `envs/dev` & `envs/prod`, static UI bucket |
-| [`frontend/`](frontend/) | Phase 12 — Next.js triage console (static export → S3) |
-| [`docs/deploy/aws-ecs.md`](docs/deploy/aws-ecs.md) | Phase 11–12 — ECR push, ECS rollout, SSM, hosted UI + CORS |
-| [`docs/deploy/observability.md`](docs/deploy/observability.md) | Phase 13 — CloudWatch dashboard, alarms, triage log metrics |
-| [`docs/deploy/ci.md`](docs/deploy/ci.md) | Phase 14 — GitHub Actions CI and optional dev deploy |
-| [`scripts/aws/push_api_to_ecr.sh`](scripts/aws/push_api_to_ecr.sh) | Phase 11 — build/push + **`terraform apply`** (ECS pins **`:latest`** digest) |
-| [`scripts/aws/deploy_frontend_cdn.sh`](scripts/aws/deploy_frontend_cdn.sh) | Phase 12 — static build + **`aws s3 sync`** |
-| [`scripts/aws/verify_triage_cors_preflight.sh`](scripts/aws/verify_triage_cors_preflight.sh) | Phase 12 — **`OPTIONS /triage`** CORS smoke test |
+| [`execution.md`](execution.md) | Build order, detailed phases, milestones |
+| [`docs/contributing.md`](docs/contributing.md) | Branching & GitHub Actions secrets |
+| [`docs/decisions/`](docs/decisions/) | ADRs, problem definition, roadmap |
+| [`docs/architecture/`](docs/architecture/) | Architecture diagram |
+| [`app/`](app/) | `rag`, `agent`, `api`, `models`, `ui`, `eval` |
+| [`data/`](data/) | Runbooks, incidents, logs, eval gold set |
+| [`frontend/`](frontend/) | Next.js triage console |
+| [`workflows/n8n/`](workflows/n8n/) | Importable n8n JSON + README |
+| [`infra/terraform/`](infra/terraform/) | Modules, `envs/dev`, `envs/prod`, bootstrap |
+| [`scripts/`](scripts/) | E2E check, benchmarks, AWS helper scripts |
+| [`examples/sample_incident_payload.json`](examples/sample_incident_payload.json) | Sample payload for CLI / API |
 
 ---
 
-## Python environment (**uv**, not manual venv + pip)
+## Development
 
-This repo uses **[uv](https://docs.astral.sh/uv/)** to create `.venv`, resolve deps from [`pyproject.toml`](pyproject.toml), and run commands with locked versions ([`uv.lock`](uv.lock)).
-
-Install uv (pick one):
+Uses **[uv](https://docs.astral.sh/uv/)** with [`pyproject.toml`](pyproject.toml) and [`uv.lock`](uv.lock).
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-# or: brew install uv
-```
-
-Sync and install the project (editable) + dev tools:
-
-```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh   # or: brew install uv
 cd autonomous-incident-response-agent
 uv sync --extra dev
 ```
 
-Run RAG CLI (always via `uv run` so the right env is used):
+**Triage CLI** (needs `.env`, index, chat model):
 
 ```bash
-uv run python -m app.rag.cli build-index
-uv run python -m app.rag.cli query "High CPU on payment-api in production"
-# or entry points:
-uv run rag-build
-uv run rag-query "High CPU on payment-api in production"
+uv run triage -f examples/sample_incident_payload.json
 ```
 
-**Phase 4 — triage (needs `.env` + built RAG index + chat LLM):**
-
-```bash
-uv run python -m app.agent.cli -f examples/sample_incident_payload.json
-# or: uv run triage -f examples/sample_incident_payload.json
-```
-
-**Phase 8 — evaluation (same env; calls live LLM per gold row):**
-
-```bash
-uv run triage-eval
-# Markdown report to file:
-uv run triage-eval --out data/eval/reports/latest.md
-```
-
-**Phase 5 — HTTP API (same env as triage):**
+**API** (same environment):
 
 ```bash
 uv run serve-api
-# or: uv run uvicorn app.api.main:app --reload --host 127.0.0.1 --port 8000
-```
-
-Optional: `API_HOST`, `API_PORT` for `serve-api`.
-
-```bash
 curl -s http://127.0.0.1:8000/health
-curl -s http://127.0.0.1:8000/version
-curl -s -X POST http://127.0.0.1:8000/ingest-incident -H "Content-Type: application/json" \
-  -d @examples/sample_incident_payload.json
 curl -s -X POST http://127.0.0.1:8000/triage -H "Content-Type: application/json" \
   -d @examples/sample_incident_payload.json
-# When API_KEY is set on the server, add: -H "x-api-key: <same value>"
 ```
 
-OpenAPI: `http://127.0.0.1:8000/docs`
+With **`API_KEY`** set on the server, add header `x-api-key: <value>`. OpenAPI: `/docs`.
 
-**Phase 7 — Gradio UI (optional extra, same server as Phase 5):**
+**Gradio:** `uv sync --extra ui` then `uv run serve-api` → `http://127.0.0.1:8000/ui` (Compose default API port is **18080**).
+
+**Eval:** `uv run triage-eval` — optional `--limit N`, `--out path/to/report.md`.
+
+**Lockfile:** after editing dependencies, `uv lock`. [`requirements.txt`](requirements.txt) is optional; prefer **`uv sync`**.
+
+If `POST /triage` returns 404, confirm nothing else is bound to the port: `curl -s http://127.0.0.1:8000/` should show this service’s discovery JSON.
+
+---
+
+## Testing
 
 ```bash
-uv sync --extra ui
-uv run serve-api
-# Browser: http://127.0.0.1:8000/ui
+uv sync --extra dev
+uv run pytest
 ```
 
-**Phase 9 — full stack (API + n8n in Docker):**
+Layout: `tests/unit/`, `tests/integration/` (integration mocks the LLM where appropriate).
+
+---
+
+## Docker Compose & n8n
 
 ```bash
-# After: uv run rag-build  and  .env with OPENAI_API_KEY
+uv run rag-build
 docker compose up -d --build
-# API: http://127.0.0.1:18080/docs  (override with COMPOSE_API_PORT=8000 if you want :8000)
 ```
 
-**Phase 6 — n8n only (API on host in another terminal):**
+- API: `http://127.0.0.1:18080/docs` · UI: `http://127.0.0.1:18080/ui` · n8n: `http://localhost:5678`
+- Host port: override with `COMPOSE_API_PORT=8000` if needed.
+- E2E smoke: [`scripts/e2e_stack_check.sh`](scripts/e2e_stack_check.sh) (see script for `API_BASE`).
 
-```bash
-docker compose -f docker-compose.n8n.yml up -d
-```
+**n8n only** (API on host): `docker compose -f docker-compose.n8n.yml up -d` — full guide: [`workflows/n8n/README.md`](workflows/n8n/README.md).
 
-Import and activate in n8n: [`incident-triage-escalation.json`](workflows/n8n/incident-triage-escalation.json), [`incident-ticket-creation.json`](workflows/n8n/incident-ticket-creation.json), and optionally [`incident-triage-feedback.json`](workflows/n8n/incident-triage-feedback.json) — then follow [`workflows/n8n/README.md`](workflows/n8n/README.md).
+**AWS image:** `.rag_index` is baked in the Dockerfile; run `rag-build` before `docker build`. Rollout: [`scripts/aws/push_api_to_ecr.sh`](scripts/aws/push_api_to_ecr.sh) and [`docs/deploy/aws-ecs.md`](docs/deploy/aws-ecs.md).
 
-If `POST /triage` returns `{"detail":"Not Found"}`, something else is bound to that port or an old server is running. Check with `curl -s http://127.0.0.1:8000/` — you should see `service: autonomous-incident-response-agent` and `triage: POST /triage`. Then restart: `uv run serve-api` (or `uvicorn app.api.main:app` from the repo root).
+---
 
-Set `LLM_MODEL` (default `gpt-4o-mini`) in `.env` if needed. Chat uses the same `OPENAI_API_KEY` / `OPENAI_API_BASE` as embeddings unless you split providers later.
+## Contributing
 
-Refresh the lockfile after changing `pyproject.toml`:
-
-```bash
-uv lock
-```
-
-[`requirements.txt`](requirements.txt) is an optional mirror for non-uv workflows; **prefer `uv sync`**.
+Branch **`dev`**, open PRs to **`main`**. CI expectations and optional secrets: [`docs/contributing.md`](docs/contributing.md).
 
 ---
 
 ## Disclaimer
 
-Runbooks, incidents, and logs are **synthetic** training/evaluation material. They are not live production data.
+Runbooks, incidents, and logs in this repository are **synthetic** training and evaluation material. They are not live production data.
