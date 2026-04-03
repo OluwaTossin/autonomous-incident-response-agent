@@ -131,6 +131,10 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
   Default `API_BASE` is **http://127.0.0.1:18080** (Compose default). For a host-only API on **:8000**, run `API_BASE=http://127.0.0.1:8000 ./scripts/e2e_stack_check.sh`. The script: **`GET /health`** → **`POST /triage`** (validates `triage_id`, severity, actions, non-empty **evidence**; optional **`STRICT_RAG_EVIDENCE=1`** requires a `data/` source in evidence) → **`POST …/webhook/ticket-creation`** (mock Jira path). **`SKIP_TRIAGE=1`** or **`SKIP_N8N=1`** to isolate steps.
 - **n8n-only** (API on host): keep using [`docker-compose.n8n.yml`](docker-compose.n8n.yml) and `TRIAGE_API_BASE=http://host.docker.internal:8000`.
 
+### Pre-cloud manual validation
+
+Before AWS, run through **[`docs/validation/pre-cloud-validation.md`](docs/validation/pre-cloud-validation.md)** (triage quality, n8n, failure modes, latency). Use **`scripts/benchmark_triage_latency.sh`** to compare host vs Docker wall time for `/triage`.
+
 ### Next (Phase 10+)
 
 - **AWS/Terraform, CI/CD, observability** — same roadmap.
@@ -143,6 +147,7 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 |------|---------|
 | `execution.md` (local, gitignored) | Optional private build sequence and checklists |
 | [`docs/decisions/`](docs/decisions/) | ADRs / product definition |
+| [`docs/validation/pre-cloud-validation.md`](docs/validation/pre-cloud-validation.md) | Manual checks before cloud (triage, n8n, resilience, latency) |
 | [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md) | Accurate product classification + elite-system roadmap |
 | [`docs/decisions/triage-audit-validation.md`](docs/decisions/triage-audit-validation.md) | JSONL audit checks, leakage, eval roadmap |
 | [`docs/architecture/`](docs/architecture/) | **[Architecture diagram](docs/architecture/README.md)** (`architectural-diagram.png` at repo root) |
@@ -155,6 +160,7 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 | [`data/eval/`](data/eval/) | Gold JSONL + eval README |
 | [`examples/sample_incident_payload.json`](examples/sample_incident_payload.json) | Sample JSON for `triage` CLI |
 | [`scripts/e2e_stack_check.sh`](scripts/e2e_stack_check.sh) | Health + `/triage` + n8n webhook smoke test |
+| [`scripts/benchmark_triage_latency.sh`](scripts/benchmark_triage_latency.sh) | Repeated `POST /triage` timings (mean / p95) |
 | [`workflows/n8n/`](workflows/n8n/) | n8n workflow JSON + Phase 6 runbook |
 | [`docker-compose.yml`](docker-compose.yml) | Phase 9 — API + n8n |
 | [`docker-compose.n8n.yml`](docker-compose.n8n.yml) | Phase 6 — n8n only |
