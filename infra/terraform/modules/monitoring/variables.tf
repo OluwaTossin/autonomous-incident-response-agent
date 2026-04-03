@@ -30,6 +30,17 @@ variable "cloudwatch_log_group_name" {
   description = "ECS api log group (e.g. /ecs/aira-dev-api)"
 }
 
+variable "triage_metrics_environment" {
+  type        = string
+  description = "Low-cardinality Environment dimension for log-derived triage metrics and alarms; must match API JSON stack_environment (set container AIRA_ENV to this value, e.g. dev or prod)"
+}
+
+variable "create_triage_logs_insights_widget" {
+  type        = bool
+  default     = true
+  description = "Append a CloudWatch dashboard Logs Insights widget listing recent triage_id rows (stdout JSON lines)"
+}
+
 variable "metric_namespace" {
   type        = string
   default     = null

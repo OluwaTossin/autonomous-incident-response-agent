@@ -1,9 +1,23 @@
 # Phase 13 — CloudWatch dashboard, alarms, and log-derived triage metrics.
 
 locals {
-  metrics_ns = coalesce(var.metric_namespace, "${var.name_prefix}/API")
+  metrics_ns     = coalesce(var.metric_namespace, "${var.name_prefix}/API")
+  triage_dim_env = var.triage_metrics_environment
 
-  dashboard_widgets = [
+  triage_log_insight_query = <<-EOT
+SOURCE '${var.cloudwatch_log_group_name}'
+| filter @message like /"event":"triage_metrics"/
+| parse @message /"triage_id":"(?<triage_id>[^"]+)"/
+| parse @message /"outcome":"(?<outcome>[^"]+)"/
+| parse @message /"duration_ms":(?<duration_ms>[0-9]+)/
+| parse @message /"severity_metric":"(?<severity_metric>[^"]*)"/
+| parse @message /"escalate_str":"(?<escalate_str>[^"]+)"/
+| parse @message /"tokens_total":(?<tokens_total>[0-9]+)/
+| sort @timestamp desc
+| limit 25
+EOT
+
+  dashboard_widgets_core = [
     {
       type   = "metric"
       x      = 0
@@ -127,9 +141,9 @@ locals {
         view    = "timeSeries"
         stacked = false
         metrics = [
-          [local.metrics_ns, "TriageSuccessCount", { "stat" = "Sum", "label" = "success" }],
-          [".", "TriageFailureCount", { "stat" = "Sum", "label" = "graph_error" }],
-          [".", "TriageTokensTotal", { "stat" = "Sum", "label" = "tokens (sum)", "yAxis" = "right" }],
+          [local.metrics_ns, "TriageSuccessCount", "Environment", local.triage_dim_env, { "stat" = "Sum", "label" = "success" }],
+          [".", "TriageFailureCount", "Environment", local.triage_dim_env, { "stat" = "Sum", "label" = "graph_error" }],
+          [".", "TriageTokensTotal", "Environment", local.triage_dim_env, { "stat" = "Sum", "label" = "tokens (sum)", "yAxis" = "right" }],
         ]
         yAxis = { left = { min = 0 }, right = { min = 0 } }
       }
@@ -147,13 +161,78 @@ locals {
         view    = "timeSeries"
         stacked = false
         metrics = [
-          [local.metrics_ns, "TriageDurationMs", { "stat" = "Average", "label" = "avg_ms" }],
+          [local.metrics_ns, "TriageDurationMs", "Environment", local.triage_dim_env, { "stat" = "Average", "label" = "avg_ms" }],
           ["...", { "stat" = "p95", "label" = "p95_ms" }],
         ]
         yAxis = { left = { min = 0 } }
       }
     },
+    {
+      type   = "metric"
+      x      = 0
+      y      = 24
+      width  = 12
+      height = 6
+      properties = {
+        region  = var.aws_region
+        title   = "Triage — count by severity (log-derived, SEARCH)"
+        period  = 300
+        view    = "timeSeries"
+        stacked = false
+        metrics = [
+          [{
+            expression = "SEARCH('{${local.metrics_ns}} TriageBySeverityCount', 'Sum', 300)"
+            id         = "e_sev"
+            label      = "By Severity + Environment"
+            region     = var.aws_region
+          }],
+        ]
+        yAxis = { left = { min = 0 } }
+      }
+    },
+    {
+      type   = "metric"
+      x      = 12
+      y      = 24
+      width  = 12
+      height = 6
+      properties = {
+        region  = var.aws_region
+        title   = "Triage — count by escalate (log-derived, SEARCH)"
+        period  = 300
+        view    = "timeSeries"
+        stacked = false
+        metrics = [
+          [{
+            expression = "SEARCH('{${local.metrics_ns}} TriageByEscalateCount', 'Sum', 300)"
+            id         = "e_esc"
+            label      = "By Escalate + Environment"
+            region     = var.aws_region
+          }],
+        ]
+        yAxis = { left = { min = 0 } }
+      }
+    },
   ]
+
+  dashboard_widget_triage_logs = {
+    type   = "log"
+    x      = 0
+    y      = 30
+    width  = 24
+    height = 6
+    properties = {
+      query   = local.triage_log_insight_query
+      region  = var.aws_region
+      title   = "Recent triage runs (triage_id, severity, escalate, tokens)"
+      stacked = false
+    }
+  }
+
+  dashboard_widgets = concat(
+    local.dashboard_widgets_core,
+    var.create_triage_logs_insights_widget ? [local.dashboard_widget_triage_logs] : [],
+  )
 }
 
 resource "aws_cloudwatch_dashboard" "api" {
@@ -262,6 +341,10 @@ resource "aws_cloudwatch_metric_alarm" "triage_duration_max_high" {
   treat_missing_data  = "notBreaching"
   alarm_description   = "Single triage graph run exceeded duration threshold — LLM/RAG stall or cold start"
 
+  dimensions = {
+    Environment = local.triage_dim_env
+  }
+
   alarm_actions = var.alarm_actions
   ok_actions    = var.alarm_actions
 }
@@ -276,6 +359,9 @@ resource "aws_cloudwatch_log_metric_filter" "triage_success" {
     name      = "TriageSuccessCount"
     namespace = local.metrics_ns
     value     = "1"
+    dimensions = {
+      Environment = "$.stack_environment"
+    }
   }
 }
 
@@ -288,6 +374,9 @@ resource "aws_cloudwatch_log_metric_filter" "triage_failure" {
     name      = "TriageFailureCount"
     namespace = local.metrics_ns
     value     = "1"
+    dimensions = {
+      Environment = "$.stack_environment"
+    }
   }
 }
 
@@ -300,6 +389,9 @@ resource "aws_cloudwatch_log_metric_filter" "triage_duration_ms" {
     name      = "TriageDurationMs"
     namespace = local.metrics_ns
     value     = "$.duration_ms"
+    dimensions = {
+      Environment = "$.stack_environment"
+    }
   }
 }
 
@@ -312,5 +404,40 @@ resource "aws_cloudwatch_log_metric_filter" "triage_tokens_total" {
     name      = "TriageTokensTotal"
     namespace = local.metrics_ns
     value     = "$.tokens_total"
+    dimensions = {
+      Environment = "$.stack_environment"
+    }
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "triage_by_severity" {
+  name           = "${var.name_prefix}-triage-by-severity"
+  log_group_name = var.cloudwatch_log_group_name
+  pattern        = "{ $.event = \"triage_metrics\" }"
+
+  metric_transformation {
+    name      = "TriageBySeverityCount"
+    namespace = local.metrics_ns
+    value     = "1"
+    dimensions = {
+      Environment = "$.stack_environment"
+      Severity    = "$.severity_metric"
+    }
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "triage_by_escalate" {
+  name           = "${var.name_prefix}-triage-by-escalate"
+  log_group_name = var.cloudwatch_log_group_name
+  pattern        = "{ $.event = \"triage_metrics\" }"
+
+  metric_transformation {
+    name      = "TriageByEscalateCount"
+    namespace = local.metrics_ns
+    value     = "1"
+    dimensions = {
+      Environment = "$.stack_environment"
+      Escalate    = "$.escalate_str"
+    }
   }
 }

@@ -24,6 +24,7 @@ locals {
     [
       { name = "API_HOST", value = "0.0.0.0" },
       { name = "API_PORT", value = tostring(var.api_container_port) },
+      { name = "AIRA_ENV", value = var.environment },
       { name = "ENABLE_GRADIO_UI", value = "1" },
     ],
     var.cors_origins != "" ? [{ name = "CORS_ORIGINS", value = var.cors_origins }] : [],

@@ -4,15 +4,22 @@ Terraform resources:
 
 | Resource | Purpose |
 |----------|---------|
-| `aws_cloudwatch_dashboard` | ALB request **rate/min**, latency **avg + p95**, **4xx** vs **5xx** panels, target health, ECS CPU/memory, triage success/fail + **token sum**, triage duration **avg + p95** |
-| `aws_cloudwatch_metric_alarm` | Target **5xx**; **UnHealthyHostCount**; **TargetResponseTime p95**; **ECS CPUUtilization**; **TriageDurationMs** Maximum |
-| `aws_cloudwatch_log_metric_filter` | JSON `triage_metrics` → **TriageSuccessCount**, **TriageFailureCount**, **TriageDurationMs**, **TriageTokensTotal** |
+| `aws_cloudwatch_dashboard` | ALB request **rate/min**, latency **avg + p95**, **4xx** vs **5xx** panels, target health, ECS CPU/memory, triage success/fail + **token sum**, triage duration **avg + p95**, **severity/escalate** SEARCH panels, optional **Logs Insights** widget (`triage_id` table) |
+| `aws_cloudwatch_metric_alarm` | Target **5xx**; **UnHealthyHostCount**; **TargetResponseTime p95**; **ECS CPUUtilization**; **TriageDurationMs** Maximum (**Environment** dimension) |
+| `aws_cloudwatch_log_metric_filter` | JSON `triage_metrics` → **TriageSuccessCount**, **TriageFailureCount**, **TriageDurationMs**, **TriageTokensTotal**, **TriageBySeverityCount**, **TriageByEscalateCount** (all with **Environment** from `stack_environment`) |
 
 ## Application logs
 
-The API writes **one JSON object per line** to **stdout** and the **`aira.triage`** logger after each triage (`app/api/metrics_log.py`, `app/api/triage_execution.py`). Fields include `triage_id`, `outcome`, `duration_ms`, `severity`, `tokens_prompt`, `tokens_completion`, `tokens_total` (from LangChain usage metadata on the LLM step).
+The API writes **one JSON object per line** to **stdout** and the **`aira.triage`** logger after each triage (`app/api/metrics_log.py`, `app/api/triage_execution.py`). Fields include `triage_id`, `stack_environment` (from **`AIRA_ENV`**, default `local`), `outcome`, `duration_ms`, `severity` / `severity_metric`, `escalate` / `escalate_str`, and `tokens_*` (from LangChain usage metadata on the LLM step).
 
 Disable with `TRIAGE_METRICS_LOG_DISABLE=1`.
+
+## Required / common inputs
+
+| Variable | Meaning |
+|----------|---------|
+| `triage_metrics_environment` | Value of JSON `stack_environment` and **Environment** metric dimension (match ECS **`AIRA_ENV`**) |
+| `create_triage_logs_insights_widget` | `true` (default): append dashboard Logs Insights table for `triage_id` rows |
 
 ## Alarm tuning (module variables)
 

@@ -1,7 +1,8 @@
 """Triage observability: stdout JSON for CloudWatch metric filters + structured app logs.
 
 One JSON object per line (``aira.triage`` logger + stdout) so Logs Insights can correlate by
-``triage_id``, ``outcome``, ``duration_ms``, ``severity``, and token fields.
+``triage_id``, ``stack_environment``, ``outcome``, ``duration_ms``, ``severity`` / ``severity_metric``,
+``escalate`` / ``escalate_str``, and token fields.
 
 Disable with ``TRIAGE_METRICS_LOG_DISABLE=1`` (e.g. tests, noisy local dev).
 """

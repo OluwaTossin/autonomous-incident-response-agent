@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 from typing import Any
 from uuid import uuid4
@@ -35,16 +36,22 @@ def run_full_triage(incident: dict[str, Any]) -> dict[str, Any]:
     tp = int(usage.get("tokens_prompt") or 0)
     tc = int(usage.get("tokens_completion") or 0)
     tt = int(usage.get("tokens_total") or 0)
+    raw_sev = result.get("severity")
+    severity_metric = str(raw_sev).strip().upper() if raw_sev is not None and str(raw_sev).strip() else "UNKNOWN"
+    esc = bool(result.get("escalate"))
     write_triage_metrics_line(
         {
             "log_schema": "aira.triage.v1",
             "event": "triage_metrics",
             "triage_id": triage_id,
+            "stack_environment": os.environ.get("AIRA_ENV", "local"),
             "outcome": "success" if success else "graph_error",
             "duration_ms": duration_ms,
             "success": success,
             "severity": result.get("severity"),
-            "escalate": bool(result.get("escalate")),
+            "severity_metric": severity_metric,
+            "escalate": esc,
+            "escalate_str": "true" if esc else "false",
             "graph_error": bool(err),
             "tokens_prompt": tp,
             "tokens_completion": tc,
