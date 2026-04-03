@@ -1,0 +1,15 @@
+aws_region   = "us-east-1"
+project_name = "aira"
+environment  = "prod"
+
+alb_ingress_cidr_ipv4          = "0.0.0.0/0"
+alb_enable_deletion_protection = true
+
+api_cpu           = 512
+api_memory        = 1024
+api_desired_count = 2
+
+openai_api_key_ssm_parameter = "/aira/prod/openai_api_key"
+
+enable_container_insights = true
+enable_execute_command    = false

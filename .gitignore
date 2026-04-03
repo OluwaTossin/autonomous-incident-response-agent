@@ -1,6 +1,3 @@
-# Local planning (not committed)
-execution.md
-
 # Secrets
 .env
 .env.*.local
@@ -33,7 +30,10 @@ Thumbs.db
 .terraform/
 *.tfstate
 *.tfstate.*
-.terraform.lock.hcl
+# Commit infra/**/.terraform.lock.hcl for provider pins
+infra/terraform/envs/*/*.auto.tfvars
+infra/terraform/envs/*/*.tfvars
+!infra/terraform/envs/*/*.tfvars.example
 
 # Docker / local volumes (if added later)
 *.log.local

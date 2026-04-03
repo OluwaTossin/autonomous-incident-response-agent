@@ -98,4 +98,4 @@ The canonical Pydantic schema lives in [`app/models/triage.py`](../../app/models
 ## References
 
 - Sample operational procedure: `data/runbooks/sample-runbook-01.md`
-- Build order / phases: maintainer-local `execution.md` (gitignored) or this repo’s [`README.md`](../../README.md)
+- Build order / phases: root [`execution.md`](../../execution.md) or this repo’s [`README.md`](../../README.md)
