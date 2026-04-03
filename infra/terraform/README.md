@@ -21,7 +21,9 @@ Terraform and the AWS provider **do not read** repo-root `.env`. Either:
 
 Same variables are documented in [`.env.example`](../../.env.example) for convenience; load them into your shell before `terraform` commands.
 
-**CI:** `terraform fmt -check` and `terraform validate` run in GitHub Actions — see [`docs/deploy/ci.md`](../../docs/deploy/ci.md).
+**CI:** `terraform fmt -check` and `terraform validate` run in GitHub Actions (Terraform **1.9.4**) — see [`docs/deploy/ci.md`](../../docs/deploy/ci.md).
+
+**`.terraform.lock.hcl`:** If CI fails with *cached package does not match checksums*, run **`terraform init -backend=false`** in the same env (or `terraform providers lock` for `linux_amd64` + darwin) with Terraform **≥ 1.9** and commit the updated lock file (several **`h1:`** lines per provider are normal).
 
 ## Remote state (S3 + DynamoDB)
 
