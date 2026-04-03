@@ -9,9 +9,9 @@
 
 This matches a single remote that only had **`main`**: add **`dev`**, do routine work there, and promote with **`dev` → `main`** PRs.
 
-### One-time setup (after your tree is clean)
+### One-time setup (after the working tree is clean)
 
-From the repo root, with latest **`main`** checked out and your work committed:
+From the repo root, with latest **`main`** checked out and local work committed:
 
 ```bash
 git checkout main
@@ -29,11 +29,11 @@ Then in **GitHub → Settings → Branches**:
 
 ```text
 feature work → commit → push origin dev
-              → open PR dev → main when you want a release
+              → open PR dev → main when a release is due
               → merge (CI should pass on the PR)
 ```
 
-**Deploy API (dev)** workflow: in Actions, choose branch **`dev`** when using **Run workflow** (dropdown “Use workflow from”). If you run it from **`main`**, the **gate** job fails on purpose — that email is expected until you re-run from **`dev`**.
+**Deploy API (dev)** workflow: in Actions, choose branch **`dev`** when using **Run workflow** (dropdown “Use workflow from”). Running it from **`main`** makes the **gate** job fail on purpose — that email is expected until re-running from **`dev`**.
 
 ---
 
@@ -49,15 +49,15 @@ The **CI** workflow needs **no** secrets to run **lint**, **tests**, **Terraform
 
 | Secret | Used by | Purpose |
 |--------|---------|---------|
-| **`OPENAI_API_KEY`** | `CI` → job **eval-smoke** | If unset, that job still runs but **skips** `rag-build` / `triage-eval` (no cost). Add the secret only if you want live LLM checks in CI. |
+| **`OPENAI_API_KEY`** | `CI` → job **eval-smoke** | If unset, that job still runs but **skips** `rag-build` / `triage-eval` (no cost). Add the secret only when live LLM checks in CI are wanted. |
 
-| **`AWS_DEPLOY_ROLE_ARN`** | `Deploy API (dev)` | IAM role ARN for **OIDC**. Required **only** when you use the deploy workflow **and** have set the **DEV_\*** variables. Omit if you deploy only via **`./scripts/aws/push_api_to_ecr.sh`**. |
+| **`AWS_DEPLOY_ROLE_ARN`** | `Deploy API (dev)` | IAM role ARN for **OIDC**. Required **only** when using the deploy workflow **and** the **DEV_\*** variables are set. Omit when deploying only via **`./scripts/aws/push_api_to_ecr.sh`**. |
 
 **Note:** GitHub does not allow **`secrets.*` inside job-level `if:`** expressions. Workflows use branch checks / variables at the job level and read secrets inside **steps** (or skip in shell) instead.
 
 ### Optional repository variables
 
-Used only when **`AWS_DEPLOY_ROLE_ARN`** is set and you run **Deploy API (dev)**:
+Used only when **`AWS_DEPLOY_ROLE_ARN`** is set for **Deploy API (dev)**:
 
 | Variable | Example | Purpose |
 |----------|---------|---------|
@@ -70,9 +70,9 @@ Details and IAM sketch: [`docs/deploy/ci.md`](deploy/ci.md).
 
 ### What stays *outside* GitHub
 
-Do **not** put these in Actions secrets unless you have a very specific automation design:
+Do **not** put these in Actions secrets unless there is a very specific automation design:
 
-- **Terraform** `terraform.tfvars`, **`backend.hcl`**, AWS access for **`terraform apply`** (use your laptop or a dedicated runner with IAM roles).
+- **Terraform** `terraform.tfvars`, **`backend.hcl`**, AWS access for **`terraform apply`** (a laptop or dedicated runner with IAM roles).
 - **SSM Parameter Store** paths / API keys for ECS (already documented in [`docs/deploy/aws-ecs.md`](deploy/aws-ecs.md)).
 - Root **`.env`** (local only; never commit).
 

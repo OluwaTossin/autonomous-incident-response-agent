@@ -25,11 +25,11 @@ curl -sS -X POST "$API_BASE/triage" \
 | **Severity** | Matches blast radius in payload (prod payment CPU → usually HIGH/CRITICAL band, not LOW). |
 | **likely_root_cause** | Hypothesis tied to logs/metrics; not a generic paragraph; mentions contradiction if signals conflict. |
 | **recommended_actions** | Verifiable next steps (check X, scale Y, rollback Z), not “monitor” only. |
-| **confidence** | Lower when evidence is thin; higher when payload + retrieval align (use your judgment). |
+| **confidence** | Lower when evidence is thin; higher when payload + retrieval align (subjective judgment). |
 | **evidence** | Non-empty; includes payload-backed rows; ideally corpus paths under `data/` when RAG hit. |
 | **triage_id** | Present for audit/feedback join. |
 
-Repeat with **2–3** incidents you care about (from `data/eval/gold.jsonl` or your own JSON). Compare to **Phase 8** gold expectations only as a regression signal; this step is **qualitative**.
+Repeat with **2–3** incidents that matter for the release (from `data/eval/gold.jsonl` or custom JSON). Compare to **Phase 8** gold expectations only as a regression signal; this step is **qualitative**.
 
 ### 1B. n8n wiring
 
@@ -47,13 +47,13 @@ curl -sS -X POST "$API_BASE/triage" \
 **Escalation / ticketing (determinism):**
 
 - **Ticket workflow:** `escalate === true` → mock Jira path; else `not_escalated`. No randomness in n8n IF nodes — behaviour is **deterministic** given the triage JSON.
-- **Escalation workflow:** `severity === CRITICAL` branches by numeric `confidence`. **Operational policy** in the API (non-prod dampening, prod payment bump) runs **before** the response leaves `/triage` — n8n sees the **final** severity/escalate. Validate that staging/dev payloads are not paged like prod when you expect policy to apply.
+- **Escalation workflow:** `severity === CRITICAL` branches by numeric `confidence`. **Operational policy** in the API (non-prod dampening, prod payment bump) runs **before** the response leaves `/triage` — n8n sees the **final** severity/escalate. Validate that staging/dev payloads are not paged like prod when policy is expected to apply.
 
 ---
 
 ## Scenario 2 — Failure & resilience (not “correctness”)
 
-You are checking **degraded behaviour**: no crash, explicit uncertainty, sane severity.
+The goal is **degraded behaviour**: no crash, explicit uncertainty, sane severity.
 
 ### 2A. RAG returns no / weak hits
 
@@ -103,7 +103,7 @@ API_BASE=http://127.0.0.1:8000 N=10 ./scripts/benchmark_triage_latency.sh
 1. **Host:** `uv run serve-api` + same payload, same `N`.
 2. **Docker:** `docker compose` API + same script with `API_BASE=http://127.0.0.1:18080`.
 
-**Interpretation:** Wall time is dominated by **LLM + embeddings**, not CPU in the container. You should see **similar order of magnitude** host vs container; large gaps suggest network (API base URL wrong), cold start, or rate limits.
+**Interpretation:** Wall time is dominated by **LLM + embeddings**, not CPU in the container. Expect **similar order of magnitude** host vs container; large gaps suggest network (API base URL wrong), cold start, or rate limits.
 
 **Repeated calls:** Run `N=20` once; watch for throttling or rising latency (provider-side). This is the start of **SLO thinking** — capture mean/p95 and revisit after Phase 12 observability.
 
@@ -111,9 +111,9 @@ API_BASE=http://127.0.0.1:8000 N=10 ./scripts/benchmark_triage_latency.sh
 
 ## Definition of done (this checklist)
 
-- [ ] Scenario 1: at least **one** production-like triage passes your **human** bar for severity, root cause, and actions.
+- [ ] Scenario 1: at least **one** production-like triage passes a **human** quality bar for severity, root cause, and actions.
 - [ ] Scenario 1: n8n **ticket** and **escalation** webhooks behave as expected for **CRITICAL** vs non-critical and **escalate** true/false.
 - [ ] Scenario 2: empty/minimal RAG and thin payload do **not** take down the API; outputs reflect uncertainty where appropriate.
 - [ ] Scenario 3: recorded **mean** (and optionally p95) for `/triage` on host vs Docker for the same payload.
 
-When this is done, you are ready to treat **Phase 8** as regression automation and **this doc** as pre-release smoke, then move to cloud with clear baselines.
+When this is done, **Phase 8** can be treated as regression automation and **this doc** as pre-release smoke, then cloud cutover can proceed with clear baselines.

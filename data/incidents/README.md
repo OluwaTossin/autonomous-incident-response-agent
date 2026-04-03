@@ -9,7 +9,7 @@ Synthetic **postmortem-style** incident records (`INC-001`–`INC-020`) plus [`s
 
 ## Phase 3 ingestion
 
-Index `data/incidents/incident-*.md` for gold narratives; include or exclude `sample-incident.md` depending on whether you want the template in the vector store.
+Index `data/incidents/incident-*.md` for gold narratives; include or exclude `sample-incident.md` depending on whether the template should live in the vector store.
 
 ## Related
 

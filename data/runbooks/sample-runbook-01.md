@@ -51,7 +51,7 @@ This runbook covers **sustained or sudden high CPU** on the payment API tier. Go
 | Single AZ/region or **global**? | Failover and stakeholder scope. |
 | **PCI / fraud** signals anomalous (velocity, auth)? | May require security path, not only scale-out. |
 
-Document **approximate % of traffic or $ at risk** if your observability supports it.
+Document **approximate % of traffic or $ at risk** when observability supports it.
 
 ---
 

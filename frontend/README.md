@@ -15,7 +15,7 @@ rm -rf .next && npm run dev
 
 1. **API** (from repo root): `uv sync --extra dev`, `uv run rag-build`, `uv run serve-api` â†’ API on **http://127.0.0.1:8000**  
    FastAPI enables **CORS** for `http://localhost:3000` and `http://127.0.0.1:3000` by default (`CORS_ORIGINS` in repo-root `.env` â€” see [`.env.example`](../.env.example)).  
-   If you set **`API_KEY`** on the API, add **`NEXT_PUBLIC_TRIAGE_API_KEY`** with the same value in **`.env.local`** (see [`.env.example`](.env.example)) so the UI sends **`x-api-key`**.
+   If **`API_KEY`** is set on the API, add **`NEXT_PUBLIC_TRIAGE_API_KEY`** with the same value in **`.env.local`** (see [`.env.example`](.env.example)) so the UI sends **`x-api-key`**.
 
 2. **Frontend** (this directory):
    ```bash
@@ -23,7 +23,7 @@ rm -rf .next && npm run dev
    npm run dev
    ```
    Open **http://localhost:3000**.  
-   **`npm run dev`** loads **[`.env.development`](.env.development)** (defaults to local API; set **`NEXT_PUBLIC_API_BASE_URL`** to your dev **`alb_url`** or use **`.env.local`**).  
+   **`npm run dev`** loads **[`.env.development`](.env.development)** (defaults to local API; set **`NEXT_PUBLIC_API_BASE_URL`** to the dev **`alb_url`** from Terraform or use **`.env.local`**).  
    **`next build && next start`** uses **[`.env.production`](.env.production)** unless **`deploy_frontend_cdn.sh`** exports **`NEXT_PUBLIC_API_BASE_URL`** from Terraform.
 
 3. **Docker Compose API** on **:18080**: in `.env.local` set `NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:18080` (or legacy `NEXT_PUBLIC_TRIAGE_API_BASE`).
@@ -40,7 +40,7 @@ The app uses Next **`output: 'export'`** ([`next.config.ts`](next.config.ts)) â€
    terraform apply
    ```
 
-2. **Build & upload** (from repo root; bakes **`NEXT_PUBLIC_API_BASE_URL`** from Terraform **`alb_url`** â€” your dev ALB):
+2. **Build & upload** (from repo root; bakes **`NEXT_PUBLIC_API_BASE_URL`** from Terraform **`alb_url`** â€” e.g. dev ALB):
 
    ```bash
    ./scripts/aws/deploy_frontend_cdn.sh dev   # or: prod
@@ -54,7 +54,7 @@ The app uses Next **`output: 'export'`** ([`next.config.ts`](next.config.ts)) â€
    npm start
    ```
 
-### Point the UI at your deployed ALB (dev / prod)
+### Point the UI at a deployed ALB (dev / prod)
 
 1. From Terraform: `terraform -chdir=infra/terraform/envs/dev output -raw alb_url` (or `prod`).
 2. **`frontend/.env.local`** (no trailing slash on the URL):
@@ -63,10 +63,10 @@ The app uses Next **`output: 'export'`** ([`next.config.ts`](next.config.ts)) â€
    NEXT_PUBLIC_API_BASE_URL=http://aira-dev-alb-xxxx.region.elb.amazonaws.com
    ```
 
-3. **Repo-root `.env`** (API server): extend **`CORS_ORIGINS`** so it includes wherever the Next app is served from, e.g. `http://localhost:3000` for local dev hitting the cloud API, or your Vercel origin for a hosted UI:
+3. **Repo-root `.env`** (API server): extend **`CORS_ORIGINS`** so it includes wherever the Next app is served from, e.g. `http://localhost:3000` for local dev hitting the cloud API, or a Vercel origin for a hosted UI:
 
    ```bash
-   CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,https://your-app.vercel.app
+   CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,https://example-app.vercel.app
    ```
 
 4. Restart **`uv run serve-api`** (or redeploy ECS) so CORS picks up the change, then **`npm run dev`** so Next embeds the new `NEXT_PUBLIC_*` value.

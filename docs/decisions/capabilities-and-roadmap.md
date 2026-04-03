@@ -6,7 +6,7 @@
 
 ---
 
-## What you have built (accurate classification)
+## What I have built (accurate classification)
 
 Name it correctly:
 
@@ -27,11 +27,11 @@ This is directly aligned with how **AIOps platforms**, **SRE copilots**, and **i
 
 ## What is still missing (the final ~10%)
 
-You are at roughly **~90% completeness** for a strong local prototype. The remaining **~10%** is what separates a **strong project** from an **elite system** in reviews and production trust.
+I'm at roughly **~90% completeness** for a strong local prototype. The remaining **~10%** is what separates a **strong project** from an **elite system** in reviews and production trust.
 
 ### 1. Evidence attribution (critical upgrade)
 
-Today the model *infers*; it does not yet *prove* provenance in a machine-readable way. You want explicit linkage:
+Today the model *infers*; it does not yet *prove* provenance in a machine-readable way. I want explicit linkage:
 
 > “This conclusion came from **this** log + **this** incident (and optionally **this** runbook).”
 

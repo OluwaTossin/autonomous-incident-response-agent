@@ -32,7 +32,7 @@ Disable with `TRIAGE_METRICS_LOG_DISABLE=1`.
 | `create_ecs_cpu_alarm` | true | Set `false` to skip |
 | `create_triage_duration_alarm` | true | Set `false` to skip |
 
-Pass these into `module.monitoring` from `envs/*/monitoring.tf` when you want per-env overrides without editing the module.
+Pass these into `module.monitoring` from `envs/*/monitoring.tf` for per-env overrides without editing the module.
 
 ## n8n workflow success
 

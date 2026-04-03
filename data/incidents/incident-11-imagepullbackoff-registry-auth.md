@@ -42,7 +42,7 @@ Policy fix; inventory all **pull identities**; add **pre-merge** checklist for E
 - **Primary:** `RB-K8S-CRASH-005` — `data/runbooks/runbook-05-kubernetes-crashloopbackoff.md` *(closest: startup/pull failures; see runbook “Out of scope: ImagePullBackOff” — treat as registry/IAM.)*
 - **Related:** `RB-LB-HEALTH-010` (if scale-out needed healthy pulls)
 
-> **Note:** Consider adding `runbook-XX-imagepullbackoff-ecr.md` when you expand the library.
+> **Note:** Consider adding `runbook-XX-imagepullbackoff-ecr.md` when expanding the library.
 
 ```json
 {

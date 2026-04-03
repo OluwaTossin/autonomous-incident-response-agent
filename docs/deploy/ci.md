@@ -57,8 +57,8 @@ uv run python scripts/ci/stub_rag_index.py && docker build -f Dockerfile -t aira
 
 ### When to use
 
-- You want a CI button instead of `./scripts/aws/push_api_to_ecr.sh dev` from a laptop.  
-- Your task definition already references the ECR repo **`latest`** (or you accept that ECS uses the repo’s current **`latest`** digest after push).
+- A CI button is preferred over `./scripts/aws/push_api_to_ecr.sh dev` from a laptop.  
+- The task definition already references the ECR repo **`latest`** (or ECS using the repo’s current **`latest`** digest after push is acceptable).
 
 For **Terraform-managed** image digests and full parity with [`docs/deploy/aws-ecs.md`](aws-ecs.md), keep using **`./scripts/aws/push_api_to_ecr.sh`** (it runs **`terraform apply`** after push).
 
@@ -76,9 +76,9 @@ If **`DEV_ECR_REPOSITORY_URL`** or **`AWS_DEPLOY_ROLE_ARN`** is missing, the dep
 
 ### IAM (outline)
 
-Trust policy: `sts:AssumeRoleWithWebIdentity` for `token.actions.githubusercontent.com`, **sub** / **aud** conditioned to your repo and (optionally) environment.
+Trust policy: `sts:AssumeRoleWithWebIdentity` for `token.actions.githubusercontent.com`, **sub** / **aud** conditioned to this repository and (optionally) environment.
 
-Permissions (tighten ARNs to your account):
+Permissions (tighten ARNs to the target AWS account):
 
 - **ECR:** `GetAuthorizationToken`; `BatchCheckLayerAvailability`, `CompleteLayerUpload`, `InitiateLayerUpload`, `PutImage`, `UploadLayerPart` on the dev API repository  
 - **ECS:** `UpdateService`, `DescribeServices` on the dev cluster/service  

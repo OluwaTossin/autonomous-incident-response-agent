@@ -19,7 +19,7 @@ Terraform and the AWS provider **do not read** repo-root `.env`. Either:
 - `export AWS_REGION=… AWS_ACCESS_KEY_ID=… AWS_SECRET_ACCESS_KEY=…` (or use `AWS_PROFILE`), or  
 - `aws configure`, then ensure `AWS_REGION` is set for the provider default.
 
-Same variables are documented in [`.env.example`](../../.env.example) for convenience; load them into your shell before `terraform` commands.
+Same variables are documented in [`.env.example`](../../.env.example) for convenience; load them into the shell before `terraform` commands.
 
 **CI:** `terraform fmt -check` and `terraform validate` run in GitHub Actions (Terraform **1.9.4**) — see [`docs/deploy/ci.md`](../../docs/deploy/ci.md).
 
@@ -67,7 +67,7 @@ terraform apply
 
 ## Prod
 
-Same flow from [`envs/prod`](envs/prod/) with stricter defaults (`alb_enable_deletion_protection`, higher `api_desired_count`, longer log retention). Tighten `alb_ingress_cidr_ipv4` when you front the ALB with CloudFront or a known egress range.
+Same flow from [`envs/prod`](envs/prod/) with stricter defaults (`alb_enable_deletion_protection`, higher `api_desired_count`, longer log retention). Tighten `alb_ingress_cidr_ipv4` when the ALB sits behind CloudFront or a known egress range.
 
 ## Validate (no AWS apply)
 
