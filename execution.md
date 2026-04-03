@@ -20,7 +20,7 @@ This document is the single source of truth for build order, scope, and mileston
 | **10** | **Done** | `infra/terraform/modules/*`, `infra/terraform/envs/dev`, `envs/prod` — VPC, ECR, ALB, ECS Fargate, IAM, logs, SSM-ready |
 | **11** | **Done** | `docs/deploy/aws-ecs.md`, `scripts/aws/push_api_to_ecr.sh`, `infra/terraform/bootstrap/` — ECR digest pinning, merged SSM secrets, Dockerfile bakes `.rag_index`, remote state S3+DynamoDB |
 | **12** | **Done** | `frontend/` (Next.js static export), `infra/terraform/modules/frontend_static_cdn/`, `cors_origins` → `CORS_ORIGINS` on ECS, FastAPI `CORSMiddleware`, `scripts/aws/deploy_frontend_cdn.sh`, `verify_triage_cors_preflight.sh` |
-| **13** | **Done** | `infra/terraform/modules/monitoring/` — CloudWatch dashboard, ALB 5xx + unhealthy-target alarms, log metric filters; `app/api/metrics_log.py` + triage duration/success logs; [`docs/deploy/observability.md`](docs/deploy/observability.md) |
+| **13** | **Done** | `modules/monitoring/` — dashboard (p95, 4xx/5xx, rpm) + alarms (p95 latency, ECS CPU, triage max duration); `metrics_log` + LangChain **token** totals; [`docs/deploy/observability.md`](docs/deploy/observability.md) |
 
 ---
 
@@ -259,7 +259,8 @@ N8N_BASIC_AUTH_PASSWORD=
 - [x] **Container logs:** ECS → CloudWatch Logs (`/ecs/<stack>-api`; existing Phase 10–11)
 - [x] **ALB + ECS metrics:** dashboard widgets (requests, latency, 4xx/5xx, healthy hosts, CPU/memory)
 - [x] **Triage duration / success / graph errors:** one JSON line per triage → metric filters (`TriageDurationMs`, success/failure counts); **tokens** field reserved (`tokens_total: null`) for future LangChain usage
-- [x] **Alarms:** ALB target 5xx; unhealthy targets (optional SNS)
+- [x] **Alarms:** ALB target 5xx; unhealthy targets; **ALB p95 latency**; **ECS CPU**; **triage max duration** (optional SNS)
+- [x] **LLM tokens:** LangChain usage metadata → JSON + **TriageTokensTotal** metric (when `tokens_total >= 1`)
 - [ ] **n8n workflow success:** track in n8n UI / external metrics (not in this module)
 - **Deliverable:** [`docs/deploy/observability.md`](docs/deploy/observability.md), Terraform `module.monitoring`, `terraform output cloudwatch_*`
 

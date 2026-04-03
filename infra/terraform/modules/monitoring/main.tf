@@ -12,15 +12,14 @@ locals {
       height = 6
       properties = {
         region  = var.aws_region
-        title   = "ALB — request volume & latency"
-        period  = 300
+        title   = "ALB — request rate (per minute)"
+        period  = 60
         view    = "timeSeries"
         stacked = false
         metrics = [
-          ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", var.alb_arn_suffix, "TargetGroup", var.target_group_arn_suffix, { "stat" = "Sum", "label" = "Requests (TG)" }],
-          [".", "TargetResponseTime", ".", ".", ".", ".", { "stat" = "Average", "label" = "Target latency (avg s)", "yAxis" = "right" }],
+          ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", var.alb_arn_suffix, "TargetGroup", var.target_group_arn_suffix, { "stat" = "Sum", "label" = "Requests/min (TG)" }],
         ]
-        yAxis = { left = { min = 0 }, right = { min = 0 } }
+        yAxis = { left = { min = 0 } }
       }
     },
     {
@@ -31,14 +30,13 @@ locals {
       height = 6
       properties = {
         region  = var.aws_region
-        title   = "ALB — HTTP errors (target vs ELB)"
+        title   = "ALB — target latency (avg & p95, seconds)"
         period  = 300
         view    = "timeSeries"
-        stacked = true
+        stacked = false
         metrics = [
-          ["AWS/ApplicationELB", "HTTPCode_Target_5XX_Count", "LoadBalancer", var.alb_arn_suffix, "TargetGroup", var.target_group_arn_suffix, { "stat" = "Sum" }],
-          ["...", "HTTPCode_Target_4XX_Count", ".", ".", ".", ".", { "stat" = "Sum" }],
-          ["AWS/ApplicationELB", "HTTPCode_ELB_5XX_Count", "LoadBalancer", var.alb_arn_suffix, { "stat" = "Sum" }],
+          ["AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", var.alb_arn_suffix, "TargetGroup", var.target_group_arn_suffix, { "stat" = "Average", "label" = "avg" }],
+          ["...", { "stat" = "p95", "label" = "p95" }],
         ]
         yAxis = { left = { min = 0 } }
       }
@@ -47,6 +45,43 @@ locals {
       type   = "metric"
       x      = 0
       y      = 6
+      width  = 12
+      height = 6
+      properties = {
+        region  = var.aws_region
+        title   = "ALB — target 5xx & ELB 5xx (server errors)"
+        period  = 300
+        view    = "timeSeries"
+        stacked = false
+        metrics = [
+          ["AWS/ApplicationELB", "HTTPCode_Target_5XX_Count", "LoadBalancer", var.alb_arn_suffix, "TargetGroup", var.target_group_arn_suffix, { "stat" = "Sum", "label" = "Target 5xx" }],
+          ["AWS/ApplicationELB", "HTTPCode_ELB_5XX_Count", "LoadBalancer", var.alb_arn_suffix, { "stat" = "Sum", "label" = "ELB 5xx" }],
+        ]
+        yAxis = { left = { min = 0 } }
+      }
+    },
+    {
+      type   = "metric"
+      x      = 12
+      y      = 6
+      width  = 12
+      height = 6
+      properties = {
+        region  = var.aws_region
+        title   = "ALB — target 4xx (client / validation errors)"
+        period  = 300
+        view    = "timeSeries"
+        stacked = false
+        metrics = [
+          ["AWS/ApplicationELB", "HTTPCode_Target_4XX_Count", "LoadBalancer", var.alb_arn_suffix, "TargetGroup", var.target_group_arn_suffix, { "stat" = "Sum" }],
+        ]
+        yAxis = { left = { min = 0 } }
+      }
+    },
+    {
+      type   = "metric"
+      x      = 0
+      y      = 12
       width  = 12
       height = 6
       properties = {
@@ -64,12 +99,12 @@ locals {
     {
       type   = "metric"
       x      = 12
-      y      = 6
+      y      = 12
       width  = 12
       height = 6
       properties = {
         region = var.aws_region
-        title  = "ECS service — CPU & memory"
+        title  = "ECS service — CPU & memory (%)"
         period = 300
         view   = "timeSeries"
         metrics = [
@@ -82,20 +117,40 @@ locals {
     {
       type   = "metric"
       x      = 0
-      y      = 12
+      y      = 18
       width  = 12
       height = 6
       properties = {
-        region = var.aws_region
-        title  = "Triage — completions & duration (from API logs)"
-        period = 300
-        view   = "timeSeries"
+        region  = var.aws_region
+        title   = "Triage — outcomes & LLM tokens (from API logs)"
+        period  = 300
+        view    = "timeSeries"
+        stacked = false
         metrics = [
           [local.metrics_ns, "TriageSuccessCount", { "stat" = "Sum", "label" = "success" }],
           [".", "TriageFailureCount", { "stat" = "Sum", "label" = "graph_error" }],
-          [".", "TriageDurationMs", { "stat" = "Average", "label" = "duration_ms_avg", "yAxis" = "right" }],
+          [".", "TriageTokensTotal", { "stat" = "Sum", "label" = "tokens (sum)", "yAxis" = "right" }],
         ]
         yAxis = { left = { min = 0 }, right = { min = 0 } }
+      }
+    },
+    {
+      type   = "metric"
+      x      = 12
+      y      = 18
+      width  = 12
+      height = 6
+      properties = {
+        region  = var.aws_region
+        title   = "Triage — duration ms (avg & p95, graph wall time)"
+        period  = 300
+        view    = "timeSeries"
+        stacked = false
+        metrics = [
+          [local.metrics_ns, "TriageDurationMs", { "stat" = "Average", "label" = "avg_ms" }],
+          ["...", { "stat" = "p95", "label" = "p95_ms" }],
+        ]
+        yAxis = { left = { min = 0 } }
       }
     },
   ]
@@ -150,6 +205,67 @@ resource "aws_cloudwatch_metric_alarm" "alb_unhealthy_targets" {
   ok_actions    = var.alarm_actions
 }
 
+resource "aws_cloudwatch_metric_alarm" "alb_target_latency_p95_high" {
+  count               = var.create_alb_latency_p95_alarm ? 1 : 0
+  alarm_name          = "${var.name_prefix}-alb-target-latency-p95-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = var.alb_latency_p95_evaluation_periods
+  metric_name         = "TargetResponseTime"
+  namespace           = "AWS/ApplicationELB"
+  period              = var.alb_latency_p95_period_seconds
+  extended_statistic  = "p95"
+  threshold           = var.alb_latency_p95_threshold_seconds
+  treat_missing_data  = "notBreaching"
+  alarm_description   = "ALB p95 target response time high — triage/LLM slow or overloaded; consider scaling or model tuning"
+
+  dimensions = {
+    LoadBalancer = var.alb_arn_suffix
+    TargetGroup  = var.target_group_arn_suffix
+  }
+
+  alarm_actions = var.alarm_actions
+  ok_actions    = var.alarm_actions
+}
+
+resource "aws_cloudwatch_metric_alarm" "ecs_cpu_high" {
+  count               = var.create_ecs_cpu_alarm ? 1 : 0
+  alarm_name          = "${var.name_prefix}-ecs-cpu-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = var.ecs_cpu_alarm_evaluation_periods
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/ECS"
+  period              = var.ecs_cpu_alarm_period_seconds
+  statistic           = "Average"
+  threshold           = var.ecs_cpu_alarm_threshold_percent
+  treat_missing_data  = "notBreaching"
+  alarm_description   = "ECS service CPU high — scale tasks or increase cpu in task definition"
+
+  dimensions = {
+    ClusterName = var.ecs_cluster_name
+    ServiceName = var.ecs_service_name
+  }
+
+  alarm_actions = var.alarm_actions
+  ok_actions    = var.alarm_actions
+}
+
+resource "aws_cloudwatch_metric_alarm" "triage_duration_max_high" {
+  count               = var.create_triage_duration_alarm ? 1 : 0
+  alarm_name          = "${var.name_prefix}-triage-duration-max-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = var.triage_duration_alarm_evaluation_periods
+  metric_name         = "TriageDurationMs"
+  namespace           = local.metrics_ns
+  period              = var.triage_duration_alarm_period_seconds
+  statistic           = "Maximum"
+  threshold           = var.triage_duration_alarm_max_ms
+  treat_missing_data  = "notBreaching"
+  alarm_description   = "Single triage graph run exceeded duration threshold — LLM/RAG stall or cold start"
+
+  alarm_actions = var.alarm_actions
+  ok_actions    = var.alarm_actions
+}
+
 # JSON lines from the API container: {"event":"triage_metrics",...} (stdout; see app/api/metrics_log.py)
 resource "aws_cloudwatch_log_metric_filter" "triage_success" {
   name           = "${var.name_prefix}-triage-success"
@@ -184,5 +300,17 @@ resource "aws_cloudwatch_log_metric_filter" "triage_duration_ms" {
     name      = "TriageDurationMs"
     namespace = local.metrics_ns
     value     = "$.duration_ms"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "triage_tokens_total" {
+  name           = "${var.name_prefix}-triage-tokens-total"
+  log_group_name = var.cloudwatch_log_group_name
+  pattern        = "{ $.event = \"triage_metrics\" && $.success = true && $.tokens_total >= 1 }"
+
+  metric_transformation {
+    name      = "TriageTokensTotal"
+    namespace = local.metrics_ns
+    value     = "$.tokens_total"
   }
 }

@@ -92,3 +92,15 @@ output "cloudwatch_alarm_alb_target_5xx" {
 output "cloudwatch_alarm_alb_unhealthy_targets" {
   value = module.monitoring.alarm_unhealthy_targets_name
 }
+
+output "cloudwatch_alarm_alb_latency_p95" {
+  value = module.monitoring.alarm_alb_latency_p95_name
+}
+
+output "cloudwatch_alarm_ecs_cpu_high" {
+  value = module.monitoring.alarm_ecs_cpu_high_name
+}
+
+output "cloudwatch_alarm_triage_duration_max" {
+  value = module.monitoring.alarm_triage_duration_max_name
+}

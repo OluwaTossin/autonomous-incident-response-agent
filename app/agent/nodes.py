@@ -5,10 +5,12 @@ from __future__ import annotations
 import os
 from typing import Any, TypedDict
 
+from langchain_core.callbacks import UsageMetadataCallbackHandler
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import ValidationError
 
+from app.agent.llm_usage import aggregate_llm_usage
 from app.agent.operational_policy import apply_operational_policy
 from app.agent.prompts import TRIAGE_SYSTEM
 from app.agent.signal_reasoning import (
@@ -33,6 +35,7 @@ class TriageState(TypedDict, total=False):
     draft: dict[str, Any]
     result: dict[str, Any]
     error: str
+    llm_usage: dict[str, Any]
 
 
 def _pick(raw: dict[str, Any], *keys: str) -> str:
@@ -148,6 +151,7 @@ def _chat_model() -> ChatOpenAI:
 def node_analysis(state: TriageState) -> dict[str, Any]:
     if state.get("error"):
         return {}
+    usage_cb = UsageMetadataCallbackHandler()
     llm = _chat_model().with_structured_output(TriageOutput)
     human = f"""INCIDENT (normalized):
 {state.get("normalized_narrative", "")}
@@ -161,15 +165,23 @@ Produce triage JSON matching the schema."""
             [
                 SystemMessage(content=TRIAGE_SYSTEM),
                 HumanMessage(content=human),
-            ]
+            ],
+            config={"callbacks": [usage_cb]},
         )
+        usage = aggregate_llm_usage(usage_cb)
         if isinstance(out, TriageOutput):
-            return {"draft": out.model_dump(mode="json")}
+            return {"draft": out.model_dump(mode="json"), "llm_usage": usage}
         if isinstance(out, dict):
-            return {"draft": out}
-        return {"error": f"Unexpected LLM output type: {type(out)!r}"}
+            return {"draft": out, "llm_usage": usage}
+        return {
+            "error": f"Unexpected LLM output type: {type(out)!r}",
+            "llm_usage": usage,
+        }
     except Exception as e:
-        return {"error": f"LLM analysis failed: {e}"}
+        return {
+            "error": f"LLM analysis failed: {e}",
+            "llm_usage": aggregate_llm_usage(usage_cb),
+        }
 
 
 def node_enrich_triage(state: TriageState) -> dict[str, Any]:

@@ -44,7 +44,7 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 | **10** — AWS / Terraform | Done | [`infra/terraform/`](infra/terraform/) · modules + [`envs/dev`](infra/terraform/envs/dev/) & [`envs/prod`](infra/terraform/envs/prod/) |
 | **11** — Deploy to AWS | Done | [`docs/deploy/aws-ecs.md`](docs/deploy/aws-ecs.md) · [`scripts/aws/push_api_to_ecr.sh`](scripts/aws/push_api_to_ecr.sh) · **ECR digest of `:latest`** · image bakes **`.rag_index`** · SSM secret merge · [`infra/terraform/bootstrap/`](infra/terraform/bootstrap/) |
 | **12** — Triage UI (Next.js) | Done | [`frontend/`](frontend/) · [`infra/terraform/modules/frontend_static_cdn/`](infra/terraform/modules/frontend_static_cdn/) · **`cors_origins`** → **`CORS_ORIGINS`** · [`scripts/aws/deploy_frontend_cdn.sh`](scripts/aws/deploy_frontend_cdn.sh) |
-| **13** — Observability | Done | [`infra/terraform/modules/monitoring/`](infra/terraform/modules/monitoring/) · [`docs/deploy/observability.md`](docs/deploy/observability.md) · triage **`triage_metrics`** JSON logs → CloudWatch metrics |
+| **13** — Observability | Done | [`infra/terraform/modules/monitoring/`](infra/terraform/modules/monitoring/) · [`docs/deploy/observability.md`](docs/deploy/observability.md) · triage JSON + **LLM tokens** → log metrics; **p95** dashboards + **SNS-ready** alarms |
 
 ### Phase 1 — Problem definition
 
@@ -160,8 +160,8 @@ Before AWS, run through **[`docs/validation/pre-cloud-validation.md`](docs/valid
 
 ### Phase 13 — Observability (CloudWatch)
 
-- **Deliverable:** Dashboard **`<name_prefix>-api-observability`**, alarms (ALB target 5xx, unhealthy hosts), metric filters on ECS log group for **triage** success/fail counts and **duration_ms**. Runbook: [`docs/deploy/observability.md`](docs/deploy/observability.md).
-- **App:** Each triage emits one stdout JSON line (`event: triage_metrics`); disable with **`TRIAGE_METRICS_LOG_DISABLE=1`**.
+- **Deliverable:** Dashboard (ALB **rpm**, latency **avg+p95**, **4xx/5xx** split, ECS, triage outcomes + **tokens**, triage duration **avg+p95**), **alarms** (5xx, unhealthy, **p95 latency**, **ECS CPU**, **triage max duration**). Runbook: [`docs/deploy/observability.md`](docs/deploy/observability.md).
+- **App:** Each triage emits one JSON line to stdout and **`aira.triage`** (`triage_id`, `outcome`, `duration_ms`, `severity`, **LLM token counts**). Disable with **`TRIAGE_METRICS_LOG_DISABLE=1`**.
 
 ### Next (Phase 14+)
 

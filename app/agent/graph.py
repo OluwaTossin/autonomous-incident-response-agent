@@ -50,9 +50,12 @@ def run_triage_with_audit(
     result = final.get("result") or {}
     rag = final.get("rag_context")
     hits = final.get("retrieval_hits")
+    raw_usage = final.get("llm_usage")
+    llm_usage: dict[str, Any] = raw_usage if isinstance(raw_usage, dict) else {}
     meta: dict[str, Any] = {
         "rag_context": rag if isinstance(rag, str) else "",
         "retrieval_hits": hits if isinstance(hits, list) else [],
+        "llm_usage": llm_usage,
     }
     return result, meta
 

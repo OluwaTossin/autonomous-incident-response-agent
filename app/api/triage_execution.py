@@ -31,16 +31,24 @@ def run_full_triage(incident: dict[str, Any]) -> dict[str, Any]:
     )
     err = result.get("error")
     success = not err
+    usage = audit_meta.get("llm_usage") if isinstance(audit_meta.get("llm_usage"), dict) else {}
+    tp = int(usage.get("tokens_prompt") or 0)
+    tc = int(usage.get("tokens_completion") or 0)
+    tt = int(usage.get("tokens_total") or 0)
     write_triage_metrics_line(
         {
+            "log_schema": "aira.triage.v1",
             "event": "triage_metrics",
             "triage_id": triage_id,
+            "outcome": "success" if success else "graph_error",
             "duration_ms": duration_ms,
             "success": success,
             "severity": result.get("severity"),
             "escalate": bool(result.get("escalate")),
             "graph_error": bool(err),
-            "tokens_total": None,
+            "tokens_prompt": tp,
+            "tokens_completion": tc,
+            "tokens_total": tt,
         }
     )
     return result_out

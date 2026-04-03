@@ -36,6 +36,8 @@ infra/terraform/envs/*/*.tfvars
 !infra/terraform/envs/*/*.tfvars.example
 infra/terraform/envs/*/backend.hcl
 infra/terraform/bootstrap/terraform.tfvars
+**/tfplan
+*.tfplan
 
 # Docker / local volumes (if added later)
 *.log.local
