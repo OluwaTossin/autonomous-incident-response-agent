@@ -16,7 +16,7 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 1. `uv sync --extra dev` (add `--extra ui` for Gradio at `/ui`).
 2. `uv run rag-build` — build FAISS index under `.rag_index/` (needs `OPENAI_API_KEY` in `.env`).
 3. `uv run serve-api` — API + optional `/ui` → [`/docs`](http://127.0.0.1:8000/docs).
-4. **Stack in Docker:** `docker compose up -d --build` — API on **:8000** + n8n on **:5678** ([Phase 9](#phase-9--docker-compose-full-stack)). *Or* run the API on the host and use `docker compose -f docker-compose.n8n.yml up -d` for n8n only.
+4. **Stack in Docker:** `docker compose up -d --build` — API on host **:18080** + n8n on **:5678** ([Phase 9](#phase-9--docker-compose-full-stack)). *Or* run the API on the host and use `docker compose -f docker-compose.n8n.yml up -d` for n8n only.
 5. `uv run triage-eval` — regression-style eval over [`data/eval/gold.jsonl`](data/eval/gold.jsonl) (live LLM, ~27 cases; regenerate via `python3 scripts/generate_eval_gold.py`).
 
 | Command | Role |
@@ -121,15 +121,14 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
   ```bash
   docker compose up -d --build
   ```
-  - API: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs), UI: [http://127.0.0.1:8000/ui](http://127.0.0.1:8000/ui)
-  - If **port 8000 is already allocated** (local `uv run serve-api`, another container, OrbStack):  
-    `COMPOSE_API_PORT=18080 docker compose up -d --build` → open **http://127.0.0.1:18080/docs** (n8n still uses `http://api:8000` on the Docker network).
+  - API: [http://127.0.0.1:18080/docs](http://127.0.0.1:18080/docs), UI: [http://127.0.0.1:18080/ui](http://127.0.0.1:18080/ui) — **default host port `18080`** avoids clashes with local **`serve-api`** on **:8000**.
+  - To publish the API on host **:8000** instead: `COMPOSE_API_PORT=8000 docker compose up -d --build`.
   - n8n: [http://localhost:5678](http://localhost:5678) — import and activate workflows from [`workflows/n8n/`](workflows/n8n/). **`TRIAGE_API_BASE`** is set to **`http://api:8000`** inside Compose (do not override to `host.docker.internal` for this stack).
 - **End-to-end check (definition of done before Phase 10):** With Compose up and **n8n workflow `incident-ticket-creation` imported + active**, run from repo root:
   ```bash
-  API_BASE=http://127.0.0.1:8000 ./scripts/e2e_stack_check.sh
+  ./scripts/e2e_stack_check.sh
   ```
-  Use your published port if needed (e.g. `API_BASE=http://127.0.0.1:18080`). The script: **`GET /health`** → **`POST /triage`** (validates `triage_id`, severity, actions, non-empty **evidence**; optional **`STRICT_RAG_EVIDENCE=1`** requires a `data/` source in evidence) → **`POST …/webhook/ticket-creation`** (mock Jira path). **`SKIP_TRIAGE=1`** or **`SKIP_N8N=1`** to isolate steps.
+  Default `API_BASE` is **http://127.0.0.1:18080** (Compose default). For a host-only API on **:8000**, run `API_BASE=http://127.0.0.1:8000 ./scripts/e2e_stack_check.sh`. The script: **`GET /health`** → **`POST /triage`** (validates `triage_id`, severity, actions, non-empty **evidence**; optional **`STRICT_RAG_EVIDENCE=1`** requires a `data/` source in evidence) → **`POST …/webhook/ticket-creation`** (mock Jira path). **`SKIP_TRIAGE=1`** or **`SKIP_N8N=1`** to isolate steps.
 - **n8n-only** (API on host): keep using [`docker-compose.n8n.yml`](docker-compose.n8n.yml) and `TRIAGE_API_BASE=http://host.docker.internal:8000`.
 
 ### Next (Phase 10+)
@@ -240,6 +239,7 @@ uv run serve-api
 ```bash
 # After: uv run rag-build  and  .env with OPENAI_API_KEY
 docker compose up -d --build
+# API: http://127.0.0.1:18080/docs  (override with COMPOSE_API_PORT=8000 if you want :8000)
 ```
 
 **Phase 6 — n8n only (API on host in another terminal):**

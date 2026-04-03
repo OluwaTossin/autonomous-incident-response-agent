@@ -2,7 +2,8 @@
 # End-to-end check: health → POST /triage (RAG + LangGraph) → n8n webhook.
 #
 # Usage (repo root, API reachable from this machine):
-#   API_BASE=http://127.0.0.1:18080 ./scripts/e2e_stack_check.sh
+#   ./scripts/e2e_stack_check.sh
+#   API_BASE=http://127.0.0.1:8000 ./scripts/e2e_stack_check.sh   # if API is host uvicorn on :8000
 #
 # Env:
 #   API_BASE      default http://127.0.0.1:8000
@@ -14,7 +15,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-API_BASE="${API_BASE:-http://127.0.0.1:8000}"
+API_BASE="${API_BASE:-http://127.0.0.1:18080}"
 N8N_BASE="${N8N_BASE:-http://127.0.0.1:5678}"
 SKIP_TRIAGE="${SKIP_TRIAGE:-0}"
 SKIP_N8N="${SKIP_N8N:-0}"

@@ -32,7 +32,7 @@ Open **http://localhost:5678**, create an owner account (first visit), then **Im
 
 **Activate** each workflow (toggle in n8n UI) so webhooks listen.
 
-**Stack E2E:** from the repo root, with the API reachable and **`incident-ticket-creation` active**, run [`scripts/e2e_stack_check.sh`](../scripts/e2e_stack_check.sh) (set `API_BASE` if the API is not on `:8000`).
+**Stack E2E:** from the repo root, with the API reachable and **`incident-ticket-creation` active**, run [`scripts/e2e_stack_check.sh`](../scripts/e2e_stack_check.sh) (defaults to host **:18080** with `docker compose`; set `API_BASE` for other ports).
 
 ### Docker → host API
 

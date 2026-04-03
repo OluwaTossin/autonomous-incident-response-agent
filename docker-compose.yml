@@ -8,10 +8,10 @@
 #
 # Usage (repo root):
 #   docker compose up -d --build
-#   open http://127.0.0.1:8000/docs  and  http://127.0.0.1:8000/ui
-# If host port 8000 is busy (e.g. local `serve-api` or another container):
-#   COMPOSE_API_PORT=18080 docker compose up -d --build
-#   then http://127.0.0.1:18080/docs  (n8n still uses http://api:8000 inside the network)
+#   open http://127.0.0.1:18080/docs  and  http://127.0.0.1:18080/ui
+# Default host port is 18080 so this does not collide with local `serve-api` / other stacks on :8000.
+# To publish on 8000 instead: COMPOSE_API_PORT=8000 docker compose up -d --build
+# Inside the network n8n still uses http://api:8000 (container port).
 #   open http://localhost:5678  → import workflows from workflows/n8n/
 #
 # n8n reaches the API via Docker DNS (`api:8000`). Do not set TRIAGE_API_BASE to host.docker.internal
@@ -21,7 +21,7 @@ services:
   api:
     build: .
     ports:
-      - "${COMPOSE_API_PORT:-8000}:8000"
+      - "${COMPOSE_API_PORT:-18080}:8000"
     env_file:
       - .env
     environment:
