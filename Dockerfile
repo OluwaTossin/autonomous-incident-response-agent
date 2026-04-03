@@ -26,6 +26,6 @@ EXPOSE 8000
 
 # Explicit probe (ECS/Fargate + ALB-style expectations; matches compose healthcheck).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=25s --retries=3 \
-    CMD curl --fail --silent --show-error --max-time 4 http://127.0.0.1:8000/health || exit 1
+    CMD curl --fail --silent --show-error --max-time 4 http://localhost:8000/health || exit 1
 
 CMD ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
