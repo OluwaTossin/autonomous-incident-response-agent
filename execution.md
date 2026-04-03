@@ -41,7 +41,7 @@ I'm building an AI-powered incident response system that can:
 
 ## 2. What I am building (five parts)
 
-**Visual:** [`docs/architecture/README.md`](docs/architecture/README.md) (diagram: `architectural-diagram.png`).
+**Visual:** [`docs/architecture/system-architecture.md`](docs/architecture/system-architecture.md) (Mermaid diagrams: layers, runtime, AWS, triage flow, CI/CD).
 
 | Layer | Role |
 |--------|------|

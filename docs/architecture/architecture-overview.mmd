@@ -1,0 +1,52 @@
+%% Single export for architecture-overview.png (Phases 1–14)
+%% Render: npx @mermaid-js/mermaid-cli -i architecture-overview.mmd -o architecture-overview.png
+
+flowchart TB
+  subgraph Users["Users & automation"]
+    BR["Browser · Next.js static UI"]
+    N8["n8n · Slack · mock Jira"]
+  end
+
+  subgraph UIHost["Static UI · Phase 12"]
+    CF["CloudFront optional"]
+    S3["S3 website bucket"]
+  end
+
+  subgraph Edge["AWS edge · Phase 10–11"]
+    ALB["ALB :80"]
+  end
+
+  subgraph Fargate["ECS Fargate · API service"]
+    API["FastAPI · /triage · /ingest-incident"]
+    LG["LangGraph · structured triage"]
+    RK["RAG · FAISS · baked .rag_index"]
+  end
+
+  subgraph Corpus["Knowledge · Phase 2–3"]
+    DATA["data/ runbooks · incidents · logs · KB"]
+  end
+
+  subgraph External["LLM provider"]
+    OAI["OpenAI · embeddings + chat"]
+  end
+
+  subgraph Platform["Platform · Phase 13–14"]
+    SSM["SSM Parameter Store · secrets"]
+    CW["CloudWatch · logs · dashboard · alarms"]
+    ECR["ECR · API image"]
+    GHA["GitHub Actions · CI · optional deploy"]
+  end
+
+  BR --> CF
+  CF --> S3
+  BR --> ALB
+  N8 --> ALB
+  ALB --> API
+  SSM -.->|inject at task start| API
+  API --> LG
+  RK --> LG
+  DATA -.->|rag-build in image| RK
+  LG --> OAI
+  API --> CW
+  GHA --> ECR
+  ECR -.->|pull digest| API
