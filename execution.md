@@ -18,6 +18,7 @@ This document is the single source of truth for build order, scope, and mileston
 | **8** | **Done** | `app/eval/`, `data/eval/gold.jsonl`, `uv run triage-eval` |
 | **9** | **Done** | `Dockerfile`, `docker-compose.yml` — API + n8n full stack locally |
 | **10** | **Done** | `infra/terraform/modules/*`, `infra/terraform/envs/dev`, `envs/prod` — VPC, ECR, ALB, ECS Fargate, IAM, logs, SSM-ready |
+| **11** | **Done** | `docs/deploy/aws-ecs.md`, `scripts/aws/push_api_to_ecr.sh`, `infra/terraform/bootstrap/` — ECR digest pinning, merged SSM secrets, Dockerfile bakes `.rag_index`, remote state S3+DynamoDB |
 
 ---
 
@@ -242,8 +243,8 @@ N8N_BASIC_AUTH_PASSWORD=
 
 ### Phase 11 — Deploy to AWS
 
-- [ ] Push images to ECR; run services
-- **Deliverable:** Usable URL (dev/prod separated from day one)
+- [x] Push images to ECR; run services *(script + runbook; execute in your account after `terraform apply`)*
+- **Deliverable:** Usable URL (dev/prod separated from day one) — ALB DNS from Terraform outputs; `curl …/health` after push + rollout
 
 ### Phase 12 — Observability
 
@@ -280,7 +281,7 @@ Use this as the default execution order:
 - [x] **Milestone 8** — Evaluation suite (`app/eval`, `data/eval/gold.jsonl`)
 - [x] **Milestone 9** — Full docker-compose
 - [x] **Milestone 10** — Terraform dev environment *(+ prod env root; apply when ready)*
-- [ ] **Milestone 11** — ECS Fargate deploy
+- [x] **Milestone 11** — ECS Fargate deploy *(image push + `update-service`; see `docs/deploy/aws-ecs.md`)*
 - [ ] **Milestone 12** — CloudWatch observability
 - [ ] **Milestone 13** — CI/CD
 
@@ -305,8 +306,8 @@ At completion you should be able to demonstrate:
 
 1. Keep **problem definition** and **sample runbooks** current as the source of truth for what “good” looks like.
 2. Do not skip **Phase 2** data; retrieval quality depends on it.
-3. Treat **Phase 11+** (ECR push, running tasks, RAG on Fargate) as the next deploy slice after Terraform is applied.
+3. Treat **Phase 12+** (presentation UI, observability, TLS, CI/CD) as the next slices after the API is reachable on the ALB.
 
 ---
 
-*Last updated: 2026-04-03 — Phases 1–10 complete in-repo (through Terraform layouts for dev/prod). Next: Phase 11 deploy to AWS (images, usable URL).*
+*Last updated: 2026-04-03 — Phase 11 complete: ECR push, ECS digest pinning, baked RAG index, deploy runbook. Next: Phase 12+ (UI, observability).*

@@ -2,7 +2,7 @@
 #
 # Prerequisites:
 #   1. Copy `.env.example` → `.env` and set OPENAI_API_KEY (and SLACK_WEBHOOK_URL if using Slack nodes).
-#   2. On the host: `uv run rag-build` so `./.rag_index` exists (mounted read-only into the API).
+#   2. On the host: `uv run rag-build` so `./.rag_index` exists (mounted read-only into the API, overlaying the image’s baked copy).
 # Persistence: `./data` (corpus paths, logs, eval artifacts) and `./.rag_index` (FAISS) are bind-mounted
 # so image rebuilds do not wipe JSONL logs or the vector index.
 #

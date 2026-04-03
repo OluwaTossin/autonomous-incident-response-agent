@@ -34,6 +34,8 @@ Thumbs.db
 infra/terraform/envs/*/*.auto.tfvars
 infra/terraform/envs/*/*.tfvars
 !infra/terraform/envs/*/*.tfvars.example
+infra/terraform/envs/*/backend.hcl
+infra/terraform/bootstrap/terraform.tfvars
 
 # Docker / local volumes (if added later)
 *.log.local
@@ -49,3 +51,4 @@ data/logs/triage_feedback.jsonl
 # Eval Markdown reports (regenerate with triage-eval --out)
 data/eval/reports/*
 !data/eval/reports/.gitkeep
+_split_backup/

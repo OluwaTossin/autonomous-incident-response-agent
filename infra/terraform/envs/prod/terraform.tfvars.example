@@ -1,4 +1,7 @@
-aws_region   = "us-east-1"
+# Copy to terraform.tfvars (gitignored) and adjust.
+# Credentials: aws configure, env vars, or IAM role — same account/region as this file.
+
+aws_region   = "eu-west-1" # set to your region (e.g. us-east-1)
 project_name = "aira"
 environment  = "prod"
 
@@ -9,7 +12,22 @@ api_cpu           = 512
 api_memory        = 1024
 api_desired_count = 2
 
+# Greenfield: apply ECR only first (`terraform apply -target=module.ecr`), push an image with :latest,
+# then full apply. Or set api_desired_count = 0 until the first push.
+
+# log_retention_days = 30   # default in variables.tf
+# ecs_health_check_grace_period_seconds = 90
+
+# --- Secrets: AWS Systems Manager Parameter Store (SecureString) ---
+# Option A — shorthand (sets OPENAI_API_KEY only):
 openai_api_key_ssm_parameter = "/aira/prod/openai_api_key"
+# Option B — multiple keys (do not repeat OPENAI_API_KEY if Option A is set):
+# ssm_secrets = [
+#   { env_name = "OPENAI_API_KEY",     parameter_name = "/aira/prod/openai_api_key" },
+#   { env_name = "OPENROUTER_API_KEY", parameter_name = "/aira/prod/openrouter_api_key" },
+# ]
+# Create values (example — use same region as aws_region above):
+# aws ssm put-parameter --region eu-west-1 --name /aira/prod/openai_api_key --type SecureString --value "$(printf %s "$OPENAI_API_KEY")"
 
 enable_container_insights = true
 enable_execute_command    = false

@@ -1,0 +1,9 @@
+# Copy to backend.hcl (gitignored) after running infra/terraform/bootstrap.
+# Same bucket + lock table as prod; different S3 object key = separate state.
+# If you already used key aira/dev/terraform.tfstate, see bootstrap/README.md (rename in S3).
+
+bucket         = "aira-tf-state-YOUR_ACCOUNT_ID"
+key            = "aira/terraform/state/development.tfstate"
+region         = "eu-west-1"
+dynamodb_table = "aira-terraform-locks"
+encrypt        = true

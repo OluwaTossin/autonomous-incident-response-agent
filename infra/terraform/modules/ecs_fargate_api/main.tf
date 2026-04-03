@@ -141,6 +141,8 @@ resource "aws_ecs_service" "api" {
     container_port   = var.container_port
   }
 
+  health_check_grace_period_seconds = var.health_check_grace_period_seconds
+
   deployment_minimum_healthy_percent = 50
   deployment_maximum_percent         = 200
 

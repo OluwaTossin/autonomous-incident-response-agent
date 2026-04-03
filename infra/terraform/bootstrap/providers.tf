@@ -7,8 +7,6 @@ terraform {
       version = "~> 5.0"
     }
   }
-
-  backend "s3" {}
 }
 
 provider "aws" {
@@ -16,9 +14,9 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Project     = var.project_name
-      Environment = var.environment
-      ManagedBy   = "terraform"
+      Project   = "aira"
+      Purpose   = "terraform-remote-state"
+      ManagedBy = "terraform"
     }
   }
 }

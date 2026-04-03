@@ -1,4 +1,4 @@
-# Phase 9 — API + optional Gradio (/ui). Build index on host, mount `.rag_index` read-only.
+# Phase 9 — API + optional Gradio (/ui). Phase 11 — bake `.rag_index` for ECS/Fargate; Compose still mounts host index over /app/.rag_index.
 FROM python:3.12-slim-bookworm
 
 WORKDIR /app
@@ -17,6 +17,10 @@ COPY app ./app
 COPY examples ./examples
 
 RUN uv sync --frozen --no-dev --extra ui
+
+# FAISS index + chunk JSONL (host: `uv run rag-build`). Required for RAG on ECS/Fargate.
+# Docker Compose still bind-mounts `./.rag_index` over this path when present.
+COPY .rag_index ./.rag_index
 
 ENV PATH="/app/.venv/bin:$PATH" \
     API_HOST=0.0.0.0 \

@@ -2,10 +2,10 @@
 
 **What this is:** an **AI-powered incident triage and diagnosis engine** — RAG over runbooks/incidents/logs, multi-source context fusion with the alert payload, heuristic guardrails plus LLM structured reasoning, and an action / escalation layer. That pattern matches **AIOps** assistants, **SRE copilots**, and internal reliability tooling at large shops.
 
-Operational scope today: ingest alerts (JSON), retrieve knowledge, return structured triage JSON over HTTP, optional **Gradio** at `/ui`, **n8n** webhooks (Slack + mock ticketing), an **offline eval harness** (`triage-eval`), **Docker Compose** for local full stack, and **Terraform** layouts for **AWS** (dev/prod). For an explicit capability breakdown and the **~10% roadmap** (evidence attribution, contradiction handling, timelines), see [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md).
+Operational scope today: ingest alerts (JSON), retrieve knowledge, return structured triage JSON over HTTP, optional **Gradio** at `/ui`, **n8n** webhooks (Slack + mock ticketing), an **offline eval harness** (`triage-eval`), **Docker Compose** for local full stack, **Terraform** for **AWS** (dev/prod), and **Phase 11** — **ECR push + ECS Fargate** behind an ALB with **`.rag_index` baked** in the image and **remote state** (S3 + DynamoDB). For capability depth and the **~10% roadmap**, see [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md).
 
 **Owner:** Oluwatosin Jegede  
-**Status:** Phases **1–9** shipped for **local Docker Compose** (API + Gradio + n8n). **Phase 10** ships **modular Terraform** for **dev** and **prod** ([`infra/terraform/`](infra/terraform/)). **Phase 11+** next: push images, wire RAG index in AWS, CI/CD.
+**Status:** Phases **1–11** shipped in-repo (API on ECS **dev/prod**). **Phase 12+**: presentation-layer UI, observability, TLS, CI/CD.
 
 **Plan:** Detailed phase notes below; maintainer checklist in root [`execution.md`](execution.md) (tracked in git).
 
@@ -28,7 +28,7 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 
 ---
 
-## Build progress: Phases 1–10
+## Build progress: Phases 1–11
 
 | Phase | Status | Primary artifacts |
 |-------|--------|---------------------|
@@ -42,6 +42,7 @@ Secrets live in **`.env`** (copy from [`.env.example`](.env.example)). **`load_d
 | **8** — Evaluation | Done | [`app/eval/`](app/eval/) · [`data/eval/gold.jsonl`](data/eval/gold.jsonl) · `scripts/generate_eval_gold.py` · `uv run triage-eval` |
 | **9** — Docker Compose | Done | [`Dockerfile`](Dockerfile) · [`docker-compose.yml`](docker-compose.yml) · n8n + API on one network |
 | **10** — AWS / Terraform | Done | [`infra/terraform/`](infra/terraform/) · modules + [`envs/dev`](infra/terraform/envs/dev/) & [`envs/prod`](infra/terraform/envs/prod/) |
+| **11** — Deploy to AWS | Done | [`docs/deploy/aws-ecs.md`](docs/deploy/aws-ecs.md) · [`scripts/aws/push_api_to_ecr.sh`](scripts/aws/push_api_to_ecr.sh) · **ECR digest of `:latest`** · image bakes **`.rag_index`** · SSM secret merge · [`infra/terraform/bootstrap/`](infra/terraform/bootstrap/) |
 
 ### Phase 1 — Problem definition
 
@@ -142,9 +143,15 @@ Before AWS, run through **[`docs/validation/pre-cloud-validation.md`](docs/valid
 - **Guide:** [`infra/terraform/README.md`](infra/terraform/README.md).
 - **Layouts:** [`infra/terraform/modules/`](infra/terraform/modules/) · [`infra/terraform/envs/dev/`](infra/terraform/envs/dev/) · [`infra/terraform/envs/prod/`](infra/terraform/envs/prod/). Copy `terraform.tfvars.example` → `terraform.tfvars` (gitignored).
 
-### Next (Phase 11+)
+### Phase 11 — Deploy API to AWS (ECR + ECS)
 
-- **Push images to ECR**, RAG index strategy on Fargate (EFS / bake / download), TLS in front of ALB, CI/CD, observability (Phase 12).
+- **Deliverable:** Push API image to **ECR**, ECS **Fargate** service behind **ALB**, **`GET /health`** via Terraform **`alb_url`** (separate **dev** / **prod** stacks).
+- **Runbook:** [`docs/deploy/aws-ecs.md`](docs/deploy/aws-ecs.md) — SSM for secrets (`openai_api_key_ssm_parameter` / `ssm_secrets`), **`uv run rag-build`**, then **`./scripts/aws/push_api_to_ecr.sh dev`** or **`prod`** (immutable tag + **`:latest`**, **`terraform apply`** pins digest; **`linux/amd64`** for Fargate).
+- **RAG on Fargate:** the **Docker image bakes `.rag_index/`**; Compose still **bind-mounts** a host-built index for local dev.
+
+### Next (Phase 12+)
+
+- **Presentation-layer UI** (e.g. Next.js), **observability**, **TLS** in front of ALB, **CI/CD**.
 
 ---
 
@@ -172,7 +179,9 @@ Before AWS, run through **[`docs/validation/pre-cloud-validation.md`](docs/valid
 | [`docker-compose.yml`](docker-compose.yml) | Phase 9 — API + n8n |
 | [`docker-compose.n8n.yml`](docker-compose.n8n.yml) | Phase 6 — n8n only |
 | [`Dockerfile`](Dockerfile) | Phase 9 — API image |
-| [`infra/terraform/`](infra/terraform/) | Phase 10 — modular Terraform, `envs/dev` & `envs/prod` |
+| [`infra/terraform/`](infra/terraform/) | Phase 10–11 — modular Terraform, remote state bootstrap, `envs/dev` & `envs/prod` |
+| [`docs/deploy/aws-ecs.md`](docs/deploy/aws-ecs.md) | Phase 11 — ECR push, ECS rollout, SSM, smoke tests |
+| [`scripts/aws/push_api_to_ecr.sh`](scripts/aws/push_api_to_ecr.sh) | Phase 11 — build/push + **`terraform apply`** (ECS pins **`:latest`** digest) |
 
 ---
 

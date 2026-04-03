@@ -80,3 +80,9 @@ variable "enable_container_insights" {
   default     = false
   description = "Enable ECS Container Insights (extra CloudWatch cost; turn on for prod observability)"
 }
+
+variable "health_check_grace_period_seconds" {
+  type        = number
+  default     = 90
+  description = "Seconds ECS ignores ELB health checks after a task starts (Fargate pull + uvicorn cold start)"
+}

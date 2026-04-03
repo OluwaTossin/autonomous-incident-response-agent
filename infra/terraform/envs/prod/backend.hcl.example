@@ -1,0 +1,8 @@
+# Copy to backend.hcl (gitignored) after running infra/terraform/bootstrap.
+# Production state object (not shared with dev). Same bucket as dev; different key.
+
+bucket         = "aira-tf-state-YOUR_ACCOUNT_ID"
+key            = "aira/terraform/state/production.tfstate"
+region         = "eu-west-1"
+dynamodb_table = "aira-terraform-locks"
+encrypt        = true

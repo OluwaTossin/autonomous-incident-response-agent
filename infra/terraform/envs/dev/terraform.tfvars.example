@@ -2,7 +2,7 @@
 # Credentials: export AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION
 # or use aws configure / IAM role.
 
-aws_region   = "us-east-1"
+aws_region   = "eu-west-1" # set to your region (e.g. us-east-1)
 project_name = "aira"
 environment  = "dev"
 
@@ -13,8 +13,21 @@ api_cpu           = 256
 api_memory        = 512
 api_desired_count = 1
 
-# After: aws ssm put-parameter --name /aira/dev/openai_api_key --type SecureString --value "$(echo -n $OPENAI_API_KEY)"
+# ECS uses the digest of :latest in ECR (push script always updates :latest + an immutable tag).
+
+# --- Secrets: AWS Systems Manager Parameter Store (SecureString) ---
+# Option A — shorthand (sets OPENAI_API_KEY only):
 openai_api_key_ssm_parameter = "/aira/dev/openai_api_key"
+# Option B — multiple keys (use instead of A, or add extra keys with A; never duplicate the same env_name):
+# ssm_secrets = [
+#   { env_name = "OPENAI_API_KEY",       parameter_name = "/aira/dev/openai_api_key" },
+#   { env_name = "OPENROUTER_API_KEY",   parameter_name = "/aira/dev/openrouter_api_key" },
+# ]
+# Create values (example — use same region as aws_region above):
+# aws ssm put-parameter --region eu-west-1 --name /aira/dev/openai_api_key --type SecureString --value "$(printf %s "$OPENAI_API_KEY")"
+
+# log_retention_days = 7
+# ecs_health_check_grace_period_seconds = 90
 
 enable_container_insights = false
 enable_execute_command    = false

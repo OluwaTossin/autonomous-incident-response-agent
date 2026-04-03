@@ -1,0 +1,4 @@
+# Optional overrides (defaults are fine for most accounts):
+# aws_region        = "eu-west-1"
+# state_bucket_name = "my-company-unique-tf-state-bucket"
+# lock_table_name   = "aira-terraform-locks"

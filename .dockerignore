@@ -4,7 +4,6 @@
 __pycache__
 *.py[cod]
 .pytest_cache
-.rag_index
 *.egg-info
 data/eval/reports
 .cursor

@@ -1,3 +1,8 @@
+output "aws_region" {
+  description = "Region this stack was applied in (use for aws CLI / ECR login)"
+  value       = var.aws_region
+}
+
 output "alb_url" {
   description = "HTTP URL for the API (ALB)"
   value       = "http://${module.alb.alb_dns_name}"
@@ -8,8 +13,18 @@ output "alb_dns_name" {
 }
 
 output "ecr_repository_url" {
-  description = "docker build … && docker tag … && docker push target"
+  description = "ECR repository URL (ECS pins digest of :latest — see ecr_image_digest)"
   value       = module.ecr.repository_url
+}
+
+output "ecr_image_digest" {
+  description = "Digest Terraform resolved for :latest at last apply (immutable ECS reference)"
+  value       = data.aws_ecr_image.api.image_digest
+}
+
+output "ecr_image_uri" {
+  description = "Full image reference used by ECS (repository@digest)"
+  value       = "${module.ecr.repository_url}@${data.aws_ecr_image.api.image_digest}"
 }
 
 output "ecr_repository_name" {
@@ -28,7 +43,18 @@ output "cloudwatch_log_group" {
   value = module.ecs_fargate_api.log_group_name
 }
 
+output "ssm_container_secrets" {
+  description = "Create each parameter_name as SSM SecureString; ECS maps it to environment_variable (valueFrom ARN)"
+  value = [
+    for s in local.merged_ssm_secrets : {
+      environment_variable = s.env_name
+      parameter_name       = s.parameter_name
+      arn                  = "arn:aws:ssm:${var.aws_region}:${local.account_id}:parameter${s.parameter_name}"
+    }
+  ]
+}
+
 output "openai_ssm_parameter_arn" {
-  description = "Set this parameter (SecureString) before tasks can call OpenAI"
-  value       = local.openai_parameter_arn != "" ? local.openai_parameter_arn : "(not configured — set var.openai_api_key_ssm_parameter)"
+  description = "OpenAI key ARN when openai_api_key_ssm_parameter is set (legacy output)"
+  value       = var.openai_api_key_ssm_parameter != "" ? "arn:aws:ssm:${var.aws_region}:${local.account_id}:parameter${var.openai_api_key_ssm_parameter}" : "(not configured — set openai_api_key_ssm_parameter and/or ssm_secrets)"
 }

@@ -54,7 +54,27 @@ variable "log_retention_days" {
 variable "openai_api_key_ssm_parameter" {
   type        = string
   default     = ""
-  description = "SSM parameter name (leading /) e.g. /aira/dev/openai_api_key — create as SecureString before first stable deploy"
+  description = "Optional shorthand: maps OPENAI_API_KEY → this SSM name. Prefer ssm_secrets for multiple keys. Path must start with /."
+  validation {
+    condition     = var.openai_api_key_ssm_parameter == "" || startswith(var.openai_api_key_ssm_parameter, "/")
+    error_message = "openai_api_key_ssm_parameter must be empty or a path starting with / (e.g. /aira/dev/openai_api_key)."
+  }
+}
+
+variable "ssm_secrets" {
+  type = list(object({
+    env_name       = string
+    parameter_name = string
+  }))
+  default     = []
+  description = "Inject SSM Parameter Store (SecureString) values as container env vars. parameter_name is the full path (leading /). IAM execution role is scoped to these ARNs only."
+  validation {
+    condition = alltrue([
+      for s in var.ssm_secrets :
+      startswith(s.parameter_name, "/") && length(s.env_name) > 0
+    ])
+    error_message = "Each ssm_secrets.parameter_name must start with / and env_name must be non-empty."
+  }
 }
 
 variable "extra_task_environment" {
@@ -73,4 +93,10 @@ variable "enable_container_insights" {
 variable "enable_execute_command" {
   type    = bool
   default = false
+}
+
+variable "ecs_health_check_grace_period_seconds" {
+  type        = number
+  default     = 90
+  description = "ALB target health ignored briefly after task start (see ECS service)"
 }

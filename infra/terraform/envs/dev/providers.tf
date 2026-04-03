@@ -8,14 +8,9 @@ terraform {
     }
   }
 
-  # Remote state (uncomment after creating the bucket + DynamoDB lock table)
-  # backend "s3" {
-  #   bucket         = "YOUR-TF-STATE-BUCKET"
-  #   key            = "aira/dev/terraform.tfstate"
-  #   region         = "us-east-1"
-  #   dynamodb_table = "terraform-locks"
-  #   encrypt        = true
-  # }
+  # Config supplied at init: copy backend.hcl.example → backend.hcl, then:
+  #   terraform init -backend-config=backend.hcl -migrate-state
+  backend "s3" {}
 }
 
 provider "aws" {
