@@ -62,9 +62,14 @@ def main_build_index(argv: list[str] | None = None) -> int:
 
     prev_ws = os.environ.get("WORKSPACE_ID")
     prev_wo = os.environ.get("RAG_WORKSPACE_ONLY")
+    prev_idx = os.environ.get("RAG_INDEX_DIR")
+    prev_corpus = os.environ.get("RAG_CORPUS_ROOT")
     try:
         _apply_workspace_env(args.workspace)
         os.environ["RAG_WORKSPACE_ONLY"] = "1"
+        # Ignore repo `.env` legacy paths for this build — index → workspace `index/`, corpus rules from settings.
+        os.environ["RAG_INDEX_DIR"] = ""
+        os.environ["RAG_CORPUS_ROOT"] = ""
         reset_settings()
 
         errs, warns = validate_workspace_layout(require_corpus_files=args.strict)
@@ -82,6 +87,8 @@ def main_build_index(argv: list[str] | None = None) -> int:
     finally:
         _restore_env("WORKSPACE_ID", prev_ws)
         _restore_env("RAG_WORKSPACE_ONLY", prev_wo)
+        _restore_env("RAG_INDEX_DIR", prev_idx)
+        _restore_env("RAG_CORPUS_ROOT", prev_corpus)
         reset_settings()
 
 
