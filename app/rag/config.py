@@ -16,13 +16,47 @@ def project_root() -> Path:
 
 
 def rag_index_dir() -> Path:
+    """FAISS bundle directory. Uses ``RAG_INDEX_DIR`` when set; else ``workspaces/<id>/index``."""
     from app.config import get_settings
+    from app.workspace.paths import workspace_index_dir
 
-    rel = get_settings().rag_index_dir.strip() or ".rag_index"
-    p = Path(rel)
-    if not p.is_absolute():
-        p = project_root() / p
-    return p
+    rel = get_settings().rag_index_dir.strip()
+    if rel:
+        p = Path(rel)
+        if not p.is_absolute():
+            p = project_root() / p
+        return p
+    return workspace_index_dir()
+
+
+def corpus_data_root() -> Path:
+    """Primary corpus root: ``RAG_CORPUS_ROOT``, else workspace ``data/`` if populated, else ``data/``."""
+    from app.config import get_settings
+    from app.workspace.paths import workspace_data_dir
+
+    s = get_settings()
+    if s.rag_corpus_root.strip():
+        p = Path(s.rag_corpus_root.strip())
+        return p if p.is_absolute() else project_root() / p
+    wd = workspace_data_dir()
+    if _workspace_corpus_has_files(wd):
+        return wd
+    return project_root() / "data"
+
+
+def _workspace_corpus_has_files(wd: Path) -> bool:
+    if not wd.is_dir():
+        return False
+    for pattern in (
+        "runbooks/**/*.md",
+        "incidents/**/*.md",
+        "incidents/*.md",
+        "logs/*.log",
+        "knowledge_base/**/*.md",
+    ):
+        if any(wd.glob(pattern)):
+            return True
+    return False
 
 
 def openai_api_key() -> str:
@@ -43,12 +77,19 @@ def embedding_model() -> str:
     return get_settings().embedding_model.strip() or "text-embedding-3-small"
 
 
-# Corpus roots relative to project root
-CORPUS_GLOBS: list[tuple[str, str]] = [
-    ("runbook", "data/runbooks/**/*.md"),
-    ("incident", "data/incidents/incident-*.md"),
-    ("incident", "data/incidents/sample-incident.md"),
-    ("log", "data/logs/*.log"),
-    ("knowledge", "data/knowledge_base/**/*.md"),
+# Globs relative to ``corpus_data_root()`` (workspace or legacy ``data/``).
+CORPUS_RELATIVE_PATTERNS: list[tuple[str, str]] = [
+    ("runbook", "runbooks/**/*.md"),
+    ("incident", "incidents/incident-*.md"),
+    ("incident", "incidents/sample-incident.md"),
+    ("log", "logs/*.log"),
+    ("knowledge", "knowledge_base/**/*.md"),
+]
+
+# ADR / decision docs stay at repository root (not duplicated under workspace ``data/``).
+CORPUS_PROJECT_PATTERNS: list[tuple[str, str]] = [
     ("decision", "docs/decisions/**/*.md"),
 ]
+
+# Back-compat name for scripts / docs (same as ``CORPUS_RELATIVE_PATTERNS``).
+CORPUS_GLOBS = CORPUS_RELATIVE_PATTERNS

@@ -1,6 +1,9 @@
 # Private product planning (not for public repo)
 v2/
 
+# Workspace vector indexes (FAISS); corpus may stay unignored under workspaces/*/data/
+workspaces/**/index/
+
 # Secrets
 .env
 .env.*.local

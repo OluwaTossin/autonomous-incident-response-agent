@@ -25,7 +25,8 @@ COPY .rag_index ./.rag_index
 ENV PATH="/app/.venv/bin:$PATH" \
     API_HOST=0.0.0.0 \
     API_PORT=8000 \
-    ENABLE_GRADIO_UI=1
+    ENABLE_GRADIO_UI=1 \
+    RAG_INDEX_DIR=/app/.rag_index
 
 EXPOSE 8000
 

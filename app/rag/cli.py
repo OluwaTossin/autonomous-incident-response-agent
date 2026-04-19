@@ -7,8 +7,8 @@ import sys
 from pathlib import Path
 
 from app.rag.chunking import chunk_documents
-from app.rag.config import embedding_model as embedding_model_name
-from app.rag.config import project_root, rag_index_dir
+from app.rag.config import corpus_data_root, embedding_model as embedding_model_name
+from app.rag.config import rag_index_dir
 from app.rag.embeddings import embed_texts
 from app.rag.index_store import build_index, save_index
 from app.rag.loader import load_corpus
@@ -16,10 +16,10 @@ from app.rag.retrieve import retrieve
 
 
 def cmd_build_index(args: argparse.Namespace) -> int:
-    root = Path(args.root) if args.root else project_root()
+    root = Path(args.root) if args.root else corpus_data_root()
     docs = load_corpus(root)
     if not docs:
-        print("No documents found. Check CORPUS_GLOBS and repo layout.", file=sys.stderr)
+        print("No documents found. Check corpus layout under data/ or workspaces/.../data/.", file=sys.stderr)
         return 1
     chunks = chunk_documents(
         docs,
