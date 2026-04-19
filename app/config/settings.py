@@ -79,6 +79,10 @@ class Settings(BaseModel):
     api_rate_limit_disabled: bool = Field(default=False, validation_alias="API_RATE_LIMIT_DISABLED")
     api_rate_limit_triage: str = Field(default="", validation_alias="API_RATE_LIMIT_TRIAGE")
     api_rate_limit_ingest: str = Field(default="", validation_alias="API_RATE_LIMIT_INGEST")
+    api_rate_limit_admin_read: str = Field(default="", validation_alias="API_RATE_LIMIT_ADMIN_READ")
+    api_rate_limit_admin_upload: str = Field(default="", validation_alias="API_RATE_LIMIT_ADMIN_UPLOAD")
+    api_rate_limit_admin_reindex: str = Field(default="", validation_alias="API_RATE_LIMIT_ADMIN_REINDEX")
+    admin_upload_max_bytes: int = Field(default=5_242_880, validation_alias="ADMIN_UPLOAD_MAX_BYTES")
 
     cors_origins: str = Field(default="", validation_alias="CORS_ORIGINS")
     enable_gradio_ui: str = Field(default="1", validation_alias="ENABLE_GRADIO_UI")
@@ -95,6 +99,13 @@ class Settings(BaseModel):
     n8n_triage_feedback_jsonl: str = Field(default="", validation_alias="N8N_TRIAGE_FEEDBACK_JSONL")
     n8n_workflow_log_disable: str = Field(default="", validation_alias="N8N_WORKFLOW_LOG_DISABLE")
     n8n_triage_feedback_disable: str = Field(default="", validation_alias="N8N_TRIAGE_FEEDBACK_DISABLE")
+
+    @field_validator("admin_upload_max_bytes", mode="before")
+    @classmethod
+    def _admin_upload_max_bytes(cls, v: Any) -> int:
+        if v is None or v == "":
+            return 5_242_880
+        return int(v)
 
     @field_validator("aira_data_mode", mode="before")
     @classmethod

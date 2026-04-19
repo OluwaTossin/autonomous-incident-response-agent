@@ -7,6 +7,7 @@ from fastapi import HTTPException, Request
 from app.config import get_settings
 
 API_KEY_HEADER = "x-api-key"
+ADMIN_API_KEY_HEADER = "x-admin-api-key"
 
 
 def api_key_configured() -> bool:
@@ -23,6 +24,36 @@ def _header_value(request: Request, name: str) -> str | None:
 def client_api_key(request: Request) -> str | None:
     """Value from ``x-api-key`` / ``X-Api-Key`` if present."""
     return _header_value(request, API_KEY_HEADER) or _header_value(request, "X-Api-Key")
+
+
+def admin_api_key_configured() -> bool:
+    return bool(get_settings().admin_api_key.strip())
+
+
+def client_admin_api_key(request: Request) -> str | None:
+    return _header_value(request, ADMIN_API_KEY_HEADER) or _header_value(request, "X-Admin-Api-Key")
+
+
+def require_admin_api_key(request: Request) -> None:
+    """Require ``ADMIN_API_KEY`` via ``x-admin-api-key`` (mutating and listing admin routes)."""
+    if not admin_api_key_configured():
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "admin_disabled", "message": "Set ADMIN_API_KEY to enable /admin routes."},
+        )
+    expected = get_settings().admin_api_key.strip()
+    triage_key = get_settings().api_key.strip()
+    got = client_admin_api_key(request)
+    if got != expected:
+        if triage_key and got == triage_key:
+            raise HTTPException(
+                status_code=403,
+                detail={"error": "forbidden", "message": "Use x-admin-api-key with ADMIN_API_KEY, not the triage API_KEY."},
+            )
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "unauthorized", "message": "Invalid or missing x-admin-api-key."},
+        )
 
 
 def require_api_key_if_configured(request: Request) -> None:
@@ -50,3 +81,24 @@ def ingest_rate_limit_string() -> str:
         return "100000/minute"
     s = get_settings().api_rate_limit_ingest.strip()
     return s if s else "30/minute"
+
+
+def admin_read_rate_limit_string() -> str:
+    if rate_limit_disabled():
+        return "100000/minute"
+    s = get_settings().api_rate_limit_admin_read.strip()
+    return s if s else "120/minute"
+
+
+def admin_upload_rate_limit_string() -> str:
+    if rate_limit_disabled():
+        return "100000/minute"
+    s = get_settings().api_rate_limit_admin_upload.strip()
+    return s if s else "20/minute"
+
+
+def admin_reindex_rate_limit_string() -> str:
+    if rate_limit_disabled():
+        return "100000/minute"
+    s = get_settings().api_rate_limit_admin_reindex.strip()
+    return s if s else "2/minute"

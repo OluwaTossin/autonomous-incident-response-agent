@@ -39,6 +39,10 @@ These set `RAG_WORKSPACE_ONLY=1` for the build path so the corpus root is always
 uv run product-build-index --workspace demo -- --chunk-size 800
 ```
 
+## Admin HTTP API (ingestion)
+
+With **`ADMIN_API_KEY`** set, the API exposes **`POST /admin/upload`** (multipart `category` + `file`), **`GET /admin/files`**, **`POST /admin/reindex`**, and **`GET /admin/index-status`** — all require header **`x-admin-api-key`**. See [`docs/security.md`](security.md).
+
 ## Docker Compose (local product)
 
 The default [`docker-compose.yml`](../docker-compose.yml) bind-mounts **`./workspaces`** and **`./data`** into the API container and leaves **`RAG_INDEX_DIR`** empty so the index lives under `workspaces/<WORKSPACE_ID>/index/`. Build the index on the host before starting the stack, then run `./scripts/product/start.sh` (or `docker compose up -d --build`). **n8n** is behind the Compose profile **`automation`** — start it with `docker compose --profile automation up -d --build`.

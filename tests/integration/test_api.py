@@ -22,6 +22,7 @@ def test_root_lists_endpoints() -> None:
     assert data["gradio_ui"] == "/ui"
     assert "gradio_ui_mounted" in data
     assert isinstance(data["gradio_ui_mounted"], bool)
+    assert data.get("admin") is None or isinstance(data["admin"], dict)
 
 
 def test_health() -> None:
