@@ -2,6 +2,10 @@
 #   export CONFIG_YAML=config.yaml
 # Environment variables override values here for the same key.
 #
+# Workspace-specific file (created by PATCH /admin/operator-settings or by hand):
+#   workspaces/<WORKSPACE_ID>/config/operator_overrides.yaml
+# Same UPPER_SNAKE keys; merged after this file; process env still wins.
+#
 # Keys must match the environment variable names used by the app (UPPER_SNAKE).
 
 # WORKSPACE_ID: default

@@ -49,6 +49,8 @@ Deeper product framing: [`docs/decisions/capabilities-and-roadmap.md`](docs/deci
 
 ## Quick start
 
+**Step-by-step install (Compose, `.env`, first index):** [`docs/installation.md`](docs/installation.md) · **Product doc index:** [`docs/README.md`](docs/README.md)
+
 ```bash
 uv sync --extra dev          # add --extra ui for Gradio at /ui
 cp .env.example .env         # set OPENAI_API_KEY
@@ -127,6 +129,13 @@ Copy [`.env.example`](.env.example) → **`.env`**. Only **`.env`** is loaded by
 
 | Topic | Link |
 |-------|------|
+| **Product doc index** (install, configure, data, reindex, troubleshoot) | [`docs/README.md`](docs/README.md) |
+| **Installation** (prerequisites, `.env`, Compose) | [`docs/installation.md`](docs/installation.md) |
+| **Configuration** (precedence, keys, workspace) | [`docs/configuration.md`](docs/configuration.md) |
+| **Bring your own data** (workspace layout, admin API) | [`docs/bring-your-own-data.md`](docs/bring-your-own-data.md) |
+| **Reindexing** (CLI + `/admin/reindex`) | [`docs/reindexing.md`](docs/reindexing.md) |
+| **Security** (keys, TLS, Compose vs ECS, non-goals) | [`docs/security.md`](docs/security.md) |
+| **Troubleshooting** | [`docs/troubleshooting.md`](docs/troubleshooting.md) |
 | Architecture (Mermaid diagrams, PNG exports) | [`docs/architecture/system-architecture.md`](docs/architecture/system-architecture.md) |
 | **Version 1 build log** (phases 1–14, milestones, closure) | [`docs/build-journey/execution-v1.md`](docs/build-journey/execution-v1.md) |
 | Build journey index | [`docs/build-journey/README.md`](docs/build-journey/README.md) |
@@ -146,7 +155,7 @@ Copy [`.env.example`](.env.example) → **`.env`**. Only **`.env`** is loaded by
 ## Project status & branches
 
 - **Shipped:** Milestones **1–14** (see [Shipped milestones (summary)](#shipped-milestones-summary) and [`docs/build-journey/execution-v1.md`](docs/build-journey/execution-v1.md)).
-- **Version 2 (on `dev`):** through **V2.9 security baseline** — workspace-aware data, **`/admin/*`**, **`/operator-config`**, Next.js operator console, integration tests for auth/upload/rate limits, non-root API container. See [`docs/security.md`](docs/security.md). **Next:** V2.10 docs and V2.11 validation.
+- **Version 2 (on `dev`):** **V2.10** product docs — [`docs/README.md`](docs/README.md) (install, configure, BYO data, reindexing, security, troubleshooting). **Next:** V2.11 external validation (tests A–C).
 - **Workflow:** develop on **`dev`**, promote via **PR → `main`** — [`docs/contributing.md`](docs/contributing.md).
 - **Backlog:** TLS, Phase 15 ideas, deeper n8n metrics — tracked in [`docs/build-journey/execution-v1.md`](docs/build-journey/execution-v1.md), not part of the current closure.
 
@@ -171,7 +180,7 @@ Copy [`.env.example`](.env.example) → **`.env`**. Only **`.env`** is loaded by
 | **13** — Observability | Done | [`docs/deploy/observability.md`](docs/deploy/observability.md), [`infra/terraform/modules/monitoring/`](infra/terraform/modules/monitoring/) |
 | **14** — CI/CD | Done | [`.github/workflows/ci.yml`](.github/workflows/ci.yml), [`docs/deploy/ci.md`](docs/deploy/ci.md) |
 
-**Version 2 (productization, `dev`):** **V2.9** security baseline — **done** (auth/upload/rate-limit tests, dynamic Slowapi limit providers, non-root API `Dockerfile` user, expanded [`docs/security.md`](docs/security.md)). Operator UX: [`frontend/`](frontend/) (`/`, `/setup`, `/configuration`). **In progress toward V2 closure:** V2.10–V2.11 (full docs, external validation).
+**Version 2 (productization, `dev`):** **V2.10** documentation — **done** (curated [`docs/README.md`](docs/README.md), installation, configuration, reindexing, troubleshooting; BYO + `config.example.yaml` aligned). **V2.9** security baseline shipped earlier. **In progress toward V2 closure:** **V2.11** validation tests A–C.
 
 **Per-phase narrative** (endpoints, env vars, n8n behaviour, AWS steps): **[`docs/build-journey/execution-v1.md`](docs/build-journey/execution-v1.md)** — full spec lives there so this file stays scannable.
 
@@ -182,6 +191,7 @@ Copy [`.env.example`](.env.example) → **`.env`**. Only **`.env`** is loaded by
 | Path | Purpose |
 |------|---------|
 | [`docs/build-journey/execution-v1.md`](docs/build-journey/execution-v1.md) | Version 1 phased build log, milestones, evidence |
+| [`docs/README.md`](docs/README.md) | Product documentation index (V2.10) |
 | [`docs/security.md`](docs/security.md) | API keys, `/admin/*`, upload limits, threat notes |
 | [`sample_data/README.md`](sample_data/README.md) | Bundled demo corpus (`AIRA_DATA_MODE`) |
 | [`docs/contributing.md`](docs/contributing.md) | Branching & GitHub Actions secrets |
