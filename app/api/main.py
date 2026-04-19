@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from datetime import UTC, datetime
 from typing import Any
 
@@ -18,6 +17,7 @@ from starlette.responses import JSONResponse, RedirectResponse
 from starlette.routing import Mount
 
 from app.agent.nodes import parse_incident_payload
+from app.config import get_settings
 from app.api.n8n_routes import router as n8n_router
 from app.api.security import (
     client_api_key,
@@ -32,7 +32,7 @@ _log = logging.getLogger(__name__)
 
 
 def _cors_allowlist() -> list[str]:
-    raw = os.environ.get("CORS_ORIGINS", "").strip()
+    raw = get_settings().cors_origins.strip()
     if not raw:
         return ["http://localhost:3000", "http://127.0.0.1:3000"]
     return [o.strip() for o in raw.split(",") if o.strip()]
@@ -166,7 +166,7 @@ def post_triage(
 
 
 def _with_optional_gradio(application: FastAPI) -> FastAPI:
-    if os.environ.get("ENABLE_GRADIO_UI", "1").lower() in ("0", "false", "no"):
+    if not get_settings().gradio_enabled():
         return application
     try:
         from app.ui.gradio_app import with_gradio_ui

@@ -1,3 +1,6 @@
+# Private product planning (not for public repo)
+v2/
+
 # Secrets
 .env
 .env.*.local

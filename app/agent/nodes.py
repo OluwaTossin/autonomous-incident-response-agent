@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any, TypedDict
 
 from langchain_core.callbacks import UsageMetadataCallbackHandler
@@ -22,7 +21,7 @@ from app.agent.signal_reasoning import (
 )
 from app.models.incident import IncidentPayload
 from app.models.triage import TriageOutput
-from app.rag.config import openai_api_key, openai_base_url
+from app.config import get_settings
 from app.rag.retrieve import RetrievalHit, retrieve
 
 
@@ -110,7 +109,7 @@ def node_retrieval(state: TriageState) -> dict[str, Any]:
         return {}
     q = state.get("retrieval_query") or ""
     try:
-        hits = retrieve(q, top_k=int(os.environ.get("RAG_TOP_K", "8")))
+        hits = retrieve(q, top_k=get_settings().rag_top_k)
     except Exception as e:
         return {
             "rag_context": (
@@ -136,13 +135,13 @@ def node_retrieval(state: TriageState) -> dict[str, Any]:
 
 
 def _chat_model() -> ChatOpenAI:
-    model = os.environ.get("LLM_MODEL", "gpt-4o-mini").strip()
+    s = get_settings()
     kwargs: dict[str, Any] = {
-        "model": model,
-        "api_key": openai_api_key(),
-        "temperature": float(os.environ.get("LLM_TEMPERATURE", "0.2")),
+        "model": s.llm_model.strip() or "gpt-4o-mini",
+        "api_key": s.resolve_llm_api_key(),
+        "temperature": s.llm_temperature,
     }
-    base = openai_base_url()
+    base = s.openai_base_url_optional()
     if base:
         kwargs["base_url"] = base
     return ChatOpenAI(**kwargs)

@@ -96,4 +96,4 @@ Next.js 15 (App Router), TypeScript, Tailwind v4, **Monaco** (`@monaco-editor/re
 - [x] Loading overlay, disabled controls, triage error banner + retry, feedback error + retry
 - [ ] Optional: Recharts, `/triage` debug payload for retrieval scores
 
-Spec: root [`README.md`](../README.md) Phase 12 · [`execution.md`](../execution.md).
+Spec: root [`README.md`](../README.md) Phase 12 · [`execution-v1.md`](../docs/build-journey/execution-v1.md).
