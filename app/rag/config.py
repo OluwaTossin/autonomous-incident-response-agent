@@ -46,7 +46,12 @@ def corpus_data_root() -> Path:
     wd = workspace_data_dir()
     if s.rag_workspace_corpus_only:
         wd.mkdir(parents=True, exist_ok=True)
-        return wd
+        # Read corpus from workspace when populated; else demo bundle for product index build.
+        if _workspace_corpus_has_files(wd):
+            return wd
+        if s.aira_data_mode == "user":
+            return wd
+        return bundled_demo_corpus_root()
     if _workspace_corpus_has_files(wd):
         return wd
     # Empty workspace: demo corpus (bundled) vs user-only (no sample pollution).
