@@ -7,7 +7,7 @@ import shutil
 import pytest
 
 from app.config import reset_settings
-from app.rag.config import corpus_data_root, project_root
+from app.rag.config import bundled_demo_corpus_root, corpus_data_root, project_root
 from app.workspace.paths import workspace_data_dir, workspace_index_dir, workspace_root
 
 
@@ -24,12 +24,56 @@ def test_workspace_paths_use_default_id(monkeypatch: pytest.MonkeyPatch) -> None
         reset_settings()
 
 
-def test_corpus_data_root_falls_back_to_repo_data(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Empty workspace ``data/`` → use legacy ``data/``."""
+def test_corpus_data_root_demo_fallback_uses_bundled_sample(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Empty workspace + ``AIRA_DATA_MODE=demo`` → ``sample_data/default_demo/``."""
+    monkeypatch.delenv("RAG_CORPUS_ROOT", raising=False)
+    monkeypatch.delenv("AIRA_DATA_MODE", raising=False)
+    reset_settings()
+    try:
+        from app.rag.config import bundled_demo_corpus_root
+
+        assert corpus_data_root() == bundled_demo_corpus_root()
+    finally:
+        reset_settings()
+
+
+def test_corpus_data_root_user_mode_stays_workspace(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    """``AIRA_DATA_MODE=user`` with empty workspace → workspace ``data/`` only (no bundled sample)."""
+    monkeypatch.delenv("RAG_CORPUS_ROOT", raising=False)
+    monkeypatch.setenv("WORKSPACES_ROOT", str(tmp_path / "wsroot"))
+    monkeypatch.setenv("AIRA_DATA_MODE", "user")
+    reset_settings()
+    try:
+        assert corpus_data_root() == tmp_path / "wsroot" / "default" / "data"
+    finally:
+        reset_settings()
+
+
+def test_corpus_data_root_workspace_only_demo_reads_bundle_when_workspace_empty(
+    monkeypatch: pytest.MonkeyPatch, tmp_path,
+) -> None:
+    """``RAG_WORKSPACE_ONLY=1`` + empty workspace + demo mode → index from bundled sample."""
+    monkeypatch.setenv("WORKSPACES_ROOT", str(tmp_path / "wsroot"))
+    monkeypatch.setenv("RAG_WORKSPACE_ONLY", "1")
+    monkeypatch.delenv("AIRA_DATA_MODE", raising=False)
     monkeypatch.delenv("RAG_CORPUS_ROOT", raising=False)
     reset_settings()
     try:
-        assert corpus_data_root() == project_root() / "data"
+        assert corpus_data_root() == bundled_demo_corpus_root()
+    finally:
+        reset_settings()
+
+
+def test_corpus_data_root_workspace_only_user_stays_empty_workspace(
+    monkeypatch: pytest.MonkeyPatch, tmp_path,
+) -> None:
+    monkeypatch.setenv("WORKSPACES_ROOT", str(tmp_path / "wsroot"))
+    monkeypatch.setenv("RAG_WORKSPACE_ONLY", "1")
+    monkeypatch.setenv("AIRA_DATA_MODE", "user")
+    monkeypatch.delenv("RAG_CORPUS_ROOT", raising=False)
+    reset_settings()
+    try:
+        assert corpus_data_root() == tmp_path / "wsroot" / "default" / "data"
     finally:
         reset_settings()
 

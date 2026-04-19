@@ -9,7 +9,7 @@ import pytest
 from app.config import reset_settings
 from app.product.cli import main_build_index, main_validate_workspace
 from app.product.workspace_layout import validate_workspace_id, validate_workspace_layout
-from app.rag.config import corpus_data_root, workspace_corpus_has_files
+from app.rag.config import bundled_demo_corpus_root, corpus_data_root, workspace_corpus_has_files
 
 
 def test_validate_workspace_id_rejects_space() -> None:
@@ -56,18 +56,21 @@ def test_workspace_corpus_has_files_public_alias(tmp_path: Path) -> None:
     assert workspace_corpus_has_files(tmp_path / "empty") is False
 
 
-def test_corpus_data_root_workspace_only_creates_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_corpus_data_root_workspace_only_creates_workspace_and_reads_demo_corpus(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Workspace ``data/`` is created; empty corpus + demo mode reads ``sample_data/default_demo/``."""
     root = tmp_path / "wsroot"
     monkeypatch.setenv("WORKSPACES_ROOT", str(root))
     monkeypatch.setenv("WORKSPACE_ID", "newtenant")
     monkeypatch.setenv("RAG_CORPUS_ROOT", "")
     monkeypatch.setenv("RAG_WORKSPACE_ONLY", "1")
+    monkeypatch.delenv("AIRA_DATA_MODE", raising=False)
     reset_settings()
     try:
         cr = corpus_data_root()
-        assert cr.is_dir()
-        assert cr.name == "data"
         assert (root / "newtenant" / "data").is_dir()
+        assert cr == bundled_demo_corpus_root()
     finally:
         reset_settings()
 

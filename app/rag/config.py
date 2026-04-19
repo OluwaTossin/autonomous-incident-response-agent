@@ -15,6 +15,11 @@ def project_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def bundled_demo_corpus_root() -> Path:
+    """Synthetic corpus shipped with the repo (``AIRA_DATA_MODE=demo`` fallback)."""
+    return project_root() / "sample_data" / "default_demo"
+
+
 def rag_index_dir() -> Path:
     """FAISS bundle directory. Uses ``RAG_INDEX_DIR`` when set; else ``workspaces/<id>/index``."""
     from app.config import get_settings
@@ -41,10 +46,18 @@ def corpus_data_root() -> Path:
     wd = workspace_data_dir()
     if s.rag_workspace_corpus_only:
         wd.mkdir(parents=True, exist_ok=True)
-        return wd
+        # Read corpus from workspace when populated; else demo bundle for product index build.
+        if _workspace_corpus_has_files(wd):
+            return wd
+        if s.aira_data_mode == "user":
+            return wd
+        return bundled_demo_corpus_root()
     if _workspace_corpus_has_files(wd):
         return wd
-    return project_root() / "data"
+    # Empty workspace: demo corpus (bundled) vs user-only (no sample pollution).
+    if s.aira_data_mode == "user":
+        return wd
+    return bundled_demo_corpus_root()
 
 
 def _workspace_corpus_has_files(wd: Path) -> bool:
