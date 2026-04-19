@@ -28,6 +28,9 @@ services:
       API_HOST: "0.0.0.0"
       API_PORT: "8000"
       ENABLE_GRADIO_UI: "${ENABLE_GRADIO_UI:-1}"
+      # Explicit paths inside the container (bind mounts below).
+      RAG_INDEX_DIR: /app/.rag_index
+      RAG_CORPUS_ROOT: /app/data
     volumes:
       # Pre-built FAISS index from host (`uv run rag-build`); survives container rebuilds.
       - ./.rag_index:/app/.rag_index:ro

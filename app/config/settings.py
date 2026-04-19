@@ -55,7 +55,13 @@ class Settings(BaseModel):
     openrouter_api_key: str = Field(default="", validation_alias="OPENROUTER_API_KEY")
     openai_api_base: str = Field(default="", validation_alias="OPENAI_API_BASE")
     embedding_model: str = Field(default="text-embedding-3-small", validation_alias="EMBEDDING_MODEL")
-    rag_index_dir: str = Field(default=".rag_index", validation_alias="RAG_INDEX_DIR")
+    # Empty → ``workspaces/<WORKSPACE_ID>/index`` (see ``app/workspace/paths.py``).
+    rag_index_dir: str = Field(default="", validation_alias="RAG_INDEX_DIR")
+    workspace_id: str = Field(default="default", validation_alias="WORKSPACE_ID")
+    workspaces_root: str = Field(default="workspaces", validation_alias="WORKSPACES_ROOT")
+    # Override corpus root (absolute or repo-relative). Empty → workspace ``data/`` if it has
+    # corpus files, else legacy ``data/`` at repo root.
+    rag_corpus_root: str = Field(default="", validation_alias="RAG_CORPUS_ROOT")
 
     llm_model: str = Field(default="gpt-4o-mini", validation_alias="LLM_MODEL")
     llm_temperature: float = Field(default=0.2, validation_alias="LLM_TEMPERATURE")
