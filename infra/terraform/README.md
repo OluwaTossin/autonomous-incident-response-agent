@@ -49,6 +49,18 @@ Same variables are documented in [`.env.example`](../../.env.example) for conven
 
 **Dev vs prod state:** one shared bucket; **separate objects** — `aira/terraform/state/development.tfstate` and `aira/terraform/state/production.tfstate` (see [`bootstrap/README.md`](bootstrap/README.md)).
 
+### Capstone (frozen V1) vs Version 2 — separate remote state (required)
+
+**Do not** let the frozen capstone stack and the evolving V2 stack share the same remote state object. Sharing one `key=` means a V2 `apply` can plan destroys or drift against resources you thought belonged to capstone — **state pollution**.
+
+| Line | Rule |
+|------|------|
+| **Capstone / `capstone-v1`** | Use a **dedicated** `backend.hcl` (or env root) whose `key` is only for that line (e.g. `aira/terraform/state/capstone-v1.tfstate`). Apply Terraform only from that branch when touching this state. |
+| **Version 2** | Use a **different** backend: either a **different S3 `key`** in the same bucket (e.g. `aira/terraform/state/dev-v2.tfstate`) or, for stronger isolation, a **second bootstrap** (separate S3 bucket + lock table) used only by V2. Copy modules/tfvars across as needed — **never** copy `backend.hcl` state identity from capstone. |
+| **Copying code** | Duplicating `envs/dev` → `envs/dev-v2` (or similar) is fine; **each** copy must have its own `key` (and own `terraform.tfvars` / naming if resources must not collide). |
+
+**Operational habit:** before `terraform init` / `apply`, confirm `git branch` and that `backend.hcl` matches the line you intend (capstone vs V2).
+
 ## Dev (first apply)
 
 ```bash
@@ -89,4 +101,15 @@ After `terraform apply`, build the RAG index locally (`uv run rag-build`), then 
 ```
 
 The script pushes an **immutable tag** plus **`:latest`** and runs **`terraform apply`**; ECS uses the **digest** of **`:latest`** (no **`api_image_tag`** in tfvars). See **[`docs/deploy/aws-ecs.md`](../../docs/deploy/aws-ecs.md)** for SSM, prod bootstrap, and env vars (`TF_APPLY_AUTO_APPROVE`, `PUSH_ONLY`, etc.).
+
+## Tear down an environment
+
+From **repository root** (interactive confirm — type `dev` or `prod`). If you are in `infra/terraform/envs/dev` or `prod`, `cd` up to the repo root first — `./scripts/...` is relative to your **current** directory.
+
+```bash
+./scripts/terraform/destroy_dev.sh
+./scripts/terraform/destroy_prod.sh
+```
+
+Details, `TF_DESTROY_AUTO_APPROVE`, ALB deletion protection, and bootstrap: **[`scripts/terraform/README.md`](../../scripts/terraform/README.md)**.
 

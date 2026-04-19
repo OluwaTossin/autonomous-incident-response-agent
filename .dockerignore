@@ -9,7 +9,6 @@ data/eval/reports
 .cursor
 *.md
 !README.md
-execution.md
 .env
 .env.*
 !.env.example

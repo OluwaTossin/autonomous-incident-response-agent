@@ -19,6 +19,6 @@ High-level view of the **Autonomous DevOps Incident Response System**: alerts an
 | n8n workflows | Phase 6: `workflows/n8n/` |
 | AWS (ECS Fargate, S3/CloudFront UI, CloudWatch, etc.) | Phases 9–13: `Dockerfile`, `infra/terraform/` (Fargate API, static UI, CloudWatch dashboard/alarms + triage log metrics) |
 
-Aligns with the five layers in my `execution.md` (ingress, reasoning, retrieval, workflow, deployment), if present.
+Aligns with the five layers in [`execution-v1.md`](../build-journey/execution-v1.md) (ingress, reasoning, retrieval, workflow, deployment), if present.
 
 **Maintainer:** Oluwatosin Jegede

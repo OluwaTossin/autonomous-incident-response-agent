@@ -1,8 +1,9 @@
-# Execution Plan
+# Execution plan — Version 1 (phased build log)
 
-**Project:** Autonomous DevOps Incident Response Agent
+**Project:** Autonomous DevOps Incident Response Agent  
+**Path:** `docs/build-journey/execution-v1.md` (moved from repository root `execution.md` so the root `README` stays product-first.)
 
-This document is the single source of truth for build order, scope, and milestones. Prefer shipping local value before cloud complexity.
+This document is the source of truth for **Version 1** build order, scope, and milestones. Prefer shipping local value before cloud complexity.
 
 ### Phase completion (rolling)
 
@@ -94,10 +95,11 @@ Install and verify:
 
 ```
 autonomous-incident-response-agent/
-├── execution.md
 ├── README.md
 ├── .env.example
 ├── docs/
+│   ├── build-journey/
+│   │   └── execution-v1.md   # this phased build log
 │   ├── architecture/
 │   └── decisions/
 ├── app/

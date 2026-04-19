@@ -16,7 +16,7 @@ Detailed breakdowns below: open this file in **GitHub** or **Cursor** (Mermaid p
 
 ## 1. Five layers (product view)
 
-Maps to the phased build in [`execution.md`](../../execution.md).
+Maps to the phased build in [`execution-v1.md`](../build-journey/execution-v1.md).
 
 ```mermaid
 flowchart LR

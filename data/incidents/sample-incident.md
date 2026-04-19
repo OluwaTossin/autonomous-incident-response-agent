@@ -107,7 +107,7 @@ Place at the bottom of the same file or in `data/incidents/` JSONL.
 
 ## File naming
 
-`incident-NN-short-slug.md` — numeric prefix keeps sort order stable for datasets. In this repo, incident markdown lives under **`data/incidents/`** (per `execution.md`).
+`incident-NN-short-slug.md` — numeric prefix keeps sort order stable for datasets. In this repo, incident markdown lives under **`data/incidents/`** (per [`docs/build-journey/execution-v1.md`](../../docs/build-journey/execution-v1.md)).
 
 ---
 
