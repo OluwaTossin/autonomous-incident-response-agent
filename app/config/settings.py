@@ -62,6 +62,8 @@ class Settings(BaseModel):
     # Override corpus root (absolute or repo-relative). Empty → workspace ``data/`` if it has
     # corpus files, else legacy ``data/`` at repo root.
     rag_corpus_root: str = Field(default="", validation_alias="RAG_CORPUS_ROOT")
+    # When true, corpus root is always workspace ``data/`` (``product-build-index`` sets this).
+    rag_workspace_corpus_only: bool = Field(default=False, validation_alias="RAG_WORKSPACE_ONLY")
 
     llm_model: str = Field(default="gpt-4o-mini", validation_alias="LLM_MODEL")
     llm_temperature: float = Field(default=0.2, validation_alias="LLM_TEMPERATURE")
@@ -92,7 +94,7 @@ class Settings(BaseModel):
     n8n_workflow_log_disable: str = Field(default="", validation_alias="N8N_WORKFLOW_LOG_DISABLE")
     n8n_triage_feedback_disable: str = Field(default="", validation_alias="N8N_TRIAGE_FEEDBACK_DISABLE")
 
-    @field_validator("api_rate_limit_disabled", mode="before")
+    @field_validator("api_rate_limit_disabled", "rag_workspace_corpus_only", mode="before")
     @classmethod
     def _boolish(cls, v: Any) -> bool:
         if isinstance(v, bool):

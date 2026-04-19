@@ -30,7 +30,7 @@ def rag_index_dir() -> Path:
 
 
 def corpus_data_root() -> Path:
-    """Primary corpus root: ``RAG_CORPUS_ROOT``, else workspace ``data/`` if populated, else ``data/``."""
+    """Primary corpus root: explicit ``RAG_CORPUS_ROOT``, workspace-only mode, else heuristics."""
     from app.config import get_settings
     from app.workspace.paths import workspace_data_dir
 
@@ -39,6 +39,9 @@ def corpus_data_root() -> Path:
         p = Path(s.rag_corpus_root.strip())
         return p if p.is_absolute() else project_root() / p
     wd = workspace_data_dir()
+    if s.rag_workspace_corpus_only:
+        wd.mkdir(parents=True, exist_ok=True)
+        return wd
     if _workspace_corpus_has_files(wd):
         return wd
     return project_root() / "data"
@@ -57,6 +60,11 @@ def _workspace_corpus_has_files(wd: Path) -> bool:
         if any(wd.glob(pattern)):
             return True
     return False
+
+
+def workspace_corpus_has_files(wd: Path) -> bool:
+    """True if ``wd`` looks like a populated workspace corpus tree."""
+    return _workspace_corpus_has_files(wd)
 
 
 def openai_api_key() -> str:

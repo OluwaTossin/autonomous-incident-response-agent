@@ -59,6 +59,7 @@ uv run serve-api             # http://127.0.0.1:8000/docs
 | Command | Purpose |
 |---------|---------|
 | `uv run rag-build` / `rag-query` | Index + ad-hoc retrieval |
+| `uv run product-validate-workspace` / `uv run product-build-index` | Workspace layout check + workspace-scoped index build (see [`docs/bring-your-own-data.md`](docs/bring-your-own-data.md)) |
 | `uv run triage -f …` | One-shot triage CLI |
 | `uv run serve-api` | FastAPI + OpenAPI |
 | `uv run triage-eval` | Gold JSONL → report (~27 cases; live LLM) |
@@ -80,7 +81,7 @@ Operational knowledge lives under **`data/`** today:
 | [`data/logs/`](data/logs/) | Log excerpts (`.log` and notes) |
 | [`data/knowledge_base/`](data/knowledge_base/) | Extra context (ownership, tiers, …) |
 
-After you add or change files under **`data/`** (or **`workspaces/<WORKSPACE_ID>/data/`** when populated), run **`uv run rag-build`** so the FAISS bundle under **`workspaces/<WORKSPACE_ID>/index/`** is refreshed (gitignored), unless **`RAG_INDEX_DIR`** points elsewhere (e.g. `.rag_index`). See [`workspaces/README.md`](workspaces/README.md) and [`data/README.md`](data/README.md).
+After you add or change files under **`data/`** (or **`workspaces/<WORKSPACE_ID>/data/`** when populated), run **`uv run rag-build`** so the FAISS bundle under **`workspaces/<WORKSPACE_ID>/index/`** is refreshed (gitignored), unless **`RAG_INDEX_DIR`** points elsewhere (e.g. `.rag_index`). For a documented workspace layout, validation, and **`RAG_WORKSPACE_ONLY`** semantics, see **[`docs/bring-your-own-data.md`](docs/bring-your-own-data.md)**. See also [`workspaces/README.md`](workspaces/README.md) and [`data/README.md`](data/README.md).
 
 > **Note:** The repository ships a **synthetic** sample corpus for demos and eval — not live production data (see [Disclaimer](#disclaimer)).
 
