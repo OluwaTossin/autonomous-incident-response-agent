@@ -11,15 +11,16 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sys
 from typing import Any
+
+from app.config import get_settings
 
 _triage_log = logging.getLogger("aira.triage")
 
 
 def triage_metrics_log_disabled() -> bool:
-    return os.environ.get("TRIAGE_METRICS_LOG_DISABLE", "").lower() in ("1", "true", "yes")
+    return get_settings().triage_metrics_log_disable.strip().lower() in ("1", "true", "yes")
 
 
 def write_triage_metrics_line(payload: dict[str, Any]) -> None:

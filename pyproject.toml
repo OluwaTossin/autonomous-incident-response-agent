@@ -5,6 +5,7 @@ description = "Autonomous DevOps incident response — RAG, agent, API (phased b
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "pyyaml>=6.0.0",
     "openai>=1.40.0",
     "faiss-cpu>=1.8.0",
     "numpy>=1.26.0",

@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-import os
-
 import uvicorn
 
 
 def main() -> None:
-    host = os.environ.get("API_HOST", "127.0.0.1")
-    port = int(os.environ.get("API_PORT", "8000"))
+    from app.config import get_settings
+
+    s = get_settings()
+    host = s.api_host.strip() or "127.0.0.1"
+    port = int(s.api_port)
     uvicorn.run("app.api.main:app", host=host, port=port)

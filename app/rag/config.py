@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -17,7 +16,9 @@ def project_root() -> Path:
 
 
 def rag_index_dir() -> Path:
-    rel = os.environ.get("RAG_INDEX_DIR", ".rag_index")
+    from app.config import get_settings
+
+    rel = get_settings().rag_index_dir.strip() or ".rag_index"
     p = Path(rel)
     if not p.is_absolute():
         p = project_root() / p
@@ -25,25 +26,21 @@ def rag_index_dir() -> Path:
 
 
 def openai_api_key() -> str:
-    key = os.environ.get("OPENAI_API_KEY", "").strip()
-    if key:
-        return key
-    key = os.environ.get("OPENROUTER_API_KEY", "").strip()
-    if key:
-        return key
-    raise RuntimeError(
-        "No API key found. Copy .env.example to .env in the project root and set "
-        "OPENAI_API_KEY (or OPENROUTER_API_KEY). Keys in .env.example are not loaded."
-    )
+    from app.config import get_settings
+
+    return get_settings().resolve_llm_api_key()
 
 
 def openai_base_url() -> str | None:
-    base = os.environ.get("OPENAI_API_BASE", "").strip()
-    return base or None
+    from app.config import get_settings
+
+    return get_settings().openai_base_url_optional()
 
 
 def embedding_model() -> str:
-    return os.environ.get("EMBEDDING_MODEL", "text-embedding-3-small").strip()
+    from app.config import get_settings
+
+    return get_settings().embedding_model.strip() or "text-embedding-3-small"
 
 
 # Corpus roots relative to project root

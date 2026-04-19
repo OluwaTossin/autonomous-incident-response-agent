@@ -4,18 +4,18 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from app.config import get_settings
 from app.rag.config import project_root
 
 logger = logging.getLogger(__name__)
 
 
 def triage_audit_path() -> Path:
-    custom = os.environ.get("TRIAGE_AUDIT_JSONL", "").strip()
+    custom = get_settings().triage_audit_jsonl.strip()
     root = project_root()
     if custom:
         p = Path(custom)
@@ -48,7 +48,7 @@ def top_k_sources_from_hits(hits: list[dict[str, Any]] | None) -> list[dict[str,
 
 
 def _truncated_rag_context(text: str) -> str:
-    raw = os.environ.get("TRIAGE_AUDIT_MAX_RAG_CHARS", "200000").strip()
+    raw = get_settings().triage_audit_max_rag_chars.strip() or "200000"
     try:
         max_c = int(raw)
     except ValueError:
@@ -73,7 +73,7 @@ def append_triage_jsonl(
 
     Never raises to callers. Does not log API keys (only request body you send — scrub payloads).
     """
-    if os.environ.get("TRIAGE_AUDIT_DISABLE", "").lower() in ("1", "true", "yes"):
+    if get_settings().triage_audit_disable.strip().lower() in ("1", "true", "yes"):
         return
     path = triage_audit_path()
     try:

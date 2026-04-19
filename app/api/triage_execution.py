@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import time
 from typing import Any
 from uuid import uuid4
@@ -10,6 +9,7 @@ from uuid import uuid4
 from app.agent.graph import run_triage_with_audit
 from app.api.audit import append_triage_jsonl
 from app.api.metrics_log import write_triage_metrics_line
+from app.config import get_settings
 
 
 def run_full_triage(incident: dict[str, Any]) -> dict[str, Any]:
@@ -44,7 +44,7 @@ def run_full_triage(incident: dict[str, Any]) -> dict[str, Any]:
             "log_schema": "aira.triage.v1",
             "event": "triage_metrics",
             "triage_id": triage_id,
-            "stack_environment": os.environ.get("AIRA_ENV", "local"),
+            "stack_environment": get_settings().aira_env.strip() or "local",
             "outcome": "success" if success else "graph_error",
             "duration_ms": duration_ms,
             "success": success,

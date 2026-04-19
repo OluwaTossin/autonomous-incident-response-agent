@@ -1,0 +1,12 @@
+# Optional product tuning (non-secrets). Copy to e.g. `config.yaml` and set:
+#   export CONFIG_YAML=config.yaml
+# Environment variables override values here for the same key.
+#
+# Keys must match the environment variable names used by the app (UPPER_SNAKE).
+
+# RAG_TOP_K: 8
+# LLM_MODEL: gpt-4o-mini
+# LLM_TEMPERATURE: 0.2
+# EMBEDDING_MODEL: text-embedding-3-small
+# API_RATE_LIMIT_TRIAGE: "10/minute"
+# API_RATE_LIMIT_INGEST: "30/minute"
