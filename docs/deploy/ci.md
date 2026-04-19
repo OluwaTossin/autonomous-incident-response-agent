@@ -25,7 +25,7 @@ Runs on **push** to **`dev`** or **`main`**, and on **pull requests** targeting 
 | **terraform** | `terraform fmt -check` on `infra/terraform`, then `init -backend=false` + `validate` in `envs/dev` |
 | **test** | `pytest tests/unit tests/integration` (`ENABLE_GRADIO_UI=0`) |
 | **frontend** | `npm ci` + `npm run build` in `frontend/` (`NEXT_PUBLIC_API_BASE_URL` placeholder for static export) |
-| **docker** | `scripts/ci/stub_rag_index.py` (no OpenAI) then `docker build` — same `Dockerfile` as production |
+| **docker** | `docker build` on the root `Dockerfile` (stub index is created **inside** the image; no host `.rag_index/` required) |
 | **eval-smoke** | *Optional.* Runs only if repository secret **`OPENAI_API_KEY`** is set: `uv run rag-build` then `uv run triage-eval --limit 3` |
 
 Fork PRs and repos without **`OPENAI_API_KEY`** skip **eval-smoke**; the rest of CI still gates merges.
@@ -44,7 +44,7 @@ uv run ruff check app tests scripts/ci
 uv run pytest tests/unit tests/integration -q
 terraform fmt -check -recursive infra/terraform
 (cd infra/terraform/envs/dev && rm -rf .terraform && terraform init -backend=false -lockfile=readonly && terraform validate)
-uv run python scripts/ci/stub_rag_index.py && docker build -f Dockerfile -t aira-api:local .
+docker build -f Dockerfile -t aira-api:local .
 ```
 
 **Terraform lock file:** CI uses **Terraform 1.9.4** (pinned in the workflow). The committed **`.terraform.lock.hcl`** must include **multiple `h1:`** hashes (registry signing) or Linux **`terraform validate`** can fail with “cached package does not match checksums”. Refresh from any env root:

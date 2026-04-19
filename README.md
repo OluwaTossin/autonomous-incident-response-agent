@@ -276,7 +276,7 @@ uv run product-build-index --workspace default   # or: ./scripts/product/rebuild
 
 **n8n only** (API on host): `docker compose -f docker-compose.n8n.yml up -d` — full guide: [`workflows/n8n/README.md`](workflows/n8n/README.md).
 
-**AWS image:** `.rag_index` is baked in the root `Dockerfile` for ECS; local Compose prefers **`workspaces/<id>/index/`** when `RAG_INDEX_DIR` is unset. Run [`scripts/product/rebuild-index.sh`](scripts/product/rebuild-index.sh) before `docker compose` if that directory is empty. Rollout: [`scripts/aws/push_api_to_ecr.sh`](scripts/aws/push_api_to_ecr.sh) and [`docs/deploy/aws-ecs.md`](docs/deploy/aws-ecs.md).
+**AWS image:** the root `Dockerfile` always materializes a stub `.rag_index/` so `docker build` works without a local index; **`scripts/aws/push_api_to_ecr.sh`** overlays a host-built index via **`docker/bake_index_context/`** before building for ECS. Local Compose prefers **`workspaces/<id>/index/`** when `RAG_INDEX_DIR` is unset — run [`scripts/product/rebuild-index.sh`](scripts/product/rebuild-index.sh) before `docker compose` if that directory is empty. Rollout: [`scripts/aws/push_api_to_ecr.sh`](scripts/aws/push_api_to_ecr.sh) and [`docs/deploy/aws-ecs.md`](docs/deploy/aws-ecs.md).
 
 ---
 

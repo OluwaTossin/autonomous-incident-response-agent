@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Create a minimal `.rag_index` for Docker builds in CI (no OpenAI / embeddings).
 
-Writes one chunk and a single normalized vector so `COPY .rag_index` in the Dockerfile succeeds.
+Writes one chunk and a single normalized vector so the API Dockerfile can run without a host `.rag_index/`.
 Runtime retrieval quality is not the goal — only image build parity with production layout.
 """
 
