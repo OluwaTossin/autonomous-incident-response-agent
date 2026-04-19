@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/OluwaTossin/autonomous-incident-response-agent/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/OluwaTossin/autonomous-incident-response-agent/actions/workflows/ci.yml)
 
-AI-assisted **incident triage**: RAG over runbooks, incidents, and logs; LangGraph agent with guardrails; structured JSON over HTTP; optional UIs and n8n automation. Aligned with **AIOps** / **SRE copilot** patterns.
+**AI-assisted incident triage** for people who run production systems: **RAG** over runbooks, incidents, and logs; a **LangGraph** pipeline with guardrails; **structured JSON** from **FastAPI**; **Next.js** triage console; optional **Gradio** and **n8n**; **Terraform** on **AWS** (ECS, ALB, ECR) when you deploy beyond your laptop.
 
 **Maintainer:** Oluwatosin Jegede
 
@@ -10,14 +10,16 @@ AI-assisted **incident triage**: RAG over runbooks, incidents, and logs; LangGra
 
 ## Table of contents
 
-- [Overview](#overview)
+- [What this product does](#what-this-product-does)
+- [Who it is for](#who-it-is-for)
+- [Quick start](#quick-start)
+- [Bring your own data](#bring-your-own-data)
 - [Architecture](#architecture)
 - [Features](#features)
 - [Prerequisites](#prerequisites)
-- [Quick start](#quick-start)
 - [Documentation](#documentation)
 - [Project status & branches](#project-status--branches)
-- [Build phases (summary)](#build-phases-summary)
+- [Shipped milestones (summary)](#shipped-milestones-summary)
 - [Repository layout](#repository-layout)
 - [Development](#development)
 - [Testing](#testing)
@@ -27,19 +29,66 @@ AI-assisted **incident triage**: RAG over runbooks, incidents, and logs; LangGra
 
 ---
 
-## Overview
+## What this product does
 
-The service ingests **alert-style JSON**, retrieves relevant operational context, and returns **structured triage** (summary, severity, hypothesis, actions, escalation). Sample data and runbooks are **synthetic** (see [Disclaimer](#disclaimer)).
+You send **alert-style JSON**. The service **retrieves** relevant operational writing (runbooks, past incidents, logs), **reasons** with an LLM, and returns **structured triage**: summary, severity, hypothesis, recommended actions, escalation signal, and **evidence** you can audit. Optional hooks push outcomes into **Slack**-style flows or tickets via **n8n**.
 
-**Current closure:** Phases **1–14** are implemented (local dev through **AWS ECS**, **CloudWatch**, **GitHub Actions**). Optional extensions (e.g. TLS, Phase 15 backlog) are **out of scope for this closure** — see [`execution.md`](execution.md).
+**Shipped today:** end-to-end path from local dev through **AWS ECS**, **CloudWatch**, and **GitHub Actions** (milestones **1–14**). Per-phase evidence and checklists: **[`docs/build-journey/execution-v1.md`](docs/build-journey/execution-v1.md)**.
 
 Deeper product framing: [`docs/decisions/capabilities-and-roadmap.md`](docs/decisions/capabilities-and-roadmap.md).
 
 ---
 
+## Who it is for
+
+- **SREs / DevOps / platform engineers** who want grounded first-pass triage, not a generic chatbot
+- **Teams** already storing runbooks and incident writeups as files (Markdown, logs)
+- **Builders** who need a reference layout for RAG + agents + IaC + CI/CD in one repo
+
+---
+
+## Quick start
+
+```bash
+uv sync --extra dev          # add --extra ui for Gradio at /ui
+cp .env.example .env         # set OPENAI_API_KEY
+uv run rag-build             # builds .rag_index/ (gitignored)
+uv run serve-api             # http://127.0.0.1:8000/docs
+```
+
+| Command | Purpose |
+|---------|---------|
+| `uv run rag-build` / `rag-query` | Index + ad-hoc retrieval |
+| `uv run triage -f …` | One-shot triage CLI |
+| `uv run serve-api` | FastAPI + OpenAPI |
+| `uv run triage-eval` | Gold JSONL → report (~27 cases; live LLM) |
+
+**Full stack (API + n8n):** after `rag-build`, `docker compose up -d --build` — API **:18080**, n8n **:5678**. See [Docker Compose & n8n](#docker-compose--n8n).
+
+**Next.js console:** [`frontend/README.md`](frontend/README.md) — local dev defaults to `http://localhost:3000` against your API (set `NEXT_PUBLIC_API_BASE_URL` as documented there).
+
+---
+
+## Bring your own data
+
+Operational knowledge lives under **`data/`** today:
+
+| Path | Role |
+|------|------|
+| [`data/runbooks/`](data/runbooks/) | Procedures (e.g. `RB-*` markdown) |
+| [`data/incidents/`](data/incidents/) | Incident-style narratives |
+| [`data/logs/`](data/logs/) | Log excerpts (`.log` and notes) |
+| [`data/knowledge_base/`](data/knowledge_base/) | Extra context (ownership, tiers, …) |
+
+After you add or change files, run **`uv run rag-build`** so **`.rag_index/`** reflects your corpus (directory is gitignored). Layout details: [`data/README.md`](data/README.md).
+
+> **Note:** The repository ships a **synthetic** sample corpus for demos and eval — not live production data (see [Disclaimer](#disclaimer)).
+
+---
+
 ## Architecture
 
-![Logical architecture — ingress, triage API, RAG, LangGraph, n8n, AWS, CI/CD (Phases 1–14)](architectural-diagram.png)
+![Logical architecture — ingress, triage API, RAG, LangGraph, n8n, AWS, CI/CD](architectural-diagram.png)
 
 Layered diagrams, sequence views, and CI/CD detail (Mermaid): **[`docs/architecture/system-architecture.md`](docs/architecture/system-architecture.md)** · index [`docs/architecture/README.md`](docs/architecture/README.md)
 
@@ -51,7 +100,7 @@ Layered diagrams, sequence views, and CI/CD detail (Mermaid): **[`docs/architect
 - **Agent** — LangGraph pipeline: normalize → retrieve → analyze → enrich → decide → format
 - **API** — FastAPI: `POST /triage`, `POST /ingest-incident`, OpenAPI at `/docs`, optional `API_KEY` + rate limits
 - **Audit & feedback** — JSONL audit; `triage_id` for joins; n8n + Gradio feedback paths
-- **UIs** — Gradio at `/ui`; Next.js triage console in [`frontend/`](frontend/) (static export → S3)
+- **UIs** — Gradio at `/ui`; Next.js triage console in [`frontend/`](frontend/) (static export → S3 when deployed)
 - **Automation** — n8n workflows (Slack, mock Jira) — [`workflows/n8n/`](workflows/n8n/)
 - **Eval** — Gold set + `uv run triage-eval` — [`data/eval/`](data/eval/)
 - **AWS** — Terraform **dev/prod**, ECS Fargate, ALB, ECR, SSM secrets, optional static UI CDN
@@ -74,32 +123,13 @@ Copy [`.env.example`](.env.example) → **`.env`**. Only **`.env`** is loaded by
 
 ---
 
-## Quick start
-
-```bash
-uv sync --extra dev          # add --extra ui for Gradio at /ui
-cp .env.example .env         # set OPENAI_API_KEY
-uv run rag-build             # builds .rag_index/ (gitignored)
-uv run serve-api             # http://127.0.0.1:8000/docs
-```
-
-| Command | Purpose |
-|---------|---------|
-| `uv run rag-build` / `rag-query` | Index + ad-hoc retrieval |
-| `uv run triage -f …` | One-shot triage CLI |
-| `uv run serve-api` | FastAPI + OpenAPI |
-| `uv run triage-eval` | Gold JSONL → report (~27 cases; live LLM) |
-
-**Full stack (API + n8n):** after `rag-build`, `docker compose up -d --build` — API **:18080**, n8n **:5678**. See [Docker Compose & n8n](#docker-compose--n8n).
-
----
-
 ## Documentation
 
 | Topic | Link |
 |-------|------|
 | Architecture (Mermaid diagrams, PNG exports) | [`docs/architecture/system-architecture.md`](docs/architecture/system-architecture.md) |
-| Phased build log, milestones, closure | [`execution.md`](execution.md) |
+| **Version 1 build log** (phases 1–14, milestones, closure) | [`docs/build-journey/execution-v1.md`](docs/build-journey/execution-v1.md) |
+| Build journey index | [`docs/build-journey/README.md`](docs/build-journey/README.md) |
 | Branches (`dev` / `main`), GitHub secrets | [`docs/contributing.md`](docs/contributing.md) |
 | Deploy API to ECS / ECR / SSM | [`docs/deploy/aws-ecs.md`](docs/deploy/aws-ecs.md) |
 | CloudWatch dashboard & triage metrics | [`docs/deploy/observability.md`](docs/deploy/observability.md) |
@@ -115,13 +145,13 @@ uv run serve-api             # http://127.0.0.1:8000/docs
 
 ## Project status & branches
 
-- **Shipped:** Phases **1–14** (see [Build phases (summary)](#build-phases-summary)).
+- **Shipped:** Milestones **1–14** (see [Shipped milestones (summary)](#shipped-milestones-summary) and [`docs/build-journey/execution-v1.md`](docs/build-journey/execution-v1.md)).
 - **Workflow:** develop on **`dev`**, promote via **PR → `main`** — [`docs/contributing.md`](docs/contributing.md).
-- **Future:** TLS, Phase 15 ideas, deeper n8n metrics — tracked in [`execution.md`](execution.md), not part of the current closure.
+- **Backlog:** TLS, Phase 15 ideas, deeper n8n metrics — tracked in [`docs/build-journey/execution-v1.md`](docs/build-journey/execution-v1.md), not part of the current closure.
 
 ---
 
-## Build phases (summary)
+## Shipped milestones (summary)
 
 | Phase | Status | Primary artifacts |
 |-------|--------|-------------------|
@@ -140,7 +170,7 @@ uv run serve-api             # http://127.0.0.1:8000/docs
 | **13** — Observability | Done | [`docs/deploy/observability.md`](docs/deploy/observability.md), [`infra/terraform/modules/monitoring/`](infra/terraform/modules/monitoring/) |
 | **14** — CI/CD | Done | [`.github/workflows/ci.yml`](.github/workflows/ci.yml), [`docs/deploy/ci.md`](docs/deploy/ci.md) |
 
-**Per-phase narrative** (endpoints, env vars, n8n behaviour, AWS steps): see **[`execution.md`](execution.md)** — kept there to avoid duplicating a long spec in this file.
+**Per-phase narrative** (endpoints, env vars, n8n behaviour, AWS steps): **[`docs/build-journey/execution-v1.md`](docs/build-journey/execution-v1.md)** — full spec lives there so this file stays scannable.
 
 ---
 
@@ -148,10 +178,10 @@ uv run serve-api             # http://127.0.0.1:8000/docs
 
 | Path | Purpose |
 |------|---------|
-| [`execution.md`](execution.md) | Build order, detailed phases, milestones |
+| [`docs/build-journey/execution-v1.md`](docs/build-journey/execution-v1.md) | Version 1 phased build log, milestones, evidence |
 | [`docs/contributing.md`](docs/contributing.md) | Branching & GitHub Actions secrets |
 | [`docs/decisions/`](docs/decisions/) | ADRs, problem definition, roadmap |
-| [`docs/architecture/`](docs/architecture/) | [`system-architecture.md`](docs/architecture/system-architecture.md), [`architecture-overview.mmd`](docs/architecture/architecture-overview.mmd); overview PNG at repo root [`architectural-diagram.png`](architectural-diagram.png) |
+| [`docs/architecture/`](docs/architecture/) | [`system-architecture.md`](docs/architecture/system-architecture.md), diagrams; overview PNG at repo root [`architectural-diagram.png`](architectural-diagram.png) |
 | [`app/`](app/) | `rag`, `agent`, `api`, `models`, `ui`, `eval` |
 | [`data/`](data/) | Runbooks, incidents, logs, eval gold set |
 | [`frontend/`](frontend/) | Next.js triage console |
