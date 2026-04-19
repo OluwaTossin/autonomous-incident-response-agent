@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -12,6 +11,7 @@ from typing import Any
 
 from fastapi import APIRouter, Body
 
+from app.config import get_settings
 from app.rag.config import project_root
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/n8n", tags=["n8n"])
 
 
 def _workflow_log_path() -> Path:
-    custom = os.environ.get("N8N_WORKFLOW_LOG_JSONL", "").strip()
+    custom = get_settings().n8n_workflow_log_jsonl.strip()
     root = project_root()
     if custom:
         p = Path(custom)
@@ -29,7 +29,7 @@ def _workflow_log_path() -> Path:
 
 
 def _triage_feedback_path() -> Path:
-    custom = os.environ.get("N8N_TRIAGE_FEEDBACK_JSONL", "").strip()
+    custom = get_settings().n8n_triage_feedback_jsonl.strip()
     root = project_root()
     if custom:
         p = Path(custom)
@@ -66,7 +66,7 @@ def workflow_log(event: dict[str, Any] = Body(...)) -> dict[str, str]:
     Append one JSON line for n8n workflow diagnostics (Slack path + audit).
     Disable with N8N_WORKFLOW_LOG_DISABLE=1.
     """
-    if os.environ.get("N8N_WORKFLOW_LOG_DISABLE", "").lower() in ("1", "true", "yes"):
+    if get_settings().n8n_workflow_log_disable.strip().lower() in ("1", "true", "yes"):
         return {"status": "skipped"}
     path = _workflow_log_path()
     try:
@@ -92,7 +92,7 @@ def record_triage_feedback(event: dict[str, Any]) -> dict[str, str]:
 
     Used by the HTTP route and the Phase 7 Gradio UI.
     """
-    if os.environ.get("N8N_TRIAGE_FEEDBACK_DISABLE", "").lower() in ("1", "true", "yes"):
+    if get_settings().n8n_triage_feedback_disable.strip().lower() in ("1", "true", "yes"):
         return {"status": "skipped"}
     path = _triage_feedback_path()
     try:
