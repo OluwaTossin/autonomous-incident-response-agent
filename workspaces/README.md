@@ -6,7 +6,7 @@ Runtime corpus and vector index for the active **`WORKSPACE_ID`** (default: `def
 workspaces/<WORKSPACE_ID>/
 ├── data/          # runbooks, incidents, logs, knowledge_base (optional mirror of repo data/)
 ├── index/         # FAISS bundle (gitignored); default when RAG_INDEX_DIR is unset
-└── config/        # reserved for workspace-scoped overrides
+└── config/        # `operator_overrides.yaml` (optional; merged after CONFIG_YAML; env wins)
 ```
 
 If `workspaces/.../data` has no corpus files yet, **`AIRA_DATA_MODE=demo`** (default) falls back to bundled **`sample_data/default_demo/`**. With **`AIRA_DATA_MODE=user`**, there is no bundled fallback — only your workspace `data/` (plus merged `docs/decisions/` in the loader).

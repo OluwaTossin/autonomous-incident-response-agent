@@ -41,7 +41,22 @@ uv run product-build-index --workspace demo -- --chunk-size 800
 
 ## Admin HTTP API (ingestion)
 
-With **`ADMIN_API_KEY`** set, the API exposes **`POST /admin/upload`** (multipart `category` + `file`), **`GET /admin/files`**, **`POST /admin/reindex`**, and **`GET /admin/index-status`** — all require header **`x-admin-api-key`**. See [`docs/security.md`](security.md).
+With **`ADMIN_API_KEY`** set, the API exposes:
+
+- **`POST /admin/upload`** — multipart `category` + `file`
+- **`GET /admin/files`**
+- **`POST /admin/reindex`** and **`GET /admin/index-status`**
+- **`PATCH /admin/operator-settings`** — allowlisted non-secret fields → `workspaces/<WORKSPACE_ID>/config/operator_overrides.yaml` (env still wins)
+
+All **`/admin/*`** routes require header **`x-admin-api-key`**. See [`security.md`](security.md).
+
+### Example upload flow (Next.js)
+
+1. Set **`ADMIN_API_KEY`** in `.env` and restart the API.  
+2. Open the operator UI **Setup** page (`/setup` in dev; static export path in Compose).  
+3. Paste the admin key → **Save to session** (stored in `sessionStorage`, not in the static bundle).  
+4. Choose category, upload an allowed file, then **Rebuild index** if you want triage to use the new corpus immediately.  
+5. See also [`reindexing.md`](reindexing.md) and [`configuration.md`](configuration.md).
 
 ## Docker Compose (local product)
 
@@ -63,3 +78,10 @@ Set **`AIRA_DATA_MODE`** in `.env` or `config.yaml`:
 ## Legacy layout
 
 Repo-root **`data/`** now holds **eval** assets and optional **runtime JSONL** logs; the RAG markdown corpus lives under **`sample_data/default_demo/`** for the default demo path.
+
+## See also
+
+- [`installation.md`](installation.md) — first-time install and Compose  
+- [`configuration.md`](configuration.md) — env, `config.yaml`, operator overrides  
+- [`reindexing.md`](reindexing.md) — when and how to rebuild the index  
+- [`troubleshooting.md`](troubleshooting.md) — common failures  
