@@ -103,6 +103,8 @@ jobs:
         run: uv run python scripts/ci/stub_rag_index.py
       - name: Docker build
         run: docker build -f Dockerfile -t aira-api:ci .
+      - name: Docker build frontend (static nginx)
+        run: docker build -f frontend/Dockerfile --build-arg NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:18080 -t aira-ui:ci ./frontend
 
   # Job-level `if` cannot use `secrets.*` (GitHub rejects it). Optional OpenAI steps run in shell.
   eval-smoke:
