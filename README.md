@@ -146,6 +146,7 @@ Copy [`.env.example`](.env.example) → **`.env`**. Only **`.env`** is loaded by
 ## Project status & branches
 
 - **Shipped:** Milestones **1–14** (see [Shipped milestones (summary)](#shipped-milestones-summary) and [`docs/build-journey/execution-v1.md`](docs/build-journey/execution-v1.md)).
+- **Version 2 (on `dev`):** through **V2.8** — workspace-aware data, **`/admin/*`** ingestion, **`/operator-config`** + **`PATCH /admin/operator-settings`**, and the **Next.js operator console** (Triage · Setup · Configuration). See [`docs/security.md`](docs/security.md). **Next:** V2.9 security completion gate, then V2.10 docs and V2.11 validation.
 - **Workflow:** develop on **`dev`**, promote via **PR → `main`** — [`docs/contributing.md`](docs/contributing.md).
 - **Backlog:** TLS, Phase 15 ideas, deeper n8n metrics — tracked in [`docs/build-journey/execution-v1.md`](docs/build-journey/execution-v1.md), not part of the current closure.
 
@@ -169,6 +170,8 @@ Copy [`.env.example`](.env.example) → **`.env`**. Only **`.env`** is loaded by
 | **12** — Next.js UI | Done | [`frontend/`](frontend/), [`scripts/aws/deploy_frontend_cdn.sh`](scripts/aws/deploy_frontend_cdn.sh) |
 | **13** — Observability | Done | [`docs/deploy/observability.md`](docs/deploy/observability.md), [`infra/terraform/modules/monitoring/`](infra/terraform/modules/monitoring/) |
 | **14** — CI/CD | Done | [`.github/workflows/ci.yml`](.github/workflows/ci.yml), [`docs/deploy/ci.md`](docs/deploy/ci.md) |
+
+**Version 2 (productization, `dev`):** **V2.8** Next.js operator console + admin/operator HTTP APIs — **done** (commit message `feat(v2.8): …` on `dev`). Operator UX: [`frontend/`](frontend/) (`/`, `/setup`, `/configuration`). **In progress toward V2 closure:** V2.9–V2.11 (security gate, full docs, external validation).
 
 **Per-phase narrative** (endpoints, env vars, n8n behaviour, AWS steps): **[`docs/build-journey/execution-v1.md`](docs/build-journey/execution-v1.md)** — full spec lives there so this file stays scannable.
 

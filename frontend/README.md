@@ -1,6 +1,6 @@
-# Phase 12 — Presentation layer (Next.js) — shipped
+# Next.js operator console (Phase 12 + V2.8) — shipped
 
-Operational **incident triage console** — separate from Phase 7 Gradio (validation / debug). This app is for **demos**, **portfolio**, and “internal SRE tool” UX.
+Operational **AIRA** UI: **Triage**, **Setup** (corpus upload + reindex), and **Configuration** (read-only effective config + safe overrides via API). Separate from Phase 7 Gradio (validation / debug). For **demos**, **portfolio**, and internal SRE workflows.
 
 ## Troubleshooting
 
