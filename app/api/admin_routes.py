@@ -16,9 +16,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from slowapi import Limiter
 
 from app.api.security import (
-    admin_read_rate_limit_string,
-    admin_reindex_rate_limit_string,
-    admin_upload_rate_limit_string,
+    admin_read_rate_limit_provider,
+    admin_reindex_rate_limit_provider,
+    admin_upload_rate_limit_provider,
     require_admin_api_key,
 )
 from app.config import get_settings, reset_settings
@@ -192,7 +192,7 @@ def build_admin_router(limiter: Limiter) -> APIRouter:
     r = APIRouter(prefix="/admin", tags=["admin"])
 
     @r.get("/files", response_model=AdminFilesResponse)
-    @limiter.limit(admin_read_rate_limit_string())
+    @limiter.limit(admin_read_rate_limit_provider)
     def admin_list_files(
         request: Request,
         _admin: None = Depends(require_admin_api_key),
@@ -201,7 +201,7 @@ def build_admin_router(limiter: Limiter) -> APIRouter:
         return AdminFilesResponse(files=_list_workspace_files())
 
     @r.post("/upload", response_model=AdminUploadResponse)
-    @limiter.limit(admin_upload_rate_limit_string())
+    @limiter.limit(admin_upload_rate_limit_provider)
     async def admin_upload(
         request: Request,
         category: str = Form(..., description="runbooks | incidents | logs | knowledge_base"),
@@ -258,7 +258,7 @@ def build_admin_router(limiter: Limiter) -> APIRouter:
         return AdminUploadResponse(path=rel, size_bytes=size)
 
     @r.post("/reindex", response_model=AdminReindexResponse)
-    @limiter.limit(admin_reindex_rate_limit_string())
+    @limiter.limit(admin_reindex_rate_limit_provider)
     def admin_reindex(
         request: Request,
         _admin: None = Depends(require_admin_api_key),
@@ -301,7 +301,7 @@ def build_admin_router(limiter: Limiter) -> APIRouter:
             _reindex_lock.release()
 
     @r.get("/index-status", response_model=AdminIndexStatusResponse)
-    @limiter.limit(admin_read_rate_limit_string())
+    @limiter.limit(admin_read_rate_limit_provider)
     def admin_index_status(
         request: Request,
         _admin: None = Depends(require_admin_api_key),
@@ -316,7 +316,7 @@ def build_admin_router(limiter: Limiter) -> APIRouter:
         )
 
     @r.patch("/operator-settings", response_model=OperatorSettingsPatchResponse)
-    @limiter.limit(admin_upload_rate_limit_string())
+    @limiter.limit(admin_upload_rate_limit_provider)
     def admin_patch_operator_settings(
         request: Request,
         body: OperatorSettingsPatch,

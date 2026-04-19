@@ -102,3 +102,24 @@ def admin_reindex_rate_limit_string() -> str:
         return "100000/minute"
     s = get_settings().api_rate_limit_admin_reindex.strip()
     return s if s else "2/minute"
+
+
+# Zero-arg callables for slowapi (evaluated per request so ``reset_settings()`` picks up new env).
+def triage_rate_limit_provider() -> str:
+    return triage_rate_limit_string()
+
+
+def ingest_rate_limit_provider() -> str:
+    return ingest_rate_limit_string()
+
+
+def admin_read_rate_limit_provider() -> str:
+    return admin_read_rate_limit_string()
+
+
+def admin_upload_rate_limit_provider() -> str:
+    return admin_upload_rate_limit_string()
+
+
+def admin_reindex_rate_limit_provider() -> str:
+    return admin_reindex_rate_limit_string()

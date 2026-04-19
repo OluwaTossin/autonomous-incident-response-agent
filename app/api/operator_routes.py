@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 from slowapi import Limiter
 
-from app.api.security import require_api_key_if_configured, triage_rate_limit_string
+from app.api.security import require_api_key_if_configured, triage_rate_limit_provider
 from app.config import get_settings
 from app.workspace.paths import project_root, workspace_config_dir, workspace_data_dir, workspace_index_dir
 
@@ -45,7 +45,7 @@ def build_operator_router(limiter: Limiter) -> APIRouter:
     r = APIRouter(tags=["operator"])
 
     @r.get("/operator-config", response_model=OperatorConfigResponse)
-    @limiter.limit(triage_rate_limit_string())
+    @limiter.limit(triage_rate_limit_provider)
     def get_operator_config(
         request: Request,
         _auth: None = Depends(require_api_key_if_configured),
