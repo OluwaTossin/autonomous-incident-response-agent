@@ -9,6 +9,8 @@ data/eval/reports
 .cursor
 *.md
 !README.md
+# Bundled demo corpus for RAG (V2.6); otherwise root `*.md` would drop them from the build context.
+!sample_data/**/*.md
 .env
 .env.*
 !.env.example

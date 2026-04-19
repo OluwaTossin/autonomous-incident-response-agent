@@ -21,7 +21,7 @@ def load_corpus(root: Path | None = None) -> list[SourceDocument]:
     """
     Load corpus files.
 
-    ``root`` defaults to ``corpus_data_root()`` (workspace ``data/`` or legacy ``data/``).
+    ``root`` defaults to ``corpus_data_root()`` (workspace ``data/``, bundled ``sample_data/default_demo/`` in demo mode, or workspace-only in user mode).
     Decision docs are always merged from ``project_root()`` via ``CORPUS_PROJECT_PATTERNS``.
     """
     data_root = root or corpus_data_root()

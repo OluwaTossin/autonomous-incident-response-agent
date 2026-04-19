@@ -64,6 +64,8 @@ class Settings(BaseModel):
     rag_corpus_root: str = Field(default="", validation_alias="RAG_CORPUS_ROOT")
     # When true, corpus root is always workspace ``data/`` (``product-build-index`` sets this).
     rag_workspace_corpus_only: bool = Field(default=False, validation_alias="RAG_WORKSPACE_ONLY")
+    # ``demo`` — empty workspace uses bundled ``sample_data/default_demo/``. ``user`` — only workspace ``data/``.
+    aira_data_mode: str = Field(default="demo", validation_alias="AIRA_DATA_MODE")
 
     llm_model: str = Field(default="gpt-4o-mini", validation_alias="LLM_MODEL")
     llm_temperature: float = Field(default=0.2, validation_alias="LLM_TEMPERATURE")
@@ -93,6 +95,14 @@ class Settings(BaseModel):
     n8n_triage_feedback_jsonl: str = Field(default="", validation_alias="N8N_TRIAGE_FEEDBACK_JSONL")
     n8n_workflow_log_disable: str = Field(default="", validation_alias="N8N_WORKFLOW_LOG_DISABLE")
     n8n_triage_feedback_disable: str = Field(default="", validation_alias="N8N_TRIAGE_FEEDBACK_DISABLE")
+
+    @field_validator("aira_data_mode", mode="before")
+    @classmethod
+    def _aira_data_mode(cls, v: Any) -> str:
+        s = "demo" if v is None or str(v).strip() == "" else str(v).strip().lower()
+        if s not in ("demo", "user"):
+            raise ValueError("AIRA_DATA_MODE must be 'demo' or 'user'")
+        return s
 
     @field_validator("api_rate_limit_disabled", "rag_workspace_corpus_only", mode="before")
     @classmethod

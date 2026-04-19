@@ -9,7 +9,7 @@ workspaces/<WORKSPACE_ID>/
 └── config/        # reserved for workspace-scoped overrides
 ```
 
-If `workspaces/.../data` has no corpus files yet, the app falls back to repository **`data/`** for runbooks/incidents/logs so existing clones keep working.
+If `workspaces/.../data` has no corpus files yet, **`AIRA_DATA_MODE=demo`** (default) falls back to bundled **`sample_data/default_demo/`**. With **`AIRA_DATA_MODE=user`**, there is no bundled fallback — only your workspace `data/` (plus merged `docs/decisions/` in the loader).
 
 Override paths with **`RAG_CORPUS_ROOT`** and **`RAG_INDEX_DIR`** when needed (see root `.env.example`).
 

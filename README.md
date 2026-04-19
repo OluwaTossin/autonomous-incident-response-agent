@@ -76,12 +76,11 @@ Operational knowledge lives under **`data/`** today:
 
 | Path | Role |
 |------|------|
-| [`data/runbooks/`](data/runbooks/) | Procedures (e.g. `RB-*` markdown) |
-| [`data/incidents/`](data/incidents/) | Incident-style narratives |
-| [`data/logs/`](data/logs/) | Log excerpts (`.log` and notes) |
-| [`data/knowledge_base/`](data/knowledge_base/) | Extra context (ownership, tiers, …) |
+| [`sample_data/default_demo/`](sample_data/default_demo/) | Bundled synthetic corpus (runbooks, incidents, logs, knowledge base) used when **`AIRA_DATA_MODE=demo`** and workspace `data/` is empty |
+| [`workspaces/<WORKSPACE_ID>/data/`](workspaces/README.md) | Your operational files (same subfolder layout); primary when populated or in **`AIRA_DATA_MODE=user`** |
+| [`data/eval/`](data/eval/) | Gold JSONL and eval reports (`uv run triage-eval`) |
 
-After you add or change files under **`data/`** (or **`workspaces/<WORKSPACE_ID>/data/`** when populated), run **`uv run rag-build`** so the FAISS bundle under **`workspaces/<WORKSPACE_ID>/index/`** is refreshed (gitignored), unless **`RAG_INDEX_DIR`** points elsewhere (e.g. `.rag_index`). For a documented workspace layout, validation, and **`RAG_WORKSPACE_ONLY`** semantics, see **[`docs/bring-your-own-data.md`](docs/bring-your-own-data.md)**. See also [`workspaces/README.md`](workspaces/README.md) and [`data/README.md`](data/README.md).
+After you add or change corpus files under **`workspaces/.../data/`** (or rely on **`sample_data/default_demo/`** in demo mode), run **`uv run rag-build`** or **`./scripts/product/rebuild-index.sh`** so the FAISS bundle under **`workspaces/<WORKSPACE_ID>/index/`** is refreshed (gitignored), unless **`RAG_INDEX_DIR`** points elsewhere. See **[`docs/bring-your-own-data.md`](docs/bring-your-own-data.md)** · [`workspaces/README.md`](workspaces/README.md) · [`data/README.md`](data/README.md) · [`sample_data/README.md`](sample_data/README.md).
 
 > **Note:** The repository ships a **synthetic** sample corpus for demos and eval — not live production data (see [Disclaimer](#disclaimer)).
 
@@ -97,7 +96,7 @@ Layered diagrams, sequence views, and CI/CD detail (Mermaid): **[`docs/architect
 
 ## Features
 
-- **RAG** — FAISS index over runbooks, incidents, logs, knowledge base (`uv run rag-build`)
+- **RAG** — FAISS index over workspace or bundled `sample_data/default_demo/` corpus (`uv run rag-build`; `AIRA_DATA_MODE`)
 - **Agent** — LangGraph pipeline: normalize → retrieve → analyze → enrich → decide → format
 - **API** — FastAPI: `POST /triage`, `POST /ingest-incident`, OpenAPI at `/docs`, optional `API_KEY` + rate limits
 - **Audit & feedback** — JSONL audit; `triage_id` for joins; n8n + Gradio feedback paths
@@ -157,7 +156,7 @@ Copy [`.env.example`](.env.example) → **`.env`**. Only **`.env`** is loaded by
 | Phase | Status | Primary artifacts |
 |-------|--------|-------------------|
 | **1** — Problem definition | Done | [`docs/decisions/problem-definition.md`](docs/decisions/problem-definition.md) |
-| **2** — Knowledge & sample data | Done | [`data/runbooks/`](data/runbooks/), [`data/incidents/`](data/incidents/), [`data/logs/`](data/logs/), [`data/knowledge_base/`](data/knowledge_base/) |
+| **2** — Knowledge & sample data | Done | [`sample_data/default_demo/`](sample_data/default_demo/) (bundled corpus); [`data/eval/`](data/eval/) |
 | **3** — Local RAG | Done | [`app/rag/`](app/rag/) · `.rag_index/` (gitignored) |
 | **4** — LangGraph agent | Done | [`app/agent/`](app/agent/), [`app/models/`](app/models/) |
 | **5** — HTTP API | Done | [`app/api/`](app/api/) |
@@ -180,11 +179,12 @@ Copy [`.env.example`](.env.example) → **`.env`**. Only **`.env`** is loaded by
 | Path | Purpose |
 |------|---------|
 | [`docs/build-journey/execution-v1.md`](docs/build-journey/execution-v1.md) | Version 1 phased build log, milestones, evidence |
+| [`sample_data/README.md`](sample_data/README.md) | Bundled demo corpus (`AIRA_DATA_MODE`) |
 | [`docs/contributing.md`](docs/contributing.md) | Branching & GitHub Actions secrets |
 | [`docs/decisions/`](docs/decisions/) | ADRs, problem definition, roadmap |
 | [`docs/architecture/`](docs/architecture/) | [`system-architecture.md`](docs/architecture/system-architecture.md), diagrams; overview PNG at repo root [`architectural-diagram.png`](architectural-diagram.png) |
 | [`app/`](app/) | `rag`, `agent`, `api`, `models`, `ui`, `eval` |
-| [`data/`](data/) | Runbooks, incidents, logs, eval gold set |
+| [`data/`](data/) | Eval gold set, runtime JSONL logs; bundled corpus → [`sample_data/default_demo/`](sample_data/default_demo/) |
 | [`frontend/`](frontend/) | Next.js triage console |
 | [`workflows/n8n/`](workflows/n8n/) | Importable n8n JSON + README |
 | [`infra/terraform/`](infra/terraform/) | Modules, `envs/dev`, `envs/prod`, bootstrap |

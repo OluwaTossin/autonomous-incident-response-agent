@@ -20,6 +20,16 @@ def test_yaml_sets_rag_top_k_when_env_unset(tmp_path, monkeypatch: pytest.Monkey
         reset_settings()
 
 
+def test_invalid_aira_data_mode_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AIRA_DATA_MODE", "bogus")
+    reset_settings()
+    try:
+        with pytest.raises(ValueError, match="AIRA_DATA_MODE"):
+            get_settings()
+    finally:
+        reset_settings()
+
+
 def test_env_overrides_yaml_for_same_key(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     cfg = tmp_path / "cfg.yaml"
     cfg.write_text(yaml.dump({"RAG_TOP_K": 3}), encoding="utf-8")

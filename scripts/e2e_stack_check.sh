@@ -59,7 +59,7 @@ ev = d.get('evidence') or []
 assert len(ev) >= 1, 'missing evidence (expected merged retrieval/LLM citations)'
 if os.environ.get('STRICT_RAG_EVIDENCE') == '1':
     blob = ' '.join(str(e.get('source', '')).lower() for e in ev if isinstance(e, dict))
-    assert 'data/' in blob, 'STRICT_RAG_EVIDENCE: no evidence source under data/'
+    assert ('data/' in blob or 'sample_data/' in blob), 'STRICT_RAG_EVIDENCE: no evidence under data/ or sample_data/'
 print('    OK  triage_id=', d['triage_id'], ' severity=', d['severity'], sep='')
 "
 else

@@ -45,6 +45,17 @@ The default [`docker-compose.yml`](../docker-compose.yml) bind-mounts **`./works
 
 The **Next.js** service is a static export; at image build time it receives **`NEXT_PUBLIC_API_BASE_URL`** pointed at `http://127.0.0.1:<COMPOSE_API_PORT>` so your browser can call the published API port from the same machine.
 
+## Demo vs user corpus mode
+
+Set **`AIRA_DATA_MODE`** in `.env` or `config.yaml`:
+
+| Value | Behaviour when workspace `data/` has no corpus files |
+|--------|--------------------------------------------------------|
+| `demo` (default) | Use bundled **`sample_data/default_demo/`** (synthetic runbooks/incidents/logs). |
+| `user` | Use only workspace **`data/`** (empty until you add files); no silent mixing of bundled sample into your tree. |
+
+`RAG_CORPUS_ROOT` still overrides both when set (see `app/rag/config.py`).
+
 ## Legacy layout
 
-If `RAG_CORPUS_ROOT` is set, that path wins. If it is unset and workspace `data/` has no corpus files, the app falls back to repo-root `data/` (see `app/rag/config.py`).
+Repo-root **`data/`** now holds **eval** assets and optional **runtime JSONL** logs; the RAG markdown corpus lives under **`sample_data/default_demo/`** for the default demo path.

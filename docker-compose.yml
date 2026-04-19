@@ -2,7 +2,7 @@
 #
 # Prerequisites:
 #   1. Copy `.env.example` → `.env` and set OPENAI_API_KEY.
-#   2. Build the RAG index on the host (workspace layout):
+#   2. Build the RAG index on the host (workspace layout; demo corpus lives in ./sample_data):
 #        uv run product-build-index --workspace default
 #      Legacy: `uv run rag-build` still writes `workspaces/<id>/index/` when RAG_INDEX_DIR is unset,
 #      or use `.rag_index` only if you set RAG_INDEX_DIR in `.env`.
@@ -42,6 +42,7 @@ services:
     volumes:
       - ./workspaces:/app/workspaces
       - ./data:/app/data
+      - ./sample_data:/app/sample_data:ro
     healthcheck:
       test:
         ["CMD", "curl", "--fail", "--silent", "--show-error", "--max-time", "4", "http://localhost:8000/health"]

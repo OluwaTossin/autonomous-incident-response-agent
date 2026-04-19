@@ -6,6 +6,7 @@
 
 # WORKSPACE_ID: default
 # WORKSPACES_ROOT: workspaces
+# AIRA_DATA_MODE: demo
 # RAG_WORKSPACE_ONLY: 0
 # RAG_CORPUS_ROOT: data
 # RAG_INDEX_DIR: .rag_index

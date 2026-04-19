@@ -1,29 +1,17 @@
 # Data directory
 
-Phase 2 **operational knowledge** and **sample telemetry** for RAG and evaluation (see root `README.md` for phase status).
+Runtime **JSONL logs** (audit, n8n, triage feedback) and the **evaluation** gold set live here. The **RAG runbook/incident/log corpus** moved to **[`sample_data/default_demo/`](../sample_data/default_demo/)** in Version 2.6 so demos do not overwrite operator workspaces.
 
 ## Layout
 
 | Subfolder | Role |
 |-----------|------|
-| **`runbooks/`** | SRE procedural corpus (`RB-*`); primary retrieval source alongside incidents and logs. |
-| **`incidents/`** | Synthetic incident postmortems (`incident-*.md`) + `sample-incident.md`. |
-| **`logs/`** | Synthetic `.log` bundles + `sample-log.md`. |
-| **`knowledge_base/`** | Supplementary ops docs (escalation, ownership, dependency tiers, first-response checklist). |
-| **`eval/`** | Phase 8 gold JSONL + README (`gold.jsonl` for `uv run triage-eval`). |
+| **`eval/`** | Gold JSONL + README (`gold.jsonl` for `uv run triage-eval`). |
+| **`logs/`** | Optional local JSONL outputs (`triage_outputs.jsonl`, etc.; see root `.gitignore`). |
 
-## Inventory
+## RAG corpus location
 
-- **Runbooks** (procedures): `data/runbooks/*.md` — **11** files  
-- **Incidents:** `data/incidents/incident-*.md` — **20** files (+ `sample-incident.md`)  
-- **Logs:** `data/logs/*.log` — **21** files (+ `sample-log.md`)  
-- **Knowledge base:** `data/knowledge_base/*.md` — **5** files (README + 4 guides)
+- **Demo / default:** `AIRA_DATA_MODE=demo` → empty workspace falls back to **`sample_data/default_demo/`**.
+- **User-only:** `AIRA_DATA_MODE=user` → corpus is only **`workspaces/<WORKSPACE_ID>/data/`** (or `RAG_CORPUS_ROOT` if set).
 
-## Phase 3 loaders
-
-Suggested globs from repo root:
-
-- `data/runbooks/**/*.md`
-- `data/incidents/incident-*.md`
-- `data/logs/*.log`
-- `data/knowledge_base/**/*.md`
+See [`sample_data/README.md`](../sample_data/README.md) and [`docs/bring-your-own-data.md`](../docs/bring-your-own-data.md).
