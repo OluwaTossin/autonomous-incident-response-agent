@@ -6,7 +6,7 @@ Local **[n8n](https://n8n.io/)** workflows that react to **triage-shaped JSON** 
 
 1. **FastAPI** reachable from n8n:
    - **Phase 6 (this file):** API on the host (`uv run serve-api`, default `http://127.0.0.1:8000`).
-   - **Phase 9 (full stack):** use repo-root **`docker compose up`** — n8n gets **`TRIAGE_API_BASE=http://api:8000`** automatically; no `host.docker.internal` needed.
+   - **Phase 9 / V2.5 (full stack):** use repo-root **`docker compose --profile automation up -d --build`** (API + Next.js + n8n) — n8n gets **`TRIAGE_API_BASE=http://api:8000`** automatically; no `host.docker.internal` needed. API + UI only: **`docker compose up -d --build`** (no profile).
 2. **Docker** (for n8n)
 3. If the API uses **`API_KEY`** (repo-root `.env`), any n8n **HTTP Request** node that calls **`POST /triage`** or **`POST /ingest-incident`** must send header **`x-api-key: <same value>`**. **`/n8n/*`** routes do not require this key.
 4. Optional: **Slack Incoming Webhook** — in the **repository root** `.env` (same file as API keys; **gitignored**), set:
@@ -33,7 +33,7 @@ Open **http://localhost:5678**, create an owner account (first visit), then **Im
 
 **Activate** each workflow (toggle in n8n UI) so webhooks listen.
 
-**Stack E2E:** from the repo root, with the API reachable and **`incident-ticket-creation` active**, run [`scripts/e2e_stack_check.sh`](../scripts/e2e_stack_check.sh) (defaults to host **:18080** with `docker compose`; set `API_BASE` for other ports).
+**Stack E2E:** from the repo root, with the API reachable and **`incident-ticket-creation` active**, run [`scripts/e2e_stack_check.sh`](../scripts/e2e_stack_check.sh) (defaults to host **:18080** with `docker compose`; set `API_BASE` for other ports). If n8n is not running (default Compose without **`automation`** profile), use **`SKIP_N8N=1`**.
 
 ### Docker → host API
 

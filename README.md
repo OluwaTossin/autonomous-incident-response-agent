@@ -23,7 +23,7 @@
 - [Repository layout](#repository-layout)
 - [Development](#development)
 - [Testing](#testing)
-- [Docker Compose & n8n](#docker-compose--n8n)
+- [Docker Compose (product stack)](#docker-compose-product-stack)
 - [Contributing](#contributing)
 - [Disclaimer](#disclaimer)
 
@@ -52,7 +52,7 @@ Deeper product framing: [`docs/decisions/capabilities-and-roadmap.md`](docs/deci
 ```bash
 uv sync --extra dev          # add --extra ui for Gradio at /ui
 cp .env.example .env         # set OPENAI_API_KEY
-uv run rag-build             # builds workspaces/<id>/index/ (gitignored) unless RAG_INDEX_DIR is set
+uv run product-build-index --workspace default   # or `uv run rag-build` — index under workspaces/<id>/index/ unless RAG_INDEX_DIR is set
 uv run serve-api             # http://127.0.0.1:8000/docs
 ```
 
@@ -64,7 +64,7 @@ uv run serve-api             # http://127.0.0.1:8000/docs
 | `uv run serve-api` | FastAPI + OpenAPI |
 | `uv run triage-eval` | Gold JSONL → report (~27 cases; live LLM) |
 
-**Full stack (API + n8n):** after `rag-build`, `docker compose up -d --build` — API **:18080**, n8n **:5678**. See [Docker Compose & n8n](#docker-compose--n8n).
+**Full stack (API + Next.js):** after `./scripts/product/rebuild-index.sh`, `./scripts/product/start.sh` — API **:18080**, UI **:3000**. Optional n8n: add `--profile automation`. See [Docker Compose (product stack)](#docker-compose-product-stack).
 
 **Next.js console:** [`frontend/README.md`](frontend/README.md) — local dev defaults to `http://localhost:3000` against your API (set `NEXT_PUBLIC_API_BASE_URL` as documented there).
 
@@ -188,7 +188,7 @@ Copy [`.env.example`](.env.example) → **`.env`**. Only **`.env`** is loaded by
 | [`frontend/`](frontend/) | Next.js triage console |
 | [`workflows/n8n/`](workflows/n8n/) | Importable n8n JSON + README |
 | [`infra/terraform/`](infra/terraform/) | Modules, `envs/dev`, `envs/prod`, bootstrap |
-| [`scripts/`](scripts/) | E2E check, benchmarks, AWS helper scripts |
+| [`scripts/`](scripts/) | E2E check, benchmarks, AWS helpers, [`scripts/product/`](scripts/product/) (Compose + index) |
 | [`examples/sample_incident_payload.json`](examples/sample_incident_payload.json) | Sample payload for CLI / API |
 
 ---
@@ -241,20 +241,28 @@ Layout: `tests/unit/`, `tests/integration/` (integration mocks the LLM where app
 
 ---
 
-## Docker Compose & n8n
+## Docker Compose (product stack)
+
+**Default stack** (API + Next.js static operator UI): **n8n is not started** unless you opt in with the Compose **`automation`** profile.
 
 ```bash
-uv run rag-build
-docker compose up -d --build
+uv run product-build-index --workspace default   # or: ./scripts/product/rebuild-index.sh
+./scripts/product/start.sh                       # same as: docker compose up -d --build
 ```
 
-- API: `http://127.0.0.1:18080/docs` · UI: `http://127.0.0.1:18080/ui` · n8n: `http://localhost:5678`
-- Host port: override with `COMPOSE_API_PORT=8000` if needed.
-- E2E smoke: [`scripts/e2e_stack_check.sh`](scripts/e2e_stack_check.sh) (see script for `API_BASE`).
+- **API (OpenAPI / Gradio):** `http://127.0.0.1:18080/docs` and `http://127.0.0.1:18080/ui` (override host port with `COMPOSE_API_PORT`).
+- **Next.js (static export via nginx):** `http://127.0.0.1:3000/` (`COMPOSE_UI_PORT` to change). The UI is built with `NEXT_PUBLIC_API_BASE_URL` pointing at that API port so the **browser** can reach the API from your machine.
+- **n8n (optional):** `docker compose --profile automation up -d --build` — then `http://127.0.0.1:5678/`. Same profile as [`./scripts/product/start.sh`](scripts/product/start.sh) when you pass `--profile automation`.
+
+**Volumes:** `./workspaces` (corpus + index per `WORKSPACE_ID`) and `./data` (legacy corpus + logs) are bind-mounted into the API container. **Security:** the API listens on `0.0.0.0` **inside** the container so port publishing works; only publish `COMPOSE_API_PORT` / `COMPOSE_UI_PORT` on interfaces you trust. Do not expose **`ADMIN_API_KEY`**-protected routes (when implemented) to the public internet without TLS and a reverse proxy — see product notes in [`docs/bring-your-own-data.md`](docs/bring-your-own-data.md).
+
+**Helper scripts:** [`scripts/product/start.sh`](scripts/product/start.sh), [`rebuild-index.sh`](scripts/product/rebuild-index.sh), [`reset.sh`](scripts/product/reset.sh) (index wipe only; requires typing `DELETE`).
+
+**E2E smoke:** [`scripts/e2e_stack_check.sh`](scripts/e2e_stack_check.sh) — without n8n use `SKIP_N8N=1` (n8n is off unless `--profile automation`).
 
 **n8n only** (API on host): `docker compose -f docker-compose.n8n.yml up -d` — full guide: [`workflows/n8n/README.md`](workflows/n8n/README.md).
 
-**AWS image:** `.rag_index` is baked in the Dockerfile; run `rag-build` before `docker build`. Rollout: [`scripts/aws/push_api_to_ecr.sh`](scripts/aws/push_api_to_ecr.sh) and [`docs/deploy/aws-ecs.md`](docs/deploy/aws-ecs.md).
+**AWS image:** `.rag_index` is baked in the root `Dockerfile` for ECS; local Compose prefers **`workspaces/<id>/index/`** when `RAG_INDEX_DIR` is unset. Run [`scripts/product/rebuild-index.sh`](scripts/product/rebuild-index.sh) before `docker compose` if that directory is empty. Rollout: [`scripts/aws/push_api_to_ecr.sh`](scripts/aws/push_api_to_ecr.sh) and [`docs/deploy/aws-ecs.md`](docs/deploy/aws-ecs.md).
 
 ---
 

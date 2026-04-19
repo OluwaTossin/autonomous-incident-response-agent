@@ -39,6 +39,12 @@ These set `RAG_WORKSPACE_ONLY=1` for the build path so the corpus root is always
 uv run product-build-index --workspace demo -- --chunk-size 800
 ```
 
+## Docker Compose (local product)
+
+The default [`docker-compose.yml`](../docker-compose.yml) bind-mounts **`./workspaces`** and **`./data`** into the API container and leaves **`RAG_INDEX_DIR`** empty so the index lives under `workspaces/<WORKSPACE_ID>/index/`. Build the index on the host before starting the stack, then run `./scripts/product/start.sh` (or `docker compose up -d --build`). **n8n** is behind the Compose profile **`automation`** — start it with `docker compose --profile automation up -d --build`.
+
+The **Next.js** service is a static export; at image build time it receives **`NEXT_PUBLIC_API_BASE_URL`** pointed at `http://127.0.0.1:<COMPOSE_API_PORT>` so your browser can call the published API port from the same machine.
+
 ## Legacy layout
 
 If `RAG_CORPUS_ROOT` is set, that path wins. If it is unset and workspace `data/` has no corpus files, the app falls back to repo-root `data/` (see `app/rag/config.py`).

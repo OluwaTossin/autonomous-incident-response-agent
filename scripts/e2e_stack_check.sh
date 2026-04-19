@@ -9,7 +9,7 @@
 #   API_BASE      default http://127.0.0.1:8000
 #   N8N_BASE      default http://127.0.0.1:5678
 #   SKIP_TRIAGE=1 skip live LLM call (health + n8n only)
-#   SKIP_N8N=1    skip webhook call (health + triage only)
+#   SKIP_N8N=1    skip webhook call (health + triage only; use when Compose runs without --profile automation)
 #   STRICT_RAG_EVIDENCE=1  require ≥1 evidence source under data/ (stricter)
 #   API_KEY       when set, sent as x-api-key on POST /triage (must match server API_KEY)
 #
