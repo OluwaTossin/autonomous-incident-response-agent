@@ -23,6 +23,8 @@ dev = ["pytest>=8.0.0", "ruff>=0.6.0", "httpx>=0.27.0"]
 ui = ["gradio>=5.0.0"]
 
 [project.scripts]
+product-build-index = "app.product.cli:cli_build"
+product-validate-workspace = "app.product.cli:cli_validate"
 rag-build = "app.rag.cli:main_build"
 rag-query = "app.rag.cli:main_query"
 triage = "app.agent.cli:main"
