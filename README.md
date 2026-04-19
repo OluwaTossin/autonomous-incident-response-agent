@@ -23,7 +23,7 @@
 - [Repository layout](#repository-layout)
 - [Development](#development)
 - [Testing](#testing)
-- [Docker Compose & n8n](#docker-compose--n8n)
+- [Docker Compose (product stack)](#docker-compose-product-stack)
 - [Contributing](#contributing)
 - [Disclaimer](#disclaimer)
 
