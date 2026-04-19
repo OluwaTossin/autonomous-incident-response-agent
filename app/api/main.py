@@ -23,10 +23,10 @@ from app.api.operator_routes import build_operator_router
 from app.api.n8n_routes import router as n8n_router
 from app.api.security import (
     client_api_key,
-    ingest_rate_limit_string,
+    ingest_rate_limit_provider,
     rate_limit_disabled,
     require_api_key_if_configured,
-    triage_rate_limit_string,
+    triage_rate_limit_provider,
 )
 from app.api.triage_execution import run_full_triage
 
@@ -128,7 +128,7 @@ def _validate_incident_body(body: Any) -> dict[str, Any]:
 
 
 @app.post("/ingest-incident")
-@_limiter.limit(ingest_rate_limit_string())
+@_limiter.limit(ingest_rate_limit_provider)
 def ingest_incident(
     request: Request,
     body: dict[str, Any] = Body(
@@ -155,7 +155,7 @@ def ingest_incident(
 
 
 @app.post("/triage")
-@_limiter.limit(triage_rate_limit_string())
+@_limiter.limit(triage_rate_limit_provider)
 def post_triage(
     request: Request,
     body: dict[str, Any] = Body(

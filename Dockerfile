@@ -23,6 +23,13 @@ RUN uv sync --frozen --no-dev --extra ui
 # Docker Compose still bind-mounts `./.rag_index` over this path when present.
 COPY .rag_index ./.rag_index
 
+# Non-root API process (V2.9). Bind-mounted `./workspaces` on the host should be writable by UID 1000
+# on Linux (or override with `user:` in Compose / task definition to match your volume owner).
+RUN groupadd --system --gid 1000 aira \
+    && useradd --system --uid 1000 --gid aira --create-home --home-dir /app --shell /usr/sbin/nologin aira \
+    && chown -R aira:aira /app
+USER aira
+
 ENV PATH="/app/.venv/bin:$PATH" \
     API_HOST=0.0.0.0 \
     API_PORT=8000 \
