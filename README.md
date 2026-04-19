@@ -257,7 +257,7 @@ uv run product-build-index --workspace default   # or: ./scripts/product/rebuild
 
 **Volumes:** `./workspaces` (corpus + index per `WORKSPACE_ID`) and `./data` (legacy corpus + logs) are bind-mounted into the API container. **Security:** the API listens on `0.0.0.0` **inside** the container so port publishing works; only publish `COMPOSE_API_PORT` / `COMPOSE_UI_PORT` on interfaces you trust. Do not expose **`ADMIN_API_KEY`**-protected routes (when implemented) to the public internet without TLS and a reverse proxy — see product notes in [`docs/bring-your-own-data.md`](docs/bring-your-own-data.md).
 
-**Helper scripts:** [`scripts/product/start.sh`](scripts/product/start.sh), [`rebuild-index.sh`](scripts/product/rebuild-index.sh), [`reset.sh`](scripts/product/reset.sh) (index wipe only; requires typing `DELETE`).
+**Helper scripts:** [`scripts/product/start.sh`](scripts/product/start.sh), [`rebuild-index.sh`](scripts/product/rebuild-index.sh), [`reset.sh`](scripts/product/reset.sh) (index wipe only; requires typing `DELETE`), [`verify-frontend-bundle.sh`](scripts/product/verify-frontend-bundle.sh) (static `out/` must not contain forbidden secret markers).
 
 **E2E smoke:** [`scripts/e2e_stack_check.sh`](scripts/e2e_stack_check.sh) — without n8n use `SKIP_N8N=1` (n8n is off unless `--profile automation`).
 

@@ -45,3 +45,29 @@ export function publicTriageApiKey(): string | null {
   const raw = process.env.NEXT_PUBLIC_TRIAGE_API_KEY?.trim();
   return raw || null;
 }
+
+const SESSION_ADMIN_KEY = "aira_session_admin_api_key";
+
+/** Runtime admin header value (never commit); cleared when the tab closes unless re-saved. */
+export function getSessionAdminApiKey(): string | null {
+  if (typeof window === "undefined") return null;
+  const v = sessionStorage.getItem(SESSION_ADMIN_KEY)?.trim();
+  return v || null;
+}
+
+export function setSessionAdminApiKey(key: string): void {
+  sessionStorage.setItem(SESSION_ADMIN_KEY, key.trim());
+}
+
+export function clearSessionAdminApiKey(): void {
+  sessionStorage.removeItem(SESSION_ADMIN_KEY);
+}
+
+/**
+ * When true, browser requests omit ``x-admin-api-key``; a same-origin reverse proxy must inject it
+ * (see ``docs/security.md``). Static export cannot read process env at runtime — this is build-time.
+ */
+export function publicAdminProxyInjectsHeaders(): boolean {
+  const v = process.env.NEXT_PUBLIC_ADMIN_PROXY_INJECTS_HEADERS?.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}

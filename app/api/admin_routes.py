@@ -10,8 +10,9 @@ import time
 from pathlib import Path
 from typing import Any, Literal
 
+import yaml
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from slowapi import Limiter
 
 from app.api.security import (
@@ -20,9 +21,10 @@ from app.api.security import (
     admin_upload_rate_limit_string,
     require_admin_api_key,
 )
-from app.config import get_settings
+from app.config import get_settings, reset_settings
+from app.config.settings import _flatten_yaml
 from app.rag.cli import cmd_build_index
-from app.workspace.paths import workspace_data_dir
+from app.workspace.paths import project_root, workspace_config_dir, workspace_data_dir
 
 _log = logging.getLogger(__name__)
 
@@ -64,6 +66,39 @@ class AdminIndexStatusResponse(BaseModel):
     finished_at: str | None = None
     message: str = ""
     exit_code: int | None = None
+
+
+class OperatorSettingsPatch(BaseModel):
+    """Persisted to ``workspaces/<id>/config/operator_overrides.yaml`` (precedence below process env)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    aira_data_mode: Literal["demo", "user"] | None = None
+    rag_top_k: int | None = Field(None, ge=1, le=64)
+    llm_temperature: float | None = Field(None, ge=0.0, le=2.0)
+    llm_model: str | None = Field(None, min_length=1, max_length=120)
+    embedding_model: str | None = Field(None, min_length=1, max_length=120)
+    rag_workspace_corpus_only: bool | None = None
+
+    @model_validator(mode="after")
+    def _at_least_one_field(self) -> OperatorSettingsPatch:
+        fields = (
+            self.aira_data_mode,
+            self.rag_top_k,
+            self.llm_temperature,
+            self.llm_model,
+            self.embedding_model,
+            self.rag_workspace_corpus_only,
+        )
+        if all(v is None for v in fields):
+            raise ValueError("At least one setting must be provided")
+        return self
+
+
+class OperatorSettingsPatchResponse(BaseModel):
+    status: Literal["updated"]
+    path: str
+    updated_keys: list[str]
 
 
 def _iso_utc(ts: float | None) -> str | None:
@@ -130,6 +165,26 @@ def _execute_reindex() -> tuple[int, str]:
     if code != 0:
         return code, "Index build reported failure (see server logs)."
     return 0, "Index rebuilt successfully."
+
+
+def _load_operator_overrides_map(path: Path) -> dict[str, str]:
+    if not path.is_file():
+        return {}
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    return _flatten_yaml(raw)
+
+
+def _write_operator_overrides(path: Path, flat: dict[str, str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    # Human-readable keys (already UPPER_SNAKE from _flatten_yaml).
+    ordered = {k: flat[k] for k in sorted(flat)}
+    tmp.write_text(yaml.safe_dump(ordered, default_flow_style=False, sort_keys=False), encoding="utf-8")
+    tmp.replace(path)
 
 
 def build_admin_router(limiter: Limiter) -> APIRouter:
@@ -259,5 +314,49 @@ def build_admin_router(limiter: Limiter) -> APIRouter:
             message=str(_reindex_state.get("message", "")),
             exit_code=_reindex_state.get("exit_code"),
         )
+
+    @r.patch("/operator-settings", response_model=OperatorSettingsPatchResponse)
+    @limiter.limit(admin_upload_rate_limit_string())
+    def admin_patch_operator_settings(
+        request: Request,
+        body: OperatorSettingsPatch,
+        _admin: None = Depends(require_admin_api_key),
+    ) -> OperatorSettingsPatchResponse:
+        """Merge allowlisted keys into workspace ``config/operator_overrides.yaml`` (env still wins)."""
+        path = workspace_config_dir() / "operator_overrides.yaml"
+        current = _load_operator_overrides_map(path)
+        updated_keys: list[str] = []
+        if body.aira_data_mode is not None:
+            current["AIRA_DATA_MODE"] = body.aira_data_mode
+            updated_keys.append("AIRA_DATA_MODE")
+        if body.rag_top_k is not None:
+            current["RAG_TOP_K"] = str(body.rag_top_k)
+            updated_keys.append("RAG_TOP_K")
+        if body.llm_temperature is not None:
+            current["LLM_TEMPERATURE"] = str(body.llm_temperature)
+            updated_keys.append("LLM_TEMPERATURE")
+        if body.llm_model is not None:
+            current["LLM_MODEL"] = body.llm_model.strip()
+            updated_keys.append("LLM_MODEL")
+        if body.embedding_model is not None:
+            current["EMBEDDING_MODEL"] = body.embedding_model.strip()
+            updated_keys.append("EMBEDDING_MODEL")
+        if body.rag_workspace_corpus_only is not None:
+            current["RAG_WORKSPACE_ONLY"] = "1" if body.rag_workspace_corpus_only else "0"
+            updated_keys.append("RAG_WORKSPACE_ONLY")
+        try:
+            _write_operator_overrides(path, current)
+        except OSError as e:
+            _log.warning("operator-settings write failed: %s", e)
+            raise HTTPException(
+                status_code=500,
+                detail={"error": "write_failed", "message": str(e)},
+            ) from e
+        reset_settings()
+        try:
+            rel = path.resolve().relative_to(project_root()).as_posix()
+        except ValueError:
+            rel = path.resolve().as_posix()
+        return OperatorSettingsPatchResponse(status="updated", path=rel, updated_keys=updated_keys)
 
     return r
