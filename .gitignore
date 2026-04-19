@@ -51,6 +51,10 @@ infra/terraform/bootstrap/terraform.tfvars
 # Local FAISS index + chunk metadata (Phase 3 RAG)
 .rag_index/
 
+# Populated by scripts/aws/push_api_to_ecr.sh before `docker build` (real index into image).
+docker/bake_index_context/*
+!docker/bake_index_context/.gitkeep
+
 # API triage audit (append-only JSONL; may contain alert text)
 data/logs/triage_outputs.jsonl
 data/logs/n8n_workflow_events.jsonl

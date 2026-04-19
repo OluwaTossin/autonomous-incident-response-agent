@@ -66,9 +66,6 @@ jobs:
       - name: Sync
         run: uv sync --frozen --extra dev
 
-      - name: Stub RAG index
-        run: uv run python scripts/ci/stub_rag_index.py
-
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 

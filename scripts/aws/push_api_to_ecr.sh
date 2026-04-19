@@ -36,6 +36,12 @@ if [[ ! -f "$INDEX_FAISS" ]]; then
   exit 1
 fi
 
+# Dockerfile bakes index from this path (tracked `.gitkeep` only in git; real files are local-only).
+BAKE_CTX="$REPO_ROOT/docker/bake_index_context"
+rm -rf "$BAKE_CTX"
+mkdir -p "$BAKE_CTX"
+cp -a "$REPO_ROOT/.rag_index/." "$BAKE_CTX/"
+
 if ! command -v terraform >/dev/null 2>&1; then
   echo "terraform not found on PATH" >&2
   exit 1

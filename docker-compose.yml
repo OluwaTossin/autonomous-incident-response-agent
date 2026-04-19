@@ -5,7 +5,9 @@
 #   2. Build the RAG index on the host (workspace layout; demo corpus lives in ./sample_data):
 #        uv run product-build-index --workspace default
 #      Legacy: `uv run rag-build` still writes `workspaces/<id>/index/` when RAG_INDEX_DIR is unset,
-#      or use `.rag_index` only if you set RAG_INDEX_DIR in `.env`.
+#      or set RAG_INDEX_DIR in `.env` to a repo-relative path (e.g. legacy `.rag_index`).
+#      The API image always contains a stub `.rag_index/` for `docker build`; Compose defaults mount
+#      `./workspaces` so the live index is `workspaces/<WORKSPACE_ID>/index/` when RAG_INDEX_DIR is empty.
 #
 # Usage (repo root):
 #   ./scripts/product/start.sh

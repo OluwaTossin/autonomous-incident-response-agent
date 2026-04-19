@@ -54,7 +54,7 @@ After apply, **`terraform output ecr_image_digest`** / **`ecr_image_uri`** show 
 
 ## 2. Build the RAG index on the host
 
-The Docker image **bakes** `.rag_index/` (FAISS + chunk metadata). From **repo root**:
+The Docker image includes a **stub** `.rag_index/` so `docker build` works on a clean clone. For ECS, build a **real** index on the host first; **`scripts/aws/push_api_to_ecr.sh`** copies it into **`docker/bake_index_context/`** before `docker build`, which replaces the stub inside the image. From **repo root**:
 
 ```bash
 uv run rag-build

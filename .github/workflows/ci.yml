@@ -97,10 +97,8 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
-      - name: Sync (stub script imports app)
+      - name: Sync (Dockerfile runs stub index script during image build)
         run: uv sync --frozen --extra dev
-      - name: Stub RAG index for Dockerfile COPY
-        run: uv run python scripts/ci/stub_rag_index.py
       - name: Docker build
         run: docker build -f Dockerfile -t aira-api:ci .
       - name: Docker build frontend (static nginx)

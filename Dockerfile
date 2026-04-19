@@ -1,4 +1,4 @@
-# Phase 9 — API + optional Gradio (/ui). Phase 11 — bake `.rag_index` for ECS/Fargate; Compose still mounts host index over /app/.rag_index.
+# Phase 9 — API + optional Gradio (/ui). Phase 11 — stub `.rag_index` in-image; ECS overlays real index via `docker/bake_index_context/` (see push_api_to_ecr.sh).
 FROM python:3.12-slim-bookworm
 
 WORKDIR /app
@@ -19,9 +19,14 @@ COPY sample_data ./sample_data
 
 RUN uv sync --frozen --no-dev --extra ui
 
-# FAISS index + chunk JSONL (host: `uv run rag-build`). Required for RAG on ECS/Fargate.
-# Docker Compose still bind-mounts `./.rag_index` over this path when present.
-COPY .rag_index ./.rag_index
+# Default image index: CI and fresh `docker compose build` have no host `.rag_index/` (gitignored).
+# ECS/ECR: `scripts/aws/push_api_to_ecr.sh` copies a host-built index into `docker/bake_index_context/`
+# before `docker build`, which replaces this stub when `index.faiss` is present there.
+COPY scripts/ci/stub_rag_index.py ./scripts/ci/stub_rag_index.py
+RUN uv run python scripts/ci/stub_rag_index.py
+COPY docker/bake_index_context/ /tmp/rag_bake/
+RUN if [ -f /tmp/rag_bake/index.faiss ]; then rm -rf .rag_index && cp -a /tmp/rag_bake/. .rag_index/; fi \
+    && rm -rf /tmp/rag_bake
 
 # Non-root API process (V2.9). Bind-mounted `./workspaces` on the host should be writable by UID 1000
 # on Linux (or override with `user:` in Compose / task definition to match your volume owner).
