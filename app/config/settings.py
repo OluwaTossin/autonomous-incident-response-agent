@@ -46,6 +46,13 @@ def _yaml_path() -> Path | None:
     return p if p.is_file() else None
 
 
+def _operator_overrides_path(effective: dict[str, str]) -> Path:
+    """Workspace file merged after ``CONFIG_YAML`` and before process environment (see ``_merged_env_dict``)."""
+    wid = (effective.get("WORKSPACE_ID") or "default").strip() or "default"
+    root_name = (effective.get("WORKSPACES_ROOT") or "workspaces").strip() or "workspaces"
+    return project_root() / root_name / wid / "config" / "operator_overrides.yaml"
+
+
 class Settings(BaseModel):
     """Application settings: optional ``CONFIG_YAML``, then ``.env`` / process environment."""
 
@@ -165,7 +172,7 @@ def _settings_env_keys() -> frozenset[str]:
 
 
 def _merged_env_dict() -> dict[str, str]:
-    """Dotenv + optional YAML + process environment (env wins over YAML for each key)."""
+    """Dotenv + optional YAML + workspace overrides + process environment (env wins over overrides and YAML)."""
     root = project_root()
     load_dotenv(root / ".env", override=False)
     merged: dict[str, str] = {}
@@ -178,6 +185,21 @@ def _merged_env_dict() -> dict[str, str]:
             raise ValueError(f"CONFIG_YAML {yp} must contain a mapping at the root, got {type(data).__name__}")
         else:
             merged.update(_flatten_yaml(data))
+    # Resolve workspace path using CONFIG_YAML + env (same keys as final merge).
+    effective: dict[str, str] = {**merged}
+    for key in _settings_env_keys():
+        val = os.environ.get(key)
+        if val is not None and val != "":
+            effective[key] = val
+    ow = _operator_overrides_path(effective)
+    if ow.is_file():
+        raw_ow = yaml.safe_load(ow.read_text(encoding="utf-8"))
+        if raw_ow is not None:
+            if not isinstance(raw_ow, dict):
+                raise ValueError(
+                    f"operator_overrides {ow} must contain a mapping at the root, got {type(raw_ow).__name__}"
+                )
+            merged.update(_flatten_yaml(raw_ow))
     for key in _settings_env_keys():
         val = os.environ.get(key)
         if val is not None and val != "":

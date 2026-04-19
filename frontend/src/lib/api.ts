@@ -7,7 +7,8 @@ import {
 import type { TriageResponse } from "./types";
 import { isTriageResponse } from "./types";
 
-function jsonHeaders(): Record<string, string> {
+/** JSON request headers including optional triage ``x-api-key`` (build-time or proxy-injected). */
+export function triageJsonHeaders(): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
   const key = publicTriageApiKey();
   if (key) h["x-api-key"] = key;
@@ -43,7 +44,7 @@ export async function postTriage(
   try {
     r = await fetch(`${baseUrl}/triage`, {
       method: "POST",
-      headers: jsonHeaders(),
+      headers: triageJsonHeaders(),
       body: JSON.stringify(incident),
       signal: controller.signal,
     });
@@ -105,7 +106,7 @@ export async function postTriageFeedback(
   try {
     r = await fetch(`${baseUrl}/n8n/triage-feedback`, {
       method: "POST",
-      headers: jsonHeaders(),
+      headers: triageJsonHeaders(),
       body: JSON.stringify(payload),
       signal: controller.signal,
     });

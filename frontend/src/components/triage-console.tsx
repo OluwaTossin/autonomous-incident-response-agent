@@ -172,9 +172,7 @@ export function TriageConsole() {
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
       <header className="space-y-2 border-b border-zinc-200 pb-6 dark:border-zinc-800">
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-          Incident triage console
-        </h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Triage</h1>
         <p className="max-w-3xl text-sm text-zinc-600 dark:text-zinc-400">
           <span className="text-zinc-500">API base ·</span>{" "}
           <span className="break-all font-mono text-violet-600 dark:text-violet-400">{apiBase}</span>
@@ -182,6 +180,10 @@ export function TriageConsole() {
           <code className="rounded bg-zinc-100 px-1 text-xs dark:bg-zinc-800">POST /triage</code>
           <span className="text-zinc-500"> · </span>
           <code className="rounded bg-zinc-100 px-1 text-xs dark:bg-zinc-800">POST /n8n/triage-feedback</code>
+        </p>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          Evidence is grouped by source; timeline and feedback follow the same contracts as the API
+          and optional Gradio debug UI.
         </p>
       </header>
 

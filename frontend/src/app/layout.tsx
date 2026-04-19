@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
+import { AppShell } from "@/components/app-shell";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,9 +15,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Incident triage console · AIRA",
+  title: "AIRA · Operator console",
   description:
-    "Phase 12 presentation layer — operational UI for autonomous incident response (Next.js + FastAPI)",
+    "Self-hosted incident triage, corpus setup, and product configuration (Next.js + FastAPI).",
 };
 
 export default function RootLayout({
@@ -29,7 +30,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased font-sans`}
       >
-        {children}
+        <AppShell>{children}</AppShell>
         <Toaster richColors position="top-right" />
       </body>
     </html>
