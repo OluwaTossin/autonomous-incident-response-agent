@@ -52,7 +52,7 @@ Deeper product framing: [`docs/decisions/capabilities-and-roadmap.md`](docs/deci
 ```bash
 uv sync --extra dev          # add --extra ui for Gradio at /ui
 cp .env.example .env         # set OPENAI_API_KEY
-uv run rag-build             # builds .rag_index/ (gitignored)
+uv run rag-build             # builds workspaces/<id>/index/ (gitignored) unless RAG_INDEX_DIR is set
 uv run serve-api             # http://127.0.0.1:8000/docs
 ```
 
@@ -80,7 +80,7 @@ Operational knowledge lives under **`data/`** today:
 | [`data/logs/`](data/logs/) | Log excerpts (`.log` and notes) |
 | [`data/knowledge_base/`](data/knowledge_base/) | Extra context (ownership, tiers, …) |
 
-After you add or change files, run **`uv run rag-build`** so **`.rag_index/`** reflects your corpus (directory is gitignored). Layout details: [`data/README.md`](data/README.md).
+After you add or change files under **`data/`** (or **`workspaces/<WORKSPACE_ID>/data/`** when populated), run **`uv run rag-build`** so the FAISS bundle under **`workspaces/<WORKSPACE_ID>/index/`** is refreshed (gitignored), unless **`RAG_INDEX_DIR`** points elsewhere (e.g. `.rag_index`). See [`workspaces/README.md`](workspaces/README.md) and [`data/README.md`](data/README.md).
 
 > **Note:** The repository ships a **synthetic** sample corpus for demos and eval — not live production data (see [Disclaimer](#disclaimer)).
 

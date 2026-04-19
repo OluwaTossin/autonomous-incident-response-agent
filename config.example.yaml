@@ -4,6 +4,10 @@
 #
 # Keys must match the environment variable names used by the app (UPPER_SNAKE).
 
+# WORKSPACE_ID: default
+# WORKSPACES_ROOT: workspaces
+# RAG_CORPUS_ROOT: data
+# RAG_INDEX_DIR: .rag_index
 # RAG_TOP_K: 8
 # LLM_MODEL: gpt-4o-mini
 # LLM_TEMPERATURE: 0.2
