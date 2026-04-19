@@ -18,6 +18,7 @@ from starlette.routing import Mount
 
 from app.agent.nodes import parse_incident_payload
 from app.config import get_settings
+from app.api.admin_routes import build_admin_router
 from app.api.n8n_routes import router as n8n_router
 from app.api.security import (
     client_api_key,
@@ -59,6 +60,7 @@ app = FastAPI(
 app.state.limiter = _limiter
 
 app.include_router(n8n_router)
+app.include_router(build_admin_router(_limiter))
 
 
 def _gradio_ui_mounted(application: FastAPI) -> bool:
@@ -82,6 +84,16 @@ def root(request: Request) -> dict[str, Any]:
         "n8n_triage_feedback": "POST /n8n/triage-feedback",
         "gradio_ui": "/ui",
         "gradio_ui_mounted": _gradio_ui_mounted(request.app),
+        "admin": (
+            {
+                "upload": "POST /admin/upload",
+                "files": "GET /admin/files",
+                "reindex": "POST /admin/reindex",
+                "index_status": "GET /admin/index-status",
+            }
+            if get_settings().admin_api_key.strip()
+            else None
+        ),
     }
 
 

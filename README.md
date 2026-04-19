@@ -179,6 +179,7 @@ Copy [`.env.example`](.env.example) → **`.env`**. Only **`.env`** is loaded by
 | Path | Purpose |
 |------|---------|
 | [`docs/build-journey/execution-v1.md`](docs/build-journey/execution-v1.md) | Version 1 phased build log, milestones, evidence |
+| [`docs/security.md`](docs/security.md) | API keys, `/admin/*`, upload limits, threat notes |
 | [`sample_data/README.md`](sample_data/README.md) | Bundled demo corpus (`AIRA_DATA_MODE`) |
 | [`docs/contributing.md`](docs/contributing.md) | Branching & GitHub Actions secrets |
 | [`docs/decisions/`](docs/decisions/) | ADRs, problem definition, roadmap |
