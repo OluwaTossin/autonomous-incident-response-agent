@@ -2,6 +2,12 @@
 
 Symptoms-first hints for **local** and **Docker Compose** setups. For AWS/ECS, start with [`deploy/aws-ecs.md`](deploy/aws-ecs.md) and CloudWatch logs.
 
+### AWS / Terraform (quick pointers)
+
+- **“Failed to read file … `backend.hcl`”** — Create **`infra/terraform/envs/<env>/backend.hcl`** from **`backend.hcl.example`** and bootstrap outputs; it is **not** in Git. See [`infra/terraform/README.md`](../../infra/terraform/README.md).
+- **CloudFront `AccessDenied` / account must be verified** — Set **`enable_triage_ui_cloudfront = false`** and use the S3 website UI until AWS Support enables CloudFront on the account — table row in [`deploy/aws-ecs.md`](deploy/aws-ecs.md) §7.
+- **Bootstrap `BucketAlreadyOwnedByYou` / DynamoDB already exists** — Import existing resources into bootstrap state or skip re-bootstrap and only create **`backend.hcl`** from known bucket names — [`infra/terraform/bootstrap/README.md`](../../infra/terraform/bootstrap/README.md).
+
 ## API / browser
 
 ### CORS errors from the Next.js UI

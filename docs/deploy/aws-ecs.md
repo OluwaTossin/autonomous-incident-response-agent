@@ -2,6 +2,12 @@
 
 This path assumes **Phase 10** is applied: ECR repository, ECS cluster/service, ALB, and **AWS Systems Manager Parameter Store** for sensitive env vars. **n8n** is not part of this Terraform stack; only the triage API is deployed here.
 
+### Git, clones, and who gets what
+
+- **Committed to Git:** all **`infra/terraform/**/*.tf`**, **`terraform.tfvars.example`**, **`backend.hcl.example`**, scripts under **`scripts/aws/`**, and this doc. PRs should only change tracked files unless you intentionally add new examples.
+- **Not committed (gitignored):** **`infra/terraform/envs/<env>/backend.hcl`**, **`terraform.tfvars`**, and any local **`terraform.tfstate`** after remote migration. Each operator or AWS account creates **their own** copies from the examples.
+- **After clone:** run the product **locally** with **[`docs/installation.md`](../installation.md)** (Docker Compose) — no AWS credentials required for that path. To run **your own** ECS stack, use an AWS account, create **`backend.hcl`** + **`terraform.tfvars`**, then follow the sections below. Cloners do **not** receive your remote state or your S3 buckets unless you share credentials (do not for public repos).
+
 **Phase 13:** after apply, open the CloudWatch dashboard and alarms from Terraform outputs — see **[`docs/deploy/observability.md`](observability.md)**.
 
 **Phase 14:** GitHub Actions CI and optional workflow deploy — see **[`docs/deploy/ci.md`](ci.md)**.
@@ -30,10 +36,15 @@ If **no** parameters are configured, `terraform apply` still succeeds, but **`PO
 From [`infra/terraform/envs/dev`](../../infra/terraform/envs/dev) or [`envs/prod`](../../infra/terraform/envs/prod):
 
 ```bash
+cp backend.hcl.example backend.hcl    # fill bucket / key / region / dynamodb_table from bootstrap outputs
 cp terraform.tfvars.example terraform.tfvars
 # Set aws_region, openai_api_key_ssm_parameter and/or ssm_secrets
-terraform init && terraform apply
+terraform init -backend-config=backend.hcl   # add -migrate-state only when moving existing state into S3
+terraform plan
+terraform apply
 ```
+
+**Greenfield ECR:** if **`terraform apply`** errors on **`data.aws_ecr_image`** (“couldn’t find resource”), the repository has no **`:latest`** image yet. Run **`terraform apply -target=module.ecr`**, push **`:latest`** to that repository (see §3), then **`terraform apply`** again. See **[`infra/terraform/README.md`](../../infra/terraform/README.md)** for the full table and clone expectations.
 
 Create each parameter in the **same region** as the stack (names must match `terraform.tfvars`):
 
@@ -127,3 +138,4 @@ Use **`dev`** or **`prod`** as the script argument so Terraform outputs resolve 
 | **`401`** on **`POST /triage`** / **`ingest-incident`** | Server has **`API_KEY`** set; caller omitted **`x-api-key`** | Send header **`x-api-key: <same value>`**, or remove **`API_KEY`** from the task env for open demos. For the Next.js UI, set **`NEXT_PUBLIC_TRIAGE_API_KEY`** at build time (demo only; value is public). |
 | **`429`** with **`Rate limit exceeded`** | Too many requests per minute (per IP or per **`x-api-key`**) | Defaults: **`10/minute`** triage, **`30/minute`** ingest. Tune **`API_RATE_LIMIT_TRIAGE`** / **`API_RATE_LIMIT_INGEST`** on the task, or share load across keys. |
 | UI loads but API calls fail cross-origin | Mismatched scheme/host vs **`CORS_ORIGINS`** | Origins must match the browser bar exactly (e.g. `http://` vs `https://`, trailing slash usually omitted). |
+| **`AccessDenied: Your account must be verified`** when creating **CloudFront** | New or restricted AWS accounts cannot create distributions until Support verifies the account | Set **`enable_triage_ui_cloudfront = false`** in **`terraform.tfvars`** and **`terraform apply`** to use the **S3 website endpoint (HTTP)** for the UI; open a Support case to enable CloudFront, then switch back to **`true`** and re-apply. |
