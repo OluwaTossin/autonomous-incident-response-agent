@@ -107,8 +107,8 @@ variable "cors_origins" {
 
 variable "enable_triage_ui_cloudfront" {
   type        = bool
-  default     = false
-  description = "If true, private S3 + CloudFront (HTTPS). If false, S3 static website (HTTP) — for accounts where CloudFront is not yet enabled."
+  default     = true
+  description = "If true (default), private S3 + CloudFront (HTTPS) for the operator UI. Set false for S3 static website (HTTP) only if your account cannot create CloudFront distributions."
 }
 
 variable "observability_create_dashboard" {

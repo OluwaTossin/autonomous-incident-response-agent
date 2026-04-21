@@ -6,8 +6,9 @@
 #   ./scripts/aws/deploy_frontend_cdn.sh dev
 #   ./scripts/aws/deploy_frontend_cdn.sh prod
 #
-# Bakes NEXT_PUBLIC_API_BASE_URL from Terraform alb_url for that env. After first UI deploy,
-# add triage_ui_url to cors_origins in terraform.tfvars and re-apply API stack.
+# Bakes NEXT_PUBLIC_API_BASE_URL from Terraform alb_url for that env (override: export
+# NEXT_PUBLIC_API_BASE_URL before running this script). Does not affect local Docker Compose builds.
+# After first UI deploy, add triage_ui_url to cors_origins in terraform.tfvars and re-apply API stack.
 
 set -euo pipefail
 
@@ -34,19 +35,22 @@ BUCKET="$(terraform -chdir="$TF_DIR" output -raw triage_ui_s3_bucket_id)"
 DIST="$(terraform -chdir="$TF_DIR" output -raw triage_ui_cloudfront_distribution_id)"
 REGION="$(terraform -chdir="$TF_DIR" output -raw aws_region)"
 ALB_URL="$(terraform -chdir="$TF_DIR" output -raw alb_url)"
+export NEXT_PUBLIC_API_BASE_URL="${NEXT_PUBLIC_API_BASE_URL:-$ALB_URL}"
 
 echo "S3 bucket:     $BUCKET"
 if [[ -n "$DIST" ]]; then
   echo "CloudFront:    $DIST"
 else
-  echo "CloudFront:    (none — S3 website mode; uploads take effect immediately)"
+  echo "CloudFront:    (none — S3 website mode; set enable_triage_ui_cloudfront = true for HTTPS demo)"
 fi
-echo "API (baked):   $ALB_URL"
+echo "API (baked):   $NEXT_PUBLIC_API_BASE_URL"
+if [[ "${NEXT_PUBLIC_API_BASE_URL}" != "${ALB_URL}" ]]; then
+  echo "               (overridden from env; default from Terraform alb_url is $ALB_URL)"
+fi
 echo ""
 
 cd "$FRONTEND"
 rm -rf out .next
-export NEXT_PUBLIC_API_BASE_URL="$ALB_URL"
 npm run build
 
 aws s3 sync out/ "s3://${BUCKET}/" --delete --region "$REGION"

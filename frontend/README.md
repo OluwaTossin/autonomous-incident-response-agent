@@ -38,7 +38,7 @@ docker build -f frontend/Dockerfile --build-arg NEXT_PUBLIC_API_BASE_URL=http://
 
 ### Deploy UI to S3 + CloudFront (static export)
 
-The app uses Next **`output: 'export'`** ([`next.config.ts`](next.config.ts)) — no Node server; files go to **S3** and are served via **CloudFront** (private bucket + **OAC**, not public S3 website hosting).
+The app uses Next **`output: 'export'`** ([`next.config.ts`](next.config.ts)) — no Node server; files go to **S3**. Terraform defaults to **CloudFront** (private bucket + **OAC**, HTTPS). Set **`enable_triage_ui_cloudfront = false`** in `terraform.tfvars` only if your account cannot create distributions (falls back to public S3 website / HTTP).
 
 1. **Terraform (dev)** — creates bucket + distribution:
 
@@ -54,7 +54,7 @@ The app uses Next **`output: 'export'`** ([`next.config.ts`](next.config.ts)) �
    ./scripts/aws/deploy_frontend_cdn.sh dev   # or: prod
    ```
 
-3. **CORS** — use the printed UI URL (HTTP S3 website or HTTPS CloudFront) and append it to **`cors_origins`** in **`terraform.tfvars`**, then **`terraform apply`** again so the API allows the UI origin.
+3. **CORS** — use the printed **`triage_ui_url`** (HTTPS CloudFront by default) and append it to **`cors_origins`** in **`terraform.tfvars`**, then **`terraform apply`** again so the **ECS** API allows that origin. You can keep **`http://localhost:3000`** entries for local browser → cloud API experiments; that does not change **`docker compose`** on your machine.
 
 4. **Local preview of the static `out/` folder** (after `npm run build`):
 

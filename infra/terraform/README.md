@@ -9,7 +9,7 @@ Modular layout under [`modules/`](modules/) and **environment roots** [`envs/dev
 | `ecr` | API image repository + lifecycle |
 | `alb` | Internet ALB, target group (`ip`), health check `GET /health` |
 | `ecs_fargate_api` | ECS cluster, Fargate service, task + execution IAM, CloudWatch logs, **SSM Parameter Store** secrets as container env (see `ssm_secrets` / `openai_api_key_ssm_parameter` in each env) |
-| `frontend_static_cdn` | Phase 12 — S3 bucket for Next.js static export; optional CloudFront (HTTPS) vs S3 website (HTTP) via `enable_triage_ui_cloudfront` |
+| `frontend_static_cdn` | Phase 12 — S3 bucket for Next.js static export; **CloudFront (HTTPS) by default**; set `enable_triage_ui_cloudfront = false` for S3 website (HTTP) only |
 | `monitoring` | Phase 13 — CloudWatch dashboard (ALB + ECS + triage log metrics), ALB 5xx / unhealthy-target **alarms**, **log metric filters** on `/ecs/…-api` |
 
 ## Credentials
@@ -48,6 +48,8 @@ Same variables are documented in [`.env.example`](../../.env.example) for conven
 **Region:** `aws_region` in `terraform.tfvars` must stay the region where resources were created (**do not** switch e.g. `eu-west-1` → `us-east-1` on an existing state without a planned migration or destroy). SSM secrets and the remote state bucket must use the **same** region as the stack.
 
 **Dev vs prod state:** one shared bucket; **separate objects** — `aira/terraform/state/development.tfstate` and `aira/terraform/state/production.tfstate` (see [`bootstrap/README.md`](bootstrap/README.md)).
+
+**Local Docker Compose** (repo root `docker-compose.yml`) is unchanged by Terraform: API/UI ports and `NEXT_PUBLIC_API_BASE_URL` at image build time stay on your machine. **`cors_origins` / `CORS_ORIGINS` in `terraform.tfvars`** apply only to the **ECS** API task for the hosted demo (ALB + CloudFront UI).
 
 ### Capstone (frozen V1) vs Version 2 — separate remote state (required)
 

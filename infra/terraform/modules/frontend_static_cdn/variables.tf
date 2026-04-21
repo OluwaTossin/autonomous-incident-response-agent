@@ -11,6 +11,6 @@ variable "price_class" {
 
 variable "enable_cloudfront" {
   type        = bool
-  default     = false
-  description = "If false, use S3 static website hosting (HTTP) — for accounts where CloudFront is not yet enabled. If true, private S3 + CloudFront (HTTPS)."
+  default     = true
+  description = "If true (default), private S3 + CloudFront (HTTPS). If false, S3 static website (HTTP) — for accounts where CloudFront is not yet enabled."
 }

@@ -70,4 +70,4 @@ Compose bind-mounts **`./workspaces`** into the container. The API image runs as
 - **Configure** behaviour: [`configuration.md`](configuration.md)
 - **Add your data** and reindex: [`bring-your-own-data.md`](bring-your-own-data.md), [`reindexing.md`](reindexing.md)
 - **Problems**: [`troubleshooting.md`](troubleshooting.md)
-- **AWS / ECS**: [`deploy/aws-ecs.md`](deploy/aws-ecs.md)
+- **AWS / ECS + hosted operator UI**: [`deploy/aws-ecs.md`](deploy/aws-ecs.md) — Terraform defaults to **S3 + CloudFront (HTTPS)** for the static Next.js UI; local Compose is unchanged.
