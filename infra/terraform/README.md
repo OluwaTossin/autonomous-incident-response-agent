@@ -9,7 +9,7 @@ Modular layout under [`modules/`](modules/) and **environment roots** [`envs/dev
 | `ecr` | API image repository + lifecycle |
 | `alb` | Internet ALB, target group (`ip`), health check `GET /health` |
 | `ecs_fargate_api` | ECS cluster, Fargate service, task + execution IAM, CloudWatch logs, **SSM Parameter Store** secrets as container env (see `ssm_secrets` / `openai_api_key_ssm_parameter` in each env) |
-| `frontend_static_cdn` | Phase 12 — S3 bucket for Next.js static export; optional CloudFront (HTTPS) vs S3 website (HTTP) via `enable_triage_ui_cloudfront` |
+| `frontend_static_cdn` | Phase 12 — S3 bucket for Next.js static export; **CloudFront (HTTPS) by default**; set `enable_triage_ui_cloudfront = false` for S3 website (HTTP) only |
 | `monitoring` | Phase 13 — CloudWatch dashboard (ALB + ECS + triage log metrics), ALB 5xx / unhealthy-target **alarms**, **log metric filters** on `/ecs/…-api` |
 
 ## Credentials
@@ -45,9 +45,26 @@ Same variables are documented in [`.env.example`](../../.env.example) for conven
 
 `backend.hcl` is **gitignored**; only `*.example` is committed.
 
+### What is in Git vs local-only (cloners and collaborators)
+
+| Artifact | In Git? | Purpose |
+|----------|---------|---------|
+| **`*.tf`**, **`modules/`**, **`envs/dev` / `envs/prod` roots** | Yes | Shared infrastructure code; safe to PR and review. |
+| **`terraform.tfvars.example`**, **`backend.hcl.example`** | Yes | Templates — copy to **`terraform.tfvars`** / **`backend.hcl`** per machine or per AWS account. |
+| **`terraform.tfvars`** | **No** (gitignored) | Your region, SSM paths, **`cors_origins`**, toggles (`enable_triage_ui_cloudfront`, …). Not secrets if you use SSM for keys, but still **environment-specific**. |
+| **`backend.hcl`** | **No** (gitignored) | Remote state bucket, DynamoDB lock table, state **key** — ties this working copy to **one** AWS account/state object. |
+| **`bootstrap/terraform.tfstate`** (local file) | **No** (gitignored if present) | Bootstrap stack uses **local** state; back it up if you manage shared buckets from one machine. |
+
+Anyone who **clones** the repo can:
+
+- **Run locally** with Docker Compose and **`.env`** — no Terraform and no access to your AWS state (see [`docs/installation.md`](../../docs/installation.md)).
+- **Provision their own AWS** by following [`docs/deploy/aws-ecs.md`](../../docs/deploy/aws-ecs.md) and this README: bootstrap (or reuse patterns), create **their** **`backend.hcl`** and **`terraform.tfvars`**, then **`terraform init -backend-config=backend.hcl`** and **`apply`**. They get **their** VPC, ECR, ALB, buckets — not yours.
+
 **Region:** `aws_region` in `terraform.tfvars` must stay the region where resources were created (**do not** switch e.g. `eu-west-1` → `us-east-1` on an existing state without a planned migration or destroy). SSM secrets and the remote state bucket must use the **same** region as the stack.
 
 **Dev vs prod state:** one shared bucket; **separate objects** — `aira/terraform/state/development.tfstate` and `aira/terraform/state/production.tfstate` (see [`bootstrap/README.md`](bootstrap/README.md)).
+
+**Local Docker Compose** (repo root `docker-compose.yml`) is unchanged by Terraform: API/UI ports and `NEXT_PUBLIC_API_BASE_URL` at image build time stay on your machine. **`cors_origins` / `CORS_ORIGINS` in `terraform.tfvars`** apply only to the **ECS** API task for the hosted demo (ALB + CloudFront UI).
 
 ### Capstone (frozen V1) vs Version 2 — separate remote state (required)
 
@@ -63,12 +80,15 @@ Same variables are documented in [`.env.example`](../../.env.example) for conven
 
 ## Dev (first apply)
 
+**Greenfield (no `:latest` image in ECR yet):** a full **`terraform apply`** can fail because the config reads **`data.aws_ecr_image`** for **`latest`**. Order: **`terraform apply -target=module.ecr`**, then from repo root **`uv run rag-build`** (or your index command), then push an image (**`./scripts/aws/push_api_to_ecr.sh dev`** with **`SKIP_TERRAFORM_APPLY=1`** or a manual **`docker build` / `docker push`** to that repo’s **`:latest`**), then **`terraform apply`** for the rest. Alternatively set **`api_desired_count = 0`** until after the first image exists, per [`docs/deploy/aws-ecs.md`](../../docs/deploy/aws-ecs.md).
+
 ```bash
 cd infra/terraform/envs/dev
-cp terraform.tfvars.example terraform.tfvars   # edit: aws_region (must match backend region), SSM paths
+cp backend.hcl.example backend.hcl              # edit bucket/key/region from bootstrap outputs
+cp terraform.tfvars.example terraform.tfvars   # edit: aws_region (must match backend), SSM paths
 terraform init -backend-config=backend.hcl     # add -migrate-state if moving local state
 terraform plan
-terraform apply
+terraform apply   # or -target=module.ecr first on greenfield (see above)
 ```
 
 **SSM Parameter Store:** define secrets in `terraform.tfvars` — either `openai_api_key_ssm_parameter` (sets `OPENAI_API_KEY`) or a list `ssm_secrets` mapping **env var names** → **parameter paths** (each path starts with `/`). Create each as **SecureString** in the same region; `terraform output ssm_container_secrets` shows the full list. Details: [`docs/deploy/aws-ecs.md`](../../docs/deploy/aws-ecs.md).

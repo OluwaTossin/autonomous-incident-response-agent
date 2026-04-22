@@ -1,4 +1,4 @@
-# Phase 12 — static Next.js export → S3. CloudFront (HTTPS) optional; default is S3 website (HTTP).
+# Phase 12 — static Next.js export → S3 + CloudFront (HTTPS) by default (see enable_triage_ui_cloudfront).
 # After apply: ./scripts/aws/deploy_frontend_cdn.sh prod
 
 module "triage_ui_cdn" {
