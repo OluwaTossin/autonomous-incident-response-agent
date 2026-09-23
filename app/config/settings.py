@@ -103,6 +103,30 @@ class Settings(BaseModel):
         validation_alias="AIRA_DATABASE_MIGRATION_URL",
     )
 
+    # Hosted human identity. Empty issuer/client keeps Version 2 independent of OIDC.
+    aira_oidc_issuer: str = Field(default="", validation_alias="AIRA_OIDC_ISSUER")
+    aira_oidc_client_id: str = Field(
+        default="", validation_alias="AIRA_OIDC_CLIENT_ID"
+    )
+    aira_oidc_token_use: str = Field(
+        default="access", validation_alias="AIRA_OIDC_TOKEN_USE"
+    )
+    aira_oidc_jwks_url: str = Field(
+        default="", validation_alias="AIRA_OIDC_JWKS_URL"
+    )
+    aira_oidc_algorithms: str = Field(
+        default="RS256", validation_alias="AIRA_OIDC_ALGORITHMS"
+    )
+    aira_oidc_leeway_seconds: int = Field(
+        default=30, validation_alias="AIRA_OIDC_LEEWAY_SECONDS"
+    )
+    aira_oidc_jwks_cache_seconds: int = Field(
+        default=300, validation_alias="AIRA_OIDC_JWKS_CACHE_SECONDS"
+    )
+    aira_oidc_http_timeout_seconds: float = Field(
+        default=3.0, validation_alias="AIRA_OIDC_HTTP_TIMEOUT_SECONDS"
+    )
+
     triage_audit_jsonl: str = Field(default="", validation_alias="TRIAGE_AUDIT_JSONL")
     triage_audit_disable: str = Field(default="", validation_alias="TRIAGE_AUDIT_DISABLE")
     triage_audit_max_rag_chars: str = Field(default="200000", validation_alias="TRIAGE_AUDIT_MAX_RAG_CHARS")

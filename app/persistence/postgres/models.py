@@ -20,6 +20,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -91,12 +92,107 @@ class UserRecord(Base):
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
     email: Mapped[str] = mapped_column(String(320), nullable=False)
     display_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    identity_provider: Mapped[str] = mapped_column(String(80), nullable=False)
+    identity_provider: Mapped[str] = mapped_column(String(255), nullable=False)
     provider_subject: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
     disabled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class ServiceAccountRecord(Base, TimestampColumns, ActorColumns):
+    __tablename__ = "service_accounts"
+    __table_args__ = (
+        CheckConstraint(_ACTOR_CHECK, name="ck_service_accounts_actor_kind"),
+        CheckConstraint(
+            "disabled_by_kind IS NULL OR disabled_by_kind IN ('human', 'service_account', 'system')",
+            name="ck_service_accounts_disabled_actor_kind",
+        ),
+        CheckConstraint(
+            "(disabled_at IS NULL AND disabled_by_kind IS NULL) OR "
+            "(disabled_at IS NOT NULL AND disabled_by_kind IS NOT NULL)",
+            name="ck_service_accounts_disabled_attribution",
+        ),
+        Index("ix_service_accounts_disabled", "disabled_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    disabled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    disabled_by_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    disabled_by_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True
+    )
+    disabled_by_system_name: Mapped[str | None] = mapped_column(
+        String(120), nullable=True
+    )
+
+
+class ServiceAccountCredentialRecord(Base):
+    __tablename__ = "service_account_credentials"
+    __table_args__ = (
+        UniqueConstraint("lookup_id", name="uq_service_account_credentials_lookup"),
+        CheckConstraint(
+            "algorithm = 'scrypt-v1'", name="ck_service_account_credentials_algorithm"
+        ),
+        CheckConstraint(
+            "created_by_kind IN ('human', 'service_account', 'system')",
+            name="ck_service_account_credentials_created_actor_kind",
+        ),
+        CheckConstraint(
+            "revoked_by_kind IS NULL OR revoked_by_kind IN ('human', 'service_account', 'system')",
+            name="ck_service_account_credentials_revoked_actor_kind",
+        ),
+        CheckConstraint(
+            "(revoked_at IS NULL AND revoked_by_kind IS NULL) OR "
+            "(revoked_at IS NOT NULL AND revoked_by_kind IS NOT NULL)",
+            name="ck_service_account_credentials_revoked_attribution",
+        ),
+        Index(
+            "ix_service_account_credentials_account_active",
+            "service_account_id",
+            "revoked_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    service_account_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("service_accounts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    lookup_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    verifier: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    salt: Mapped[bytes] = mapped_column(LargeBinary(16), nullable=False)
+    algorithm: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_by_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_by_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True
+    )
+    created_by_system_name: Mapped[str | None] = mapped_column(
+        String(120), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    revoked_by_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    revoked_by_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True
+    )
+    revoked_by_system_name: Mapped[str | None] = mapped_column(
+        String(120), nullable=True
+    )
+    last_used_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 

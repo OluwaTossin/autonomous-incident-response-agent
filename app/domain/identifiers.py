@@ -107,6 +107,10 @@ class ServiceAccountId(DomainId):
     pass
 
 
+class ServiceAccountCredentialId(DomainId):
+    pass
+
+
 class AuditEventId(DomainId):
     pass
 

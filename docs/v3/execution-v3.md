@@ -187,18 +187,18 @@ Version 3 preserves human authority over consequential actions. Version 4 is the
 
 **Checklist:**
 
-- [ ] Configure Cognito Authorization Code Flow with PKCE: issuer, audience, callbacks, token type, JWKS cache, claims, MFA and token lifetimes.
-- [ ] Implement hosted Next.js server-mediated sessions using Secure, HttpOnly cookies; never store refresh tokens in `localStorage`.
+- [ ] Configure the hosted API's Cognito-compatible issuer, audience/client ID, token use, algorithms, clock handling, and JWKS cache; document PKCE, callback, MFA, and token/session expectations for V3.13.
+- [ ] Define the V3.13 hosted Next.js server-mediated session contract using Secure, HttpOnly cookies; defer its browser callback, refresh, logout, CSRF, and route-protection implementation to V3.13.
 - [ ] Implement JWT verification with fail-closed key rotation and clock handling.
 - [ ] Map provider subjects to durable users without trusting role claims as the authorization source.
 - [ ] Define `ActorContext` variants for human, `service_account`, and `system` principals.
-- [ ] Implement service-account credentials, scopes, rotation, revocation, and audit attribution.
-- [ ] Use IAM/workload identity for internal API/worker communication where applicable.
+- [ ] Implement service-account identity, credential rotation, revocation, and audit attribution without assigning RBAC scopes before V3.5.
+- [ ] Define trusted system actors and the future IAM/workload-identity boundary without adding AWS infrastructure.
 - [ ] Retain shared-key security only in the self-hosted composition.
 
 **Files/modules:** Expected `app/auth/`, hosted FastAPI dependencies/middleware, identity repositories, Cognito configuration, auth tests; adapt `app/api/security.py`.
 
-**Validation:** PKCE callback/state/nonce tests, Secure/HttpOnly cookie inspection, CSRF and refresh-token-storage tests, valid/invalid/expired/wrong-audience tokens, JWKS rotation, disabled user, revoked service account, workload actor propagation, and no-auth route tests.
+**Validation:** Local valid/invalid/expired/not-yet-valid/wrong-audience token tests, JWKS rotation and failure tests, durable identity mapping, disabled user, service-account lifecycle, trusted system actor construction, authentication-versus-RLS separation, and V2 shared-key regression tests. PKCE callback/state/nonce, cookie, CSRF, refresh, logout, and browser-bundle tests belong to V3.13.
 
 **Deliverable / definition of done:** Every protected hosted request has a verified `ActorContext`; no hosted route treats shared deployment keys as user identity.
 

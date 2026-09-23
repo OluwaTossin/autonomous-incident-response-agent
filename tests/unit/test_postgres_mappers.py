@@ -36,11 +36,14 @@ from app.domain.identifiers import (
     KnowledgeIndexVersionId,
     MembershipId,
     OrganizationId,
+    ServiceAccountCredentialId,
+    ServiceAccountId,
     TriageRunId,
     UsageEventId,
     UserId,
     WorkspaceId,
 )
+from app.domain.identity import ServiceAccount, ServiceAccountCredential
 from app.domain.incidents import (
     Evidence,
     Feedback,
@@ -94,6 +97,23 @@ USER = User(
     display_name="Operator",
     identity_provider="managed-idp",
     provider_subject="subject-1",
+    created_at=NOW,
+)
+SERVICE_ACCOUNT = ServiceAccount(
+    id=_id(ServiceAccountId, 20),
+    name="CI integration",
+    created_by=ACTOR,
+    created_at=NOW,
+    updated_at=NOW,
+)
+SERVICE_CREDENTIAL = ServiceAccountCredential(
+    id=_id(ServiceAccountCredentialId, 21),
+    service_account_id=SERVICE_ACCOUNT.id,
+    lookup_id="abcdefghijklmnop",
+    verifier=b"v" * 32,
+    salt=b"s" * 16,
+    algorithm="scrypt-v1",
+    created_by=ACTOR,
     created_at=NOW,
 )
 ORGANIZATION = Organization(
@@ -272,6 +292,16 @@ AUDIT = AuditEvent(
     ("domain_object", "to_record", "from_record"),
     [
         (USER, mappers.user_to_record, mappers.user_from_record),
+        (
+            SERVICE_ACCOUNT,
+            mappers.service_account_to_record,
+            mappers.service_account_from_record,
+        ),
+        (
+            SERVICE_CREDENTIAL,
+            mappers.service_account_credential_to_record,
+            mappers.service_account_credential_from_record,
+        ),
         (
             ORGANIZATION,
             mappers.organization_to_record,

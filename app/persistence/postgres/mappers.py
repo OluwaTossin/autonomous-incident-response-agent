@@ -40,6 +40,7 @@ from app.domain.identifiers import (
     MembershipId,
     OrganizationId,
     ServiceAccountId,
+    ServiceAccountCredentialId,
     TriageRunId,
     UsageEventId,
     UserId,
@@ -56,6 +57,7 @@ from app.domain.incidents import (
     TriageRunReference,
     TriageRunState,
 )
+from app.domain.identity import ServiceAccount, ServiceAccountCredential
 from app.domain.knowledge import (
     Document,
     DocumentCategory,
@@ -93,6 +95,8 @@ from app.persistence.postgres.models import (
     KnowledgeIndexVersionRecord,
     OrganizationMembershipRecord,
     OrganizationRecord,
+    ServiceAccountCredentialRecord,
+    ServiceAccountRecord,
     TriageRunRecord,
     UsageEventRecord,
     UserRecord,
@@ -211,6 +215,107 @@ def user_from_record(record: UserRecord) -> User:
         provider_subject=record.provider_subject,
         created_at=record.created_at,
         disabled_at=record.disabled_at,
+    )
+
+
+def service_account_to_record(account: ServiceAccount) -> ServiceAccountRecord:
+    disabled_by = (
+        _actor_columns(account.disabled_by) if account.disabled_by is not None else None
+    )
+    return ServiceAccountRecord(
+        id=_uuid(account.id),
+        name=account.name,
+        created_at=account.created_at,
+        updated_at=account.updated_at,
+        disabled_at=account.disabled_at,
+        disabled_by_kind=(disabled_by["actor_kind"] if disabled_by else None),
+        disabled_by_id=(disabled_by["actor_id"] if disabled_by else None),
+        disabled_by_system_name=(
+            disabled_by["actor_system_name"] if disabled_by else None
+        ),
+        **_actor_columns(account.created_by),
+    )
+
+
+def service_account_from_record(record: ServiceAccountRecord) -> ServiceAccount:
+    return ServiceAccount(
+        id=_identifier(ServiceAccountId, record.id),
+        name=record.name,
+        created_by=_actor(record.actor_kind, record.actor_id, record.actor_system_name),
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+        disabled_at=record.disabled_at,
+        disabled_by=(
+            _actor(
+                record.disabled_by_kind,
+                record.disabled_by_id,
+                record.disabled_by_system_name,
+            )
+            if record.disabled_by_kind
+            else None
+        ),
+    )
+
+
+def service_account_credential_to_record(
+    credential: ServiceAccountCredential,
+) -> ServiceAccountCredentialRecord:
+    created_by = _actor_columns(credential.created_by)
+    revoked_by = (
+        _actor_columns(credential.revoked_by)
+        if credential.revoked_by is not None
+        else None
+    )
+    return ServiceAccountCredentialRecord(
+        id=_uuid(credential.id),
+        service_account_id=_uuid(credential.service_account_id),
+        lookup_id=credential.lookup_id,
+        verifier=credential.verifier,
+        salt=credential.salt,
+        algorithm=credential.algorithm,
+        created_by_kind=created_by["actor_kind"],
+        created_by_id=created_by["actor_id"],
+        created_by_system_name=created_by["actor_system_name"],
+        created_at=credential.created_at,
+        expires_at=credential.expires_at,
+        revoked_at=credential.revoked_at,
+        revoked_by_kind=(revoked_by["actor_kind"] if revoked_by else None),
+        revoked_by_id=(revoked_by["actor_id"] if revoked_by else None),
+        revoked_by_system_name=(
+            revoked_by["actor_system_name"] if revoked_by else None
+        ),
+        last_used_at=credential.last_used_at,
+    )
+
+
+def service_account_credential_from_record(
+    record: ServiceAccountCredentialRecord,
+) -> ServiceAccountCredential:
+    return ServiceAccountCredential(
+        id=_identifier(ServiceAccountCredentialId, record.id),
+        service_account_id=_identifier(ServiceAccountId, record.service_account_id),
+        lookup_id=record.lookup_id,
+        verifier=record.verifier,
+        salt=record.salt,
+        algorithm=record.algorithm,
+        created_by=_actor(
+            record.created_by_kind,
+            record.created_by_id,
+            record.created_by_system_name,
+        ),
+        created_at=record.created_at,
+        expires_at=record.expires_at,
+        revoked_at=record.revoked_at,
+        revoked_by=(
+            _actor(
+                record.revoked_by_kind,
+                record.revoked_by_id,
+                record.revoked_by_system_name,
+            )
+            if record.revoked_by_kind
+            else None
+        ),
+        last_used_at=record.last_used_at,
     )
 
 
