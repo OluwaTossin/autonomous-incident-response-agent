@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from uuid import UUID
 from unittest.mock import patch
 
 import pytest
@@ -91,6 +92,35 @@ def test_triage_calls_graph(fake_triage: dict) -> None:
     assert tid and len(tid) == 36
     assert data == fake_triage
     m.assert_called_once()
+
+
+def test_triage_response_contract_includes_structured_result_and_compatible_id(
+    fake_triage: dict,
+) -> None:
+    with patch(
+        "app.api.triage_execution.run_triage_with_audit",
+        return_value=(fake_triage, {"rag_context": "", "retrieval_hits": []}),
+    ):
+        response = client.post(
+            "/triage",
+            json={"alertTitle": "CPU high", "service": "payments", "env": "staging"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert str(UUID(body["triage_id"])) == body["triage_id"]
+    assert set(body) == {
+        "incident_summary",
+        "severity",
+        "likely_root_cause",
+        "recommended_actions",
+        "escalate",
+        "confidence",
+        "evidence",
+        "conflicting_signals_summary",
+        "timeline",
+        "triage_id",
+    }
 
 
 def test_triage_validation_error() -> None:

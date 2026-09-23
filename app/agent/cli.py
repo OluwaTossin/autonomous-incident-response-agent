@@ -8,6 +8,13 @@ import sys
 from uuid import uuid4
 
 from app.agent.graph import run_triage
+from app.application.triage import execute_triage
+
+
+def _run_cli_pipeline(
+    incident: dict[str, object],
+) -> tuple[dict[str, object], dict[str, object]]:
+    return run_triage(incident), {}
 
 
 def main(args: list[str] | None = None) -> int:
@@ -47,7 +54,11 @@ def main(args: list[str] | None = None) -> int:
         print("JSON root must be an object", file=sys.stderr)
         return 1
 
-    result = {**run_triage(incident), "triage_id": str(uuid4())}
+    result = execute_triage(
+        incident,
+        pipeline=_run_cli_pipeline,
+        id_factory=lambda: str(uuid4()),
+    ).result
     print(json.dumps(result, indent=2, ensure_ascii=False))
     return 0 if "error" not in result or not result.get("error") else 2
 
