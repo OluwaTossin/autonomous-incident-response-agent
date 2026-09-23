@@ -134,13 +134,15 @@ Version 3 preserves human authority over consequential actions. Version 4 is the
 
 **Dependencies:** V3.1.
 
+**Status:** Complete in `08841f8` (`feat: add hosted domain model for AIRA v3`).
+
 **Checklist:**
 
-- [ ] Define IDs and models for user, organization, membership, workspace, incident, triage run, evidence, document, index version, integration, job, action, approval, usage, and audit event.
-- [ ] Define incident and triage state transitions and immutable versus mutable fields.
-- [ ] Define correlation between legacy `triage_id` and hosted `triage_run_id`.
-- [ ] Define data classification, retention markers, timestamps, and actor attribution.
-- [ ] Add invariant and state-transition unit tests.
+- [x] Define IDs and models for user, organization, membership, workspace, incident, triage run, evidence, document, index version, integration, job, action, approval, usage, and audit event.
+- [x] Define incident and triage state transitions and immutable versus mutable fields.
+- [x] Define correlation between legacy `triage_id` and hosted `triage_run_id`.
+- [x] Define data classification, retention markers, timestamps, and actor attribution.
+- [x] Add invariant and state-transition unit tests.
 
 **Files/modules:** Expected `app/domain/`, `app/application/contracts/`, domain tests; existing `app/models/incident.py` and `triage.py` adapted or reused.
 

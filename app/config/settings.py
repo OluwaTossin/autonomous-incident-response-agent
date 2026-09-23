@@ -96,6 +96,13 @@ class Settings(BaseModel):
 
     aira_env: str = Field(default="local", validation_alias="AIRA_ENV")
 
+    # Hosted-only database URLs. Empty keeps every Version 2 command PostgreSQL-independent.
+    aira_database_url: str = Field(default="", validation_alias="AIRA_DATABASE_URL")
+    aira_database_migration_url: str = Field(
+        default="",
+        validation_alias="AIRA_DATABASE_MIGRATION_URL",
+    )
+
     triage_audit_jsonl: str = Field(default="", validation_alias="TRIAGE_AUDIT_JSONL")
     triage_audit_disable: str = Field(default="", validation_alias="TRIAGE_AUDIT_DISABLE")
     triage_audit_max_rag_chars: str = Field(default="200000", validation_alias="TRIAGE_AUDIT_MAX_RAG_CHARS")

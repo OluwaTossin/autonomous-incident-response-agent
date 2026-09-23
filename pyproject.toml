@@ -17,6 +17,9 @@ dependencies = [
     "python-multipart>=0.0.9",
     "uvicorn[standard]>=0.32.0",
     "slowapi>=0.1.9",
+    "sqlalchemy>=2.0.36",
+    "alembic>=1.14.0",
+    "psycopg[binary]>=3.2.3",
 ]
 
 [project.optional-dependencies]

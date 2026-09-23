@@ -1,0 +1,25 @@
+# Opt-in PostgreSQL for Version 3 hosted development only.
+# The default docker-compose.yml remains the PostgreSQL-free Version 2 stack.
+name: aira-hosted-db
+
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    ports:
+      - "${AIRA_POSTGRES_PORT:-55432}:5432"
+    environment:
+      POSTGRES_DB: "${AIRA_DB_NAME:-aira_hosted}"
+      POSTGRES_USER: "${AIRA_DB_MIGRATION_USER:-aira_migrator}"
+      POSTGRES_PASSWORD: "${AIRA_DB_MIGRATION_PASSWORD:?Set AIRA_DB_MIGRATION_PASSWORD}"
+      AIRA_DB_RUNTIME_PASSWORD: "${AIRA_DB_RUNTIME_PASSWORD:?Set AIRA_DB_RUNTIME_PASSWORD}"
+    volumes:
+      - aira_hosted_postgres:/var/lib/postgresql/data
+      - ./scripts/postgres/init-hosted-db.sh:/docker-entrypoint-initdb.d/10-aira-runtime-role.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AIRA_DB_MIGRATION_USER:-aira_migrator} -d ${AIRA_DB_NAME:-aira_hosted}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  aira_hosted_postgres:
