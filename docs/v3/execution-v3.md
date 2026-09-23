@@ -158,16 +158,18 @@ Version 3 preserves human authority over consequential actions. Version 4 is the
 
 **Dependencies:** V3.2.
 
+**Status:** Complete in `83cd522` (`feat: add PostgreSQL persistence and tenant RLS`).
+
 **Checklist:**
 
-- [ ] Configure SQLAlchemy 2.x and Alembic; document transaction and session conventions.
-- [ ] Create initial schemas, constraints, indexes, timestamps, and migration history.
-- [ ] Add `organization_id`/`workspace_id` to tenant-owned rows with organization/workspace consistency constraints.
-- [ ] Create separate migration/schema-owner and application runtime roles; ensure the application role owns no tenant table and lacks `BYPASSRLS`.
-- [ ] Implement `SET LOCAL`-style transaction-local organization/workspace context consumed by RLS policies.
-- [ ] Add repositories and explicit unit-of-work boundaries.
-- [ ] Add local hosted-development PostgreSQL without changing default V2 Compose behavior.
-- [ ] Define backup, restore, retention, and migration rollback expectations.
+- [x] Configure SQLAlchemy 2.x and Alembic; document transaction and session conventions.
+- [x] Create initial schemas, constraints, indexes, timestamps, and migration history.
+- [x] Add `organization_id`/`workspace_id` to tenant-owned rows with organization/workspace consistency constraints.
+- [x] Create separate migration/schema-owner and application runtime roles; ensure the application role owns no tenant table and lacks `BYPASSRLS`.
+- [x] Implement `SET LOCAL`-style transaction-local organization/workspace context consumed by RLS policies.
+- [x] Add repositories and explicit unit-of-work boundaries.
+- [x] Add local hosted-development PostgreSQL without changing default V2 Compose behavior.
+- [x] Define backup, restore, retention, and migration rollback expectations.
 
 **Files/modules:** Expected `app/db/`, `app/repositories/postgres/`, `migrations/`, hosted Compose overlay, database tests.
 
