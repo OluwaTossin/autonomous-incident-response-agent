@@ -185,16 +185,18 @@ Version 3 preserves human authority over consequential actions. Version 4 is the
 
 **Dependencies:** V3.3.
 
+**Status:** Complete in `1d52c67` (`feat: add hosted identity and actor context`).
+
 **Checklist:**
 
-- [ ] Configure the hosted API's Cognito-compatible issuer, audience/client ID, token use, algorithms, clock handling, and JWKS cache; document PKCE, callback, MFA, and token/session expectations for V3.13.
-- [ ] Define the V3.13 hosted Next.js server-mediated session contract using Secure, HttpOnly cookies; defer its browser callback, refresh, logout, CSRF, and route-protection implementation to V3.13.
-- [ ] Implement JWT verification with fail-closed key rotation and clock handling.
-- [ ] Map provider subjects to durable users without trusting role claims as the authorization source.
-- [ ] Define `ActorContext` variants for human, `service_account`, and `system` principals.
-- [ ] Implement service-account identity, credential rotation, revocation, and audit attribution without assigning RBAC scopes before V3.5.
-- [ ] Define trusted system actors and the future IAM/workload-identity boundary without adding AWS infrastructure.
-- [ ] Retain shared-key security only in the self-hosted composition.
+- [x] Configure the hosted API's Cognito-compatible issuer, audience/client ID, token use, algorithms, clock handling, and JWKS cache; document PKCE, callback, MFA, and token/session expectations for V3.13.
+- [x] Define the V3.13 hosted Next.js server-mediated session contract using Secure, HttpOnly cookies; defer its browser callback, refresh, logout, CSRF, and route-protection implementation to V3.13.
+- [x] Implement JWT verification with fail-closed key rotation and clock handling.
+- [x] Map provider subjects to durable users without trusting role claims as the authorization source.
+- [x] Define `ActorContext` variants for human, `service_account`, and `system` principals.
+- [x] Implement service-account identity, credential rotation, revocation, and audit attribution without assigning RBAC scopes before V3.5.
+- [x] Define trusted system actors and the future IAM/workload-identity boundary without adding AWS infrastructure.
+- [x] Retain shared-key security only in the self-hosted composition.
 
 **Files/modules:** Expected `app/auth/`, hosted FastAPI dependencies/middleware, identity repositories, Cognito configuration, auth tests; adapt `app/api/security.py`.
 
