@@ -110,13 +110,15 @@ Version 3 preserves human authority over consequential actions. Version 4 is the
 
 **Dependencies:** V3.0.
 
+**Status:** Complete in `ac20505` (`refactor: establish shared triage core for AIRA v3`).
+
 **Checklist:**
 
-- [ ] Add characterization tests for incident normalization, graph output, evidence, policy, retrieval hits, audit metadata, CLI, REST, and Gradio paths.
-- [ ] Define minimal ports for repositories, document storage, index resolution, jobs, audit, and actions.
-- [ ] Separate pure triage execution from HTTP/JSONL/metrics orchestration in `run_full_triage`.
-- [ ] Define explicit self-hosted and hosted composition roots; prohibit scattered `hosted_mode` checks.
-- [ ] Preserve current command names and V2 response contracts.
+- [x] Add characterization tests for incident normalization, graph output, evidence, policy, retrieval hits, audit metadata, CLI, REST, and Gradio paths.
+- [x] Define only the runtime seams required by V3.1 (`TriagePipeline`, audit, and metrics); defer repository, document, index, job, and action contracts to their owning phases.
+- [x] Separate pure triage execution from HTTP/JSONL/metrics orchestration in `run_full_triage`.
+- [x] Define the explicit self-hosted composition root and an injected boundary for the later hosted root; prohibit scattered `hosted_mode` checks.
+- [x] Preserve current command names and V2 response contracts.
 
 **Files/modules:** Existing `app/agent/`, `app/api/triage_execution.py`, `app/rag/`; expected `app/core/`, `app/application/`, `app/composition/`; characterization tests.
 
