@@ -35,14 +35,23 @@ def top_k_sources_from_hits(hits: list[dict[str, Any]] | None) -> list[dict[str,
             score = float(h.get("score", 0.0))
         except (TypeError, ValueError):
             score = 0.0
-        rows.append(
-            {
-                "source": str(h.get("source") or ""),
-                "doc_type": str(h.get("doc_type") or ""),
-                "score": round(score, 6),
-                "chunk_index": h.get("chunk_index"),
-            }
-        )
+        row = {
+            "source": str(h.get("source") or ""),
+            "doc_type": str(h.get("doc_type") or ""),
+            "score": round(score, 6),
+            "chunk_index": h.get("chunk_index"),
+        }
+        for name in (
+            "origin",
+            "organization_id",
+            "workspace_id",
+            "document_id",
+            "document_version_id",
+            "knowledge_index_version_id",
+        ):
+            if h.get(name) is not None:
+                row[name] = str(h[name])
+        rows.append(row)
     rows.sort(key=lambda r: (-r["score"], r["source"]))
     return rows
 

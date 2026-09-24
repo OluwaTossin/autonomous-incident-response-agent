@@ -26,10 +26,23 @@ def _norm_source_key(source: str) -> str:
     return os.path.basename(s).lower() if s else ""
 
 
-def evidence_from_retrieval_dicts(hit_dicts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _evidence_identity(
+    row: dict[str, Any], evidence_type: str, source: str
+) -> tuple[str, str]:
+    document_version_id = str(row.get("document_version_id") or "").strip()
+    if document_version_id:
+        return evidence_type, f"document-version:{document_version_id}"
+    return evidence_type, source
+
+
+def evidence_from_retrieval_dicts(
+    hit_dicts: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """One evidence row per unique (evidence_type, source), merging multi-chunk hits."""
     buckets: dict[tuple[str, str], float] = {}
     counts: dict[tuple[str, str], int] = {}
+    sources: dict[tuple[str, str], str] = {}
+    provenance: dict[tuple[str, str], dict[str, Any]] = {}
     for h in hit_dicts:
         source = str(h.get("source") or "").strip()
         if not source:
@@ -39,17 +52,53 @@ def evidence_from_retrieval_dicts(hit_dicts: list[dict[str, Any]]) -> list[dict[
             score = float(h.get("score", 0.0))
         except (TypeError, ValueError):
             score = 0.0
-        key = (et, source)
+        key = _evidence_identity(h, et, source)
+        sources.setdefault(key, source)
+        has_hosted_provenance = any(
+            h.get(name) is not None
+            for name in (
+                "origin",
+                "organization_id",
+                "workspace_id",
+                "document_id",
+                "document_version_id",
+                "knowledge_index_version_id",
+            )
+        )
+        if has_hosted_provenance and (key not in buckets or score > buckets[key]):
+            provenance[key] = {
+                name: h[name]
+                for name in (
+                    "origin",
+                    "organization_id",
+                    "workspace_id",
+                    "document_id",
+                    "document_version_id",
+                    "knowledge_index_version_id",
+                    "chunk_index",
+                )
+                if h.get(name) is not None
+            }
         buckets[key] = max(buckets.get(key, 0.0), score)
         counts[key] = counts.get(key, 0) + 1
 
     items: list[dict[str, Any]] = []
-    for (etype, source), score in sorted(buckets.items(), key=lambda x: -x[1]):
-        n = counts[(etype, source)]
+    for key, score in sorted(buckets.items(), key=lambda item: -item[1]):
+        etype, _identity = key
+        source = sources[key]
+        n = counts[key]
         reason = f"Retrieved from knowledge index (similarity={score:.3f})"
         if n > 1:
             reason += f"; {n} chunks matched this source"
-        items.append({"type": etype, "source": source, "reason": reason})
+        items.append(
+            {
+                "type": etype,
+                "source": source,
+                "reason": reason,
+                **provenance.get(key, {}),
+                **({"score": score} if provenance.get(key) else {}),
+            }
+        )
     return items
 
 
@@ -64,7 +113,7 @@ def merge_evidence_lists(
     for row in programmatic:
         t = str(row.get("type") or "other").lower()
         sk = _norm_source_key(str(row.get("source") or ""))
-        key = (t, sk)
+        key = _evidence_identity(row, t, sk)
         if sk and key in seen:
             continue
         if sk:

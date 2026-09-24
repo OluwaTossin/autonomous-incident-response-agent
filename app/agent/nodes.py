@@ -19,6 +19,7 @@ from app.agent.signal_reasoning import (
     merge_evidence_lists,
     merge_timelines,
 )
+from app.knowledge.contracts import RetrievalContext
 from app.models.incident import IncidentPayload
 from app.models.triage import TriageOutput
 from app.config import get_settings
@@ -96,20 +97,43 @@ def node_normalize_input(state: TriageState) -> dict[str, Any]:
 
 
 def _hit_to_state_dict(h: RetrievalHit) -> dict[str, Any]:
-    return {
+    row: dict[str, Any] = {
         "score": h.score,
         "source": h.source,
         "doc_type": h.doc_type,
         "chunk_index": h.chunk_index,
     }
+    for field in (
+        "origin",
+        "organization_id",
+        "workspace_id",
+        "document_id",
+        "document_version_id",
+        "knowledge_index_version_id",
+    ):
+        value = getattr(h, field, None)
+        if value is not None:
+            row[field] = value.value if hasattr(value, "value") else str(value)
+    return row
 
 
-def node_retrieval(state: TriageState) -> dict[str, Any]:
+def node_retrieval(
+    state: TriageState,
+    *,
+    retrieval_context: RetrievalContext | None = None,
+) -> dict[str, Any]:
     if state.get("error"):
         return {}
     q = state.get("retrieval_query") or ""
     try:
-        hits = retrieve(q, top_k=get_settings().rag_top_k)
+        if retrieval_context is None:
+            hits = retrieve(q, top_k=get_settings().rag_top_k)
+        else:
+            hits = retrieval_context.retriever.retrieve(
+                retrieval_context.index,
+                q,
+                top_k=retrieval_context.top_k,
+            )
     except Exception as e:
         return {
             "rag_context": (
@@ -268,7 +292,12 @@ def node_output_formatter(state: TriageState) -> dict[str, Any]:
     draft = state.get("draft") or {}
     try:
         validated = TriageOutput.model_validate(draft)
-        return {"result": validated.model_dump(mode="json")}
+        result = validated.model_dump(mode="json")
+        result["evidence"] = [
+            {key: value for key, value in item.items() if value is not None}
+            for item in result["evidence"]
+        ]
+        return {"result": result}
     except ValidationError as e:
         return {
             "error": f"Output validation failed: {e}",

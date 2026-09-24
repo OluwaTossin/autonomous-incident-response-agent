@@ -12,7 +12,7 @@ knowledge indexes; V3.8 and V3.9 own those flows.
 | Content | `workspaces/<id>/data/<category>/<filename>` | Private immutable object |
 | Metadata | Filesystem path and stat | PostgreSQL document/version rows |
 | Tenant scope | Process-selected `WORKSPACE_ID` | Authorized organization/workspace context plus RLS |
-| Index input | Existing corpus globs | Deferred to V3.8 |
+| Index input | Existing corpus globs | Authorized eligible-version selection from PostgreSQL |
 
 The Version 2 `/admin/upload`, file suffix checks, workspace paths, local FAISS input,
 CLI, and Compose behavior are unchanged. The hosted S3 composition is separate and does
@@ -78,9 +78,10 @@ ownership checks. Only available versions of an unarchived document receive a sh
 presigned GET. The issuance is audited without storing the URL, object key, credentials, or
 headers.
 
-Archive is a logical PostgreSQL transition. It blocks new versions, finalization, and
-downloads but retains immutable available objects. Physical deletion of available objects is
-deferred until V3.8/V3.9 define index references and V3.25 defines retention/deletion policy.
+Archive is a logical PostgreSQL transition. It blocks new versions, finalization, downloads,
+and V3.8 source selection but retains immutable available objects. Physical deletion of
+available objects is deferred until V3.9 defines artifact lifecycle and V3.25 defines
+retention/deletion policy.
 This prevents an archive operation from silently breaking a future published index. Failed
 upload objects have an explicit cleanup path in V3.7.
 
@@ -117,4 +118,3 @@ cleanup scheduling.
 Unit tests use deterministic in-memory storage and injected fake S3 clients. Real PostgreSQL
 tests cover metadata constraints, transaction rollback, missing context, cross-workspace RLS,
 and durable audit. No AWS account, LocalStack, moto, or V2 Compose change is required.
-

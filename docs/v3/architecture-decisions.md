@@ -131,6 +131,8 @@ This record translates the Version 3 product boundary into implementation constr
 
 **Follow-up work:** Define bundle format/version, manifest, checksums, cache limits, locking, activation transaction, rollback, garbage collection, compatibility checks, and pgvector evaluation criteria.
 
+**V3.8 boundary:** Hosted knowledge resolution now follows fresh authorization into a sealed workspace context and transaction-local RLS. The application reference contains tenant and index identities, not artifact keys or cache paths. Hosted source selection admits only the latest verified available version of supported, non-archived documents. System corpus content is disabled by default and must be explicitly enabled with attributable source IDs. The existing filesystem bundle and decision corpus remain in the self-hosted adapter. Bundle lifecycle and hosted artifact loading remain deferred to V3.9.
+
 ## H. Asynchronous triage
 
 **Decision:** Use SQS with a dead-letter queue. Separate API and worker services while keeping the triage engine reusable. Assume at-least-once delivery and require idempotency. Triage-run states are `QUEUED`, `RUNNING`, `SUCCEEDED`, `FAILED`, and `CANCELLED`.
