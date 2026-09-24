@@ -44,6 +44,7 @@ from app.domain.knowledge import (
     DocumentCategory,
     DocumentState,
     DocumentVersion,
+    DocumentVersionState,
     KnowledgeIndexState,
     KnowledgeIndexVersion,
 )
@@ -134,8 +135,13 @@ def test_document_and_version_lifecycle_and_scope() -> None:
         checksum_sha256="a" * 64,
         size_bytes=42,
         media_type="text/markdown",
+        original_filename="checkout.md",
+        storage_provider="s3",
+        object_key="documents/org/workspace/document/version/source",
+        state=DocumentVersionState.PENDING_UPLOAD,
         created_by=_actor(),
         created_at=NOW,
+        updated_at=NOW,
     )
 
     assert version.document == pending.reference
@@ -151,8 +157,13 @@ def test_document_and_version_lifecycle_and_scope() -> None:
             checksum_sha256="b" * 64,
             size_bytes=1,
             media_type="text/plain",
+            original_filename="other.txt",
+            storage_provider="s3",
+            object_key="documents/org/workspace/document/other/source",
+            state=DocumentVersionState.PENDING_UPLOAD,
             created_by=_actor(),
             created_at=NOW,
+            updated_at=NOW,
         )
 
 

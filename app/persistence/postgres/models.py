@@ -733,8 +733,39 @@ class DocumentVersionRecord(Base, WorkspaceTenantColumns, ActorColumns):
         ),
         CheckConstraint("version_number > 0", name="ck_document_versions_number"),
         CheckConstraint("size_bytes >= 0", name="ck_document_versions_size"),
+        CheckConstraint(
+            "state IN ('pending_upload', 'available', 'failed')",
+            name="ck_document_versions_state",
+        ),
+        CheckConstraint(
+            "content_safety_state IN ('not_scanned', 'pending_scan', 'cleared', 'rejected')",
+            name="ck_document_versions_content_safety_state",
+        ),
+        CheckConstraint(
+            "(state = 'available' AND verified_checksum_sha256 IS NOT NULL "
+            "AND verified_size_bytes IS NOT NULL AND verified_media_type IS NOT NULL "
+            "AND finalized_at IS NOT NULL AND failure_reason IS NULL "
+            "AND verified_checksum_sha256 = checksum_sha256 "
+            "AND verified_size_bytes = size_bytes "
+            "AND verified_media_type = media_type "
+            "AND object_deleted_at IS NULL) OR "
+            "(state <> 'available' AND verified_checksum_sha256 IS NULL "
+            "AND verified_size_bytes IS NULL AND verified_media_type IS NULL "
+            "AND finalized_at IS NULL)",
+            name="ck_document_versions_verified_state",
+        ),
+        CheckConstraint(
+            "(state = 'failed' AND failure_reason IS NOT NULL) OR "
+            "(state <> 'failed' AND failure_reason IS NULL)",
+            name="ck_document_versions_failure_state",
+        ),
+        CheckConstraint(
+            "object_deleted_at IS NULL OR state = 'failed'",
+            name="ck_document_versions_deleted_state",
+        ),
         CheckConstraint(_ACTOR_CHECK, name="ck_document_versions_actor_kind"),
         Index("ix_document_versions_document", "document_id", "version_number"),
+        UniqueConstraint("object_key", name="uq_document_versions_object_key"),
     )
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
@@ -743,8 +774,30 @@ class DocumentVersionRecord(Base, WorkspaceTenantColumns, ActorColumns):
     checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     media_type: Mapped[str] = mapped_column(String(255), nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    storage_provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    object_key: Mapped[str] = mapped_column(String(1024), nullable=False)
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
+    content_safety_state: Mapped[str] = mapped_column(String(32), nullable=False)
+    verified_checksum_sha256: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    verified_size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    verified_media_type: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    finalized_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    object_deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
 

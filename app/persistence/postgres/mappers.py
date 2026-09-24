@@ -68,11 +68,13 @@ from app.domain.incidents import (
 )
 from app.domain.identity import ServiceAccount, ServiceAccountCredential
 from app.domain.knowledge import (
+    ContentSafetyState,
     Document,
     DocumentCategory,
     DocumentReference,
     DocumentState,
     DocumentVersion,
+    DocumentVersionState,
     KnowledgeIndexState,
     KnowledgeIndexVersion,
 )
@@ -778,7 +780,19 @@ def document_version_to_record(version: DocumentVersion) -> DocumentVersionRecor
         checksum_sha256=version.checksum_sha256,
         size_bytes=version.size_bytes,
         media_type=version.media_type,
+        original_filename=version.original_filename,
+        storage_provider=version.storage_provider,
+        object_key=version.object_key,
+        state=version.state.value,
+        content_safety_state=version.content_safety_state.value,
+        verified_checksum_sha256=version.verified_checksum_sha256,
+        verified_size_bytes=version.verified_size_bytes,
+        verified_media_type=version.verified_media_type,
         created_at=version.created_at,
+        updated_at=version.updated_at,
+        finalized_at=version.finalized_at,
+        failure_reason=version.failure_reason,
+        object_deleted_at=version.object_deleted_at,
         **_actor_columns(version.created_by),
     )
 
@@ -793,8 +807,20 @@ def document_version_from_record(record: DocumentVersionRecord) -> DocumentVersi
         checksum_sha256=record.checksum_sha256,
         size_bytes=record.size_bytes,
         media_type=record.media_type,
+        original_filename=record.original_filename,
+        storage_provider=record.storage_provider,
+        object_key=record.object_key,
+        state=DocumentVersionState(record.state),
+        content_safety_state=ContentSafetyState(record.content_safety_state),
+        verified_checksum_sha256=record.verified_checksum_sha256,
+        verified_size_bytes=record.verified_size_bytes,
+        verified_media_type=record.verified_media_type,
         created_by=_actor(record.actor_kind, record.actor_id, record.actor_system_name),
         created_at=record.created_at,
+        updated_at=record.updated_at,
+        finalized_at=record.finalized_at,
+        failure_reason=record.failure_reason,
+        object_deleted_at=record.object_deleted_at,
     )
 
 

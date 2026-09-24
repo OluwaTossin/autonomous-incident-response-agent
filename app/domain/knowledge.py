@@ -40,6 +40,19 @@ class DocumentState(StrEnum):
     ARCHIVED = "archived"
 
 
+class DocumentVersionState(StrEnum):
+    PENDING_UPLOAD = "pending_upload"
+    AVAILABLE = "available"
+    FAILED = "failed"
+
+
+class ContentSafetyState(StrEnum):
+    NOT_SCANNED = "not_scanned"
+    PENDING_SCAN = "pending_scan"
+    CLEARED = "cleared"
+    REJECTED = "rejected"
+
+
 class KnowledgeIndexState(StrEnum):
     BUILDING = "building"
     ACTIVE = "active"
@@ -63,6 +76,14 @@ _INDEX_TRANSITIONS = {
     KnowledgeIndexState.ACTIVE: frozenset({KnowledgeIndexState.INACTIVE}),
     KnowledgeIndexState.FAILED: frozenset(),
     KnowledgeIndexState.INACTIVE: frozenset(),
+}
+
+_DOCUMENT_VERSION_TRANSITIONS = {
+    DocumentVersionState.PENDING_UPLOAD: frozenset(
+        {DocumentVersionState.AVAILABLE, DocumentVersionState.FAILED}
+    ),
+    DocumentVersionState.AVAILABLE: frozenset(),
+    DocumentVersionState.FAILED: frozenset(),
 }
 
 DOCUMENT_TERMINAL_STATES = frozenset({DocumentState.FAILED, DocumentState.ARCHIVED})
@@ -143,8 +164,20 @@ class DocumentVersion:
     checksum_sha256: str
     size_bytes: int
     media_type: str
+    original_filename: str
+    storage_provider: str
+    object_key: str
+    state: DocumentVersionState
     created_by: ActorReference
     created_at: datetime
+    updated_at: datetime
+    content_safety_state: ContentSafetyState = ContentSafetyState.NOT_SCANNED
+    verified_checksum_sha256: str | None = None
+    verified_size_bytes: int | None = None
+    verified_media_type: str | None = None
+    finalized_at: datetime | None = None
+    failure_reason: str | None = None
+    object_deleted_at: datetime | None = None
 
     def __post_init__(self) -> None:
         if self.scope != self.document.scope:
@@ -157,7 +190,121 @@ class DocumentVersion:
             raise DomainInvariantError("Document size_bytes cannot be negative")
         if not self.media_type.strip():
             raise DomainInvariantError("Document media_type cannot be blank")
-        require_aware(self.created_at, "created_at")
+        if not self.original_filename.strip() or len(self.original_filename) > 255:
+            raise DomainInvariantError(
+                "Document original_filename must be 1 to 255 characters"
+            )
+        if not self.storage_provider.strip() or not self.object_key.strip():
+            raise DomainInvariantError(
+                "Document storage provider and object key cannot be blank"
+            )
+        validate_timestamps(self.created_at, self.updated_at)
+        if self.finalized_at is not None:
+            require_aware(self.finalized_at, "finalized_at")
+        if self.object_deleted_at is not None:
+            require_aware(self.object_deleted_at, "object_deleted_at")
+        if self.verified_checksum_sha256 is not None and not _SHA256_RE.fullmatch(
+            self.verified_checksum_sha256
+        ):
+            raise DomainInvariantError(
+                "Verified document checksum must be 64 lowercase hex characters"
+            )
+        if self.verified_size_bytes is not None and self.verified_size_bytes < 0:
+            raise DomainInvariantError(
+                "Verified document size_bytes cannot be negative"
+            )
+        if self.verified_media_type is not None and not self.verified_media_type.strip():
+            raise DomainInvariantError("Verified document media_type cannot be blank")
+        verified = (
+            self.verified_checksum_sha256,
+            self.verified_size_bytes,
+            self.verified_media_type,
+            self.finalized_at,
+        )
+        if self.state is DocumentVersionState.AVAILABLE:
+            if any(value is None for value in verified):
+                raise DomainInvariantError(
+                    "Available document versions require verified metadata"
+                )
+            if self.failure_reason is not None or self.object_deleted_at is not None:
+                raise DomainInvariantError(
+                    "Available document versions cannot be failed or deleted"
+                )
+        elif any(value is not None for value in verified):
+            raise DomainInvariantError(
+                "Only available document versions may carry verified metadata"
+            )
+        if self.state is DocumentVersionState.FAILED and not self.failure_reason:
+            raise DomainInvariantError(
+                "Failed document versions require failure_reason"
+            )
+        if self.state is not DocumentVersionState.FAILED and self.failure_reason:
+            raise DomainInvariantError(
+                "Only failed document versions may carry failure_reason"
+            )
+        if (
+            self.object_deleted_at is not None
+            and self.state is not DocumentVersionState.FAILED
+        ):
+            raise DomainInvariantError("Only failed document objects may be deleted")
+
+    def finalize(
+        self,
+        *,
+        checksum_sha256: str,
+        size_bytes: int,
+        media_type: str,
+        at: datetime | None = None,
+    ) -> DocumentVersion:
+        require_transition(
+            "DocumentVersion",
+            self.state,
+            DocumentVersionState.AVAILABLE,
+            _DOCUMENT_VERSION_TRANSITIONS,
+        )
+        when = at or utc_now()
+        return replace(
+            self,
+            state=DocumentVersionState.AVAILABLE,
+            verified_checksum_sha256=checksum_sha256,
+            verified_size_bytes=size_bytes,
+            verified_media_type=media_type,
+            finalized_at=when,
+            updated_at=when,
+        )
+
+    def fail(
+        self,
+        reason: str,
+        *,
+        at: datetime | None = None,
+        object_deleted_at: datetime | None = None,
+    ) -> DocumentVersion:
+        require_transition(
+            "DocumentVersion",
+            self.state,
+            DocumentVersionState.FAILED,
+            _DOCUMENT_VERSION_TRANSITIONS,
+        )
+        normalized = reason.strip()
+        if not normalized:
+            raise DomainInvariantError(
+                "Document version failure reason cannot be blank"
+            )
+        when = at or utc_now()
+        return replace(
+            self,
+            state=DocumentVersionState.FAILED,
+            failure_reason=normalized,
+            object_deleted_at=object_deleted_at,
+            updated_at=when,
+        )
+
+    def mark_object_deleted(self, *, at: datetime | None = None) -> DocumentVersion:
+        if self.state is not DocumentVersionState.FAILED:
+            raise DomainInvariantError("Only failed document objects may be deleted")
+        when = at or utc_now()
+        return replace(self, object_deleted_at=when, updated_at=when)
 
 
 @dataclass(frozen=True, slots=True)

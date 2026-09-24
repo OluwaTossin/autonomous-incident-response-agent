@@ -24,6 +24,10 @@ The package boundaries are:
   configuration persistence with compare-and-swap updates.
 - `app/persistence/postgres/workspace_unit_of_work.py`: one authorized workspace
   transaction; see [`workspaces.md`](workspaces.md).
+- `app/persistence/postgres/document_repositories.py`: hosted document and immutable
+  version metadata persistence.
+- `app/persistence/postgres/document_unit_of_work.py`: one authorized document metadata
+  transaction; see [`documents.md`](documents.md).
 - `migrations/`: deterministic Alembic schema, privilege, and RLS changes.
 
 V3.3 intentionally does not wire existing FastAPI routes to these repositories. A hosted

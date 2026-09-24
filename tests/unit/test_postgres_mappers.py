@@ -58,6 +58,7 @@ from app.domain.knowledge import (
     DocumentCategory,
     DocumentState,
     DocumentVersion,
+    DocumentVersionState,
     KnowledgeIndexState,
     KnowledgeIndexVersion,
 )
@@ -205,8 +206,17 @@ DOCUMENT_VERSION = DocumentVersion(
     checksum_sha256="a" * 64,
     size_bytes=42,
     media_type="text/markdown",
+    original_filename="checkout.md",
+    storage_provider="s3",
+    object_key="documents/org/workspace/document/version/source",
+    state=DocumentVersionState.AVAILABLE,
     created_by=ACTOR,
     created_at=NOW,
+    updated_at=NOW,
+    verified_checksum_sha256="a" * 64,
+    verified_size_bytes=42,
+    verified_media_type="text/markdown",
+    finalized_at=NOW,
 )
 INDEX_VERSION = KnowledgeIndexVersion(
     id=_id(KnowledgeIndexVersionId, 12),

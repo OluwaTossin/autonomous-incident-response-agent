@@ -113,3 +113,7 @@ Next.js session flow remain later-phase work.
 
 V3.6 applies this boundary to durable workspace lifecycle and configuration as documented
 in [`workspaces.md`](workspaces.md).
+
+V3.7 applies `knowledge.read` to document metadata/download and `knowledge.manage` to
+upload, version, archive, and failed-object cleanup as documented in
+[`documents.md`](documents.md). Object keys never grant access independently.
