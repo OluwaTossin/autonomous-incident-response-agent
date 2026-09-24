@@ -284,13 +284,15 @@ Version 3 preserves human authority over consequential actions. Version 4 is the
 
 **Dependencies:** V3.1, V3.6, V3.7.
 
+**Status:** Complete in `80194ea` (`feat: add tenant-aware knowledge retrieval`).
+
 **Checklist:**
 
-- [ ] Define narrow `KnowledgeSource`, `KnowledgeIndex`, and `Retriever` contracts using current retrieval-hit semantics.
-- [ ] Remove hosted reliance on global `rag_index_dir()` and `corpus_data_root()`.
-- [ ] Stage authorized document versions for indexing.
-- [ ] Preserve decision-document behavior only through an explicit system corpus policy, not unconditional tenant mixing.
-- [ ] Keep local filesystem FAISS adapter for V2.
+- [x] Define narrow `KnowledgeSource`, `KnowledgeIndex`, and `Retriever` contracts using current retrieval-hit semantics.
+- [x] Remove hosted reliance on global `rag_index_dir()` and `corpus_data_root()`.
+- [x] Stage authorized document versions for indexing.
+- [x] Preserve decision-document behavior only through an explicit system corpus policy, not unconditional tenant mixing.
+- [x] Keep local filesystem FAISS adapter for V2.
 
 **Files/modules:** Adapt `app/rag/config.py`, `loader.py`, `index_store.py`, `retrieve.py`, `cli.py`; expected hosted knowledge services/adapters.
 
