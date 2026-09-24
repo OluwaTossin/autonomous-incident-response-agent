@@ -353,10 +353,39 @@ def test_pending_cancel_and_running_cancellation_request() -> None:
     requested = service.cancel_job(_human(), ORG, WORKSPACE, running.id)
     assert requested.state is JobState.RUNNING
     assert requested.cancellation_requested_at == NOW
+    with pytest.raises(JobNotClaimable):
+        service.complete_job(
+            _worker(), ORG, WORKSPACE, running.id, running.claim_token, _result()
+        )
     cancelled = service.acknowledge_cancellation(
         _worker(), ORG, WORKSPACE, running.id, running.claim_token
     )
     assert cancelled.state is JobState.CANCELLED
+
+    failing_job = _create(service, key="index:cancelling-failure")
+    failing = service.claim_job(
+        _worker(),
+        ORG,
+        WORKSPACE,
+        failing_job.id,
+        worker_id="worker-a",
+        lease_duration=timedelta(minutes=1),
+    )
+    service.cancel_job(_human(), ORG, WORKSPACE, failing.id)
+    cancelled_failure = service.fail_job(
+        _worker(),
+        ORG,
+        WORKSPACE,
+        failing.id,
+        failing.claim_token,
+        JobFailure(
+            "dependency_timeout",
+            JobErrorCategory.TRANSIENT,
+            True,
+            "Dependency timed out",
+        ),
+    )
+    assert cancelled_failure.state is JobState.CANCELLED
 
 
 def test_expired_lease_recovery_retries_then_exhausts() -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from uuid import UUID, uuid4
 
 from sqlalchemy import and_, or_, select, update
@@ -9,7 +10,8 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.application.jobs import JobConflict, JobDispatch, JobListCursor
-from app.domain.identifiers import JobId
+from app.domain.common import WorkspaceScope
+from app.domain.identifiers import JobId, OrganizationId, WorkspaceId
 from app.domain.operations import Job, JobState
 from app.persistence.postgres.mappers import job_from_record, job_to_record
 from app.persistence.postgres.models import JobDispatchRecord, JobRecord
@@ -127,9 +129,17 @@ class PostgresJobDispatchRepository:
                 available_at=job.available_at,
                 created_at=at,
                 published_at=None,
+                publish_attempt_count=0,
             )
         )
         self._session.flush()
+
+    def get(self, dispatch_id: UUID, *, for_update: bool = False) -> JobDispatch | None:
+        statement = select(JobDispatchRecord).where(JobDispatchRecord.id == dispatch_id)
+        if for_update:
+            statement = statement.with_for_update()
+        record = self._session.scalar(statement)
+        return _dispatch_from_record(record) if record else None
 
     def list_unpublished(self, *, at, limit: int) -> list[JobDispatch]:
         records = self._session.scalars(
@@ -141,26 +151,102 @@ class PostgresJobDispatchRepository:
             .order_by(JobDispatchRecord.available_at, JobDispatchRecord.created_at)
             .limit(limit)
         ).all()
-        return [
-            JobDispatch(
-                record.id,
-                JobId(str(record.job_id)),
-                record.dispatch_generation,
-                record.available_at,
-                record.created_at,
-                record.published_at,
-            )
-            for record in records
-        ]
+        return [_dispatch_from_record(record) for record in records]
 
-    def mark_published(self, dispatch_id: UUID, *, at) -> bool:
+    def claim_ready(
+        self,
+        *,
+        at,
+        limit: int,
+        claimed_by: str,
+        claim_duration: timedelta,
+    ) -> list[JobDispatch]:
+        records = self._session.scalars(
+            select(JobDispatchRecord)
+            .where(
+                JobDispatchRecord.published_at.is_(None),
+                JobDispatchRecord.available_at <= at,
+                or_(
+                    JobDispatchRecord.claim_expires_at.is_(None),
+                    JobDispatchRecord.claim_expires_at <= at,
+                ),
+            )
+            .order_by(JobDispatchRecord.available_at, JobDispatchRecord.created_at)
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        ).all()
+        for record in records:
+            record.claimed_by = claimed_by
+            record.claim_token = uuid4()
+            record.claim_expires_at = at + claim_duration
+            record.publish_attempt_count += 1
+        self._session.flush()
+        return [_dispatch_from_record(record) for record in records]
+
+    def mark_published(self, dispatch_id: UUID, claim_token: UUID, *, at) -> bool:
         result = self._session.execute(
             update(JobDispatchRecord)
             .where(
                 JobDispatchRecord.id == dispatch_id,
                 JobDispatchRecord.published_at.is_(None),
+                JobDispatchRecord.claim_token == claim_token,
+                JobDispatchRecord.claim_expires_at > at,
             )
-            .values(published_at=at)
+            .values(
+                published_at=at,
+                claimed_by=None,
+                claim_token=None,
+                claim_expires_at=None,
+            )
         )
         self._session.flush()
         return result.rowcount == 1
+
+    def release_claim(self, dispatch_id: UUID, claim_token: UUID) -> bool:
+        result = self._session.execute(
+            update(JobDispatchRecord)
+            .where(
+                JobDispatchRecord.id == dispatch_id,
+                JobDispatchRecord.published_at.is_(None),
+                JobDispatchRecord.claim_token == claim_token,
+            )
+            .values(claimed_by=None, claim_token=None, claim_expires_at=None)
+        )
+        self._session.flush()
+        return result.rowcount == 1
+
+    def reset_for_replay(self, dispatch_id: UUID, dispatch_generation: int) -> bool:
+        result = self._session.execute(
+            update(JobDispatchRecord)
+            .where(
+                JobDispatchRecord.id == dispatch_id,
+                JobDispatchRecord.dispatch_generation == dispatch_generation,
+            )
+            .values(
+                published_at=None,
+                claimed_by=None,
+                claim_token=None,
+                claim_expires_at=None,
+            )
+        )
+        self._session.flush()
+        return result.rowcount == 1
+
+
+def _dispatch_from_record(record: JobDispatchRecord) -> JobDispatch:
+    return JobDispatch(
+        id=record.id,
+        scope=WorkspaceScope(
+            OrganizationId(str(record.organization_id)),
+            WorkspaceId(str(record.workspace_id)),
+        ),
+        job_id=JobId(str(record.job_id)),
+        dispatch_generation=record.dispatch_generation,
+        available_at=record.available_at,
+        created_at=record.created_at,
+        published_at=record.published_at,
+        claimed_by=record.claimed_by,
+        claim_token=record.claim_token,
+        claim_expires_at=record.claim_expires_at,
+        publish_attempt_count=record.publish_attempt_count,
+    )

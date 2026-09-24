@@ -6,7 +6,7 @@ import hashlib
 import json
 import time
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import Protocol, Self
 from uuid import UUID, uuid4
@@ -82,11 +82,16 @@ class JobListCursor:
 @dataclass(frozen=True, slots=True)
 class JobDispatch:
     id: UUID
+    scope: WorkspaceScope
     job_id: JobId
     dispatch_generation: int
     available_at: datetime
     created_at: datetime
     published_at: datetime | None = None
+    claimed_by: str | None = None
+    claim_token: UUID | None = None
+    claim_expires_at: datetime | None = None
+    publish_attempt_count: int = 0
 
 
 class JobRepository(Protocol):
@@ -109,8 +114,19 @@ class JobRepository(Protocol):
 
 class JobDispatchRepository(Protocol):
     def add(self, job: Job, *, at: datetime) -> None: ...
+    def get(self, dispatch_id: UUID, *, for_update: bool = False) -> JobDispatch | None: ...
     def list_unpublished(self, *, at: datetime, limit: int) -> Sequence[JobDispatch]: ...
-    def mark_published(self, dispatch_id: UUID, *, at: datetime) -> bool: ...
+    def claim_ready(
+        self,
+        *,
+        at: datetime,
+        limit: int,
+        claimed_by: str,
+        claim_duration: timedelta,
+    ) -> Sequence[JobDispatch]: ...
+    def mark_published(self, dispatch_id: UUID, claim_token: UUID, *, at: datetime) -> bool: ...
+    def release_claim(self, dispatch_id: UUID, claim_token: UUID) -> bool: ...
+    def reset_for_replay(self, dispatch_id: UUID, dispatch_generation: int) -> bool: ...
 
 
 class AuditEventRepository(Protocol):
@@ -305,18 +321,23 @@ class HostedJobService:
         started = self._monotonic()
         with self._uow_factory(context) as uow:
             current = self._required(uow.jobs.get(job_id, for_update=True))
-            next_available = now + self._backoff(current.attempt_count)
             try:
-                updated = current.fail_attempt(
-                    claim_token,
-                    failure,
-                    next_available_at=next_available,
-                    at=now,
-                )
+                if current.cancellation_requested_at is not None:
+                    updated = current.acknowledge_cancellation(claim_token, at=now)
+                else:
+                    updated = current.fail_attempt(
+                        claim_token,
+                        failure,
+                        next_available_at=now + self._backoff(current.attempt_count),
+                        at=now,
+                    )
             except Exception as exc:
                 raise JobNotClaimable("Job failure claim is stale") from exc
             uow.jobs.save(updated, expected_version=current.state_version)
-            if updated.state is JobState.PENDING:
+            if updated.state is JobState.CANCELLED:
+                event_type = "job.cancelled"
+                metric = "jobs_cancelled"
+            elif updated.state is JobState.PENDING:
                 uow.dispatches.add(updated, at=now)
                 event_type = "job.retry_scheduled"
                 metric = "jobs_retried"
@@ -376,6 +397,55 @@ class HostedJobService:
             ),
         )
 
+    def renew_job_lease(
+        self,
+        actor: ActorContext,
+        organization_id: OrganizationId,
+        workspace_id: WorkspaceId,
+        job_id: JobId,
+        claim_token: UUID,
+        *,
+        lease_duration: timedelta,
+    ) -> Job:
+        if lease_duration <= timedelta(0):
+            raise ValueError("Job lease duration must be positive")
+        context = self._authorize(
+            actor, organization_id, workspace_id, Permission.JOB_EXECUTE
+        )
+        now = self._clock()
+        with self._uow_factory(context) as uow:
+            current = self._required(uow.jobs.get(job_id, for_update=True))
+            try:
+                renewed = current.renew_lease(
+                    claim_token,
+                    lease_expires_at=now + lease_duration,
+                    at=now,
+                )
+            except Exception as exc:
+                raise JobNotClaimable("Job lease cannot be renewed") from exc
+            uow.jobs.save(renewed, expected_version=current.state_version)
+        return renewed
+
+    def get_execution_state(
+        self,
+        actor: ActorContext,
+        organization_id: OrganizationId,
+        workspace_id: WorkspaceId,
+        dispatch_id: UUID,
+        job_id: JobId,
+    ) -> tuple[JobDispatch, Job]:
+        context = self._authorize(
+            actor, organization_id, workspace_id, Permission.JOB_EXECUTE
+        )
+        with self._uow_factory(context) as uow:
+            dispatch = uow.dispatches.get(dispatch_id)
+            job = uow.jobs.get(job_id)
+            if dispatch is None or job is None or dispatch.job_id != job.id:
+                raise JobNotFound("Job dispatch not found")
+            if dispatch.scope != job.scope:
+                raise JobNotFound("Job dispatch not found")
+            return dispatch, job
+
     def recover_expired_jobs(
         self,
         actor: ActorContext,
@@ -431,18 +501,102 @@ class HostedJobService:
                 uow.dispatches.list_unpublished(at=self._clock(), limit=limit)
             )
 
+    def claim_dispatches(
+        self,
+        actor: ActorContext,
+        organization_id: OrganizationId,
+        workspace_id: WorkspaceId,
+        *,
+        publisher_id: str,
+        claim_duration: timedelta,
+        limit: int = 100,
+    ) -> tuple[JobDispatch, ...]:
+        if not 1 <= limit <= 500:
+            raise ValueError("Dispatch claim limit must be between 1 and 500")
+        if claim_duration <= timedelta(0):
+            raise ValueError("Dispatch claim duration must be positive")
+        if (
+            not publisher_id.strip()
+            or len(publisher_id) > 120
+            or any(character in publisher_id for character in "\r\n")
+        ):
+            raise ValueError("Publisher ID is invalid")
+        context = self._authorize(
+            actor, organization_id, workspace_id, Permission.JOB_EXECUTE
+        )
+        with self._uow_factory(context) as uow:
+            return tuple(
+                uow.dispatches.claim_ready(
+                    at=self._clock(),
+                    limit=limit,
+                    claimed_by=publisher_id,
+                    claim_duration=claim_duration,
+                )
+            )
+
     def mark_dispatch_published(
         self,
         actor: ActorContext,
         organization_id: OrganizationId,
         workspace_id: WorkspaceId,
         dispatch_id: UUID,
+        claim_token: UUID,
     ) -> bool:
         context = self._authorize(
             actor, organization_id, workspace_id, Permission.JOB_EXECUTE
         )
         with self._uow_factory(context) as uow:
-            return uow.dispatches.mark_published(dispatch_id, at=self._clock())
+            return uow.dispatches.mark_published(
+                dispatch_id, claim_token, at=self._clock()
+            )
+
+    def release_dispatch_claim(
+        self,
+        actor: ActorContext,
+        organization_id: OrganizationId,
+        workspace_id: WorkspaceId,
+        dispatch_id: UUID,
+        claim_token: UUID,
+    ) -> bool:
+        context = self._authorize(
+            actor, organization_id, workspace_id, Permission.JOB_EXECUTE
+        )
+        with self._uow_factory(context) as uow:
+            return uow.dispatches.release_claim(dispatch_id, claim_token)
+
+    def replay_dispatch(
+        self,
+        actor: ActorContext,
+        organization_id: OrganizationId,
+        workspace_id: WorkspaceId,
+        dispatch_id: UUID,
+        job_id: JobId,
+    ) -> JobDispatch:
+        context = self._authorize(
+            actor, organization_id, workspace_id, Permission.JOB_EXECUTE
+        )
+        now = self._clock()
+        with self._uow_factory(context) as uow:
+            dispatch = uow.dispatches.get(dispatch_id, for_update=True)
+            job = self._required(uow.jobs.get(job_id, for_update=True))
+            if dispatch is None or dispatch.job_id != job.id or dispatch.scope != job.scope:
+                raise JobNotFound("Job dispatch not found")
+            if job.state in {JobState.SUCCEEDED, JobState.FAILED, JobState.CANCELLED}:
+                raise JobConflict("Terminal job dispatch cannot be replayed")
+            if dispatch.dispatch_generation != job.dispatch_generation:
+                raise JobConflict("Stale job dispatch cannot be replayed")
+            if not uow.dispatches.reset_for_replay(
+                dispatch.id, dispatch.dispatch_generation
+            ):
+                raise JobConflict("Job dispatch replay conflicted with current state")
+            self._audit(uow, context, job, "job.dispatch_replayed", now)
+            return replace(
+                dispatch,
+                published_at=None,
+                claimed_by=None,
+                claim_token=None,
+                claim_expires_at=None,
+            )
 
     def _worker_transition(
         self,
@@ -553,6 +707,10 @@ class TransientJobExecutionError(RuntimeError):
     """A deterministic adapter classification indicating bounded retry."""
 
 
+class JobCancellationRequested(RuntimeError):
+    """A typed handler reached a safe cancellation checkpoint."""
+
+
 class KnowledgeIndexBuildJobHandler:
     def __init__(
         self,
@@ -582,17 +740,8 @@ class KnowledgeIndexBuildJobHandler:
             worker_id=worker_id,
             lease_duration=self._lease_duration,
         )
-        payload = dict(claimed.payload)
-        index_version_id = KnowledgeIndexVersionId(
-            payload["knowledge_index_version_id"]
-        )
         try:
-            published = self._operation.build_publish_activate(
-                actor,
-                organization_id,
-                workspace_id,
-                index_version_id=index_version_id,
-            )
+            result = self.handle(actor, claimed, cancellation_requested=lambda: False)
         except TransientJobExecutionError:
             return self._jobs.fail_job(
                 actor,
@@ -627,10 +776,35 @@ class KnowledgeIndexBuildJobHandler:
             workspace_id,
             job_id,
             claimed.claim_token,
-            JobResultReference(
-                "knowledge_index_version",
-                str(published.index.index_version_id),
-            ),
+            result,
+        )
+
+    def handle(
+        self,
+        actor: ActorContext,
+        job: Job,
+        *,
+        cancellation_requested: Callable[[], bool],
+    ) -> JobResultReference:
+        if job.kind is not JobKind.INDEX_BUILD:
+            raise ValueError("Index-build handler received another job kind")
+        if cancellation_requested():
+            raise JobCancellationRequested("Job cancellation was requested")
+        payload = dict(job.payload)
+        index_version_id = KnowledgeIndexVersionId(
+            payload["knowledge_index_version_id"]
+        )
+        published = self._operation.build_publish_activate(
+            actor,
+            job.scope.organization_id,
+            job.scope.workspace_id,
+            index_version_id=index_version_id,
+        )
+        if cancellation_requested():
+            raise JobCancellationRequested("Job cancellation was requested")
+        return JobResultReference(
+            "knowledge_index_version",
+            str(published.index.index_version_id),
         )
 
 

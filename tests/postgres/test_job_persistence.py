@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import func, select
@@ -122,12 +122,45 @@ def test_concurrent_idempotent_creation_has_one_job_dispatch_and_audit(
         _worker(), organization_id, workspace.id
     )
     assert len(pending_dispatches) == 1
+    claimed_dispatches = service.claim_dispatches(
+        _worker(),
+        organization_id,
+        workspace.id,
+        publisher_id="publisher-a",
+        claim_duration=timedelta(minutes=1),
+    )
+    assert len(claimed_dispatches) == 1
     assert service.mark_dispatch_published(
-        _worker(), organization_id, workspace.id, pending_dispatches[0].id
+        _worker(),
+        organization_id,
+        workspace.id,
+        pending_dispatches[0].id,
+        claimed_dispatches[0].claim_token,
     )
     assert service.list_unpublished_dispatches(
         _worker(), organization_id, workspace.id
     ) == ()
+    with pytest.raises(AuthorizationDenied):
+        service.replay_dispatch(
+            actor,
+            organization_id,
+            workspace.id,
+            pending_dispatches[0].id,
+            jobs[0].id,
+        )
+    replayed = service.replay_dispatch(
+        _worker(),
+        organization_id,
+        workspace.id,
+        pending_dispatches[0].id,
+        jobs[0].id,
+    )
+    assert replayed.published_at is None
+    assert len(
+        service.list_unpublished_dispatches(
+            _worker(), organization_id, workspace.id
+        )
+    ) == 1
     with Session(postgres_database.migration_engine) as session:
         assert session.scalar(select(func.count()).select_from(JobRecord)) == 1
         assert session.scalar(select(func.count()).select_from(JobDispatchRecord)) == 1
@@ -136,7 +169,10 @@ def test_concurrent_idempotent_creation_has_one_job_dispatch_and_audit(
                 AuditEventRecord.target_id == str(jobs[0].id)
             )
         ).all()
-        assert [event.event_type for event in events] == ["job.created"]
+        assert [event.event_type for event in events] == [
+            "job.created",
+            "job.dispatch_replayed",
+        ]
         assert "knowledge_index_version_id" not in str(events[0].details)
 
     with pytest.raises(JobIdempotencyConflict):
@@ -203,6 +239,101 @@ def test_concurrent_claim_retry_and_stale_worker_are_database_serialized(
             job.id,
             claimed.claim_token,
             JobResultReference("knowledge_index_version", str(_index(1))),
+        )
+
+
+def test_outbox_claims_are_concurrent_recoverable_and_token_protected(
+    postgres_database: PostgresTestDatabase,
+    runtime_session_factory,
+) -> None:
+    actor, organization_id, _, workspace, _, _ = _setup(
+        postgres_database, runtime_session_factory, 155
+    )
+    now = [NOW]
+    service = _service(
+        runtime_session_factory,
+        organization_id,
+        workspace.id,
+        clock=lambda: now[0],
+    )
+    _create(service, actor, organization_id, workspace.id)
+
+    def claim(publisher_id):
+        return service.claim_dispatches(
+            _worker(),
+            organization_id,
+            workspace.id,
+            publisher_id=publisher_id,
+            claim_duration=timedelta(seconds=10),
+            limit=1,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = list(executor.map(claim, ("publisher-a", "publisher-b")))
+    claimed = [dispatch for batch in outcomes for dispatch in batch]
+    assert len(claimed) == 1
+    assert claimed[0].publish_attempt_count == 1
+
+    now[0] += timedelta(seconds=11)
+    recovered = claim("publisher-c")
+    assert len(recovered) == 1
+    assert recovered[0].publish_attempt_count == 2
+    assert not service.mark_dispatch_published(
+        _worker(),
+        organization_id,
+        workspace.id,
+        recovered[0].id,
+        claimed[0].claim_token,
+    )
+    assert service.mark_dispatch_published(
+        _worker(),
+        organization_id,
+        workspace.id,
+        recovered[0].id,
+        recovered[0].claim_token,
+    )
+
+
+def test_job_lease_renewal_requires_current_unexpired_claim(
+    postgres_database: PostgresTestDatabase,
+    runtime_session_factory,
+) -> None:
+    actor, organization_id, _, workspace, _, _ = _setup(
+        postgres_database, runtime_session_factory, 157
+    )
+    now = [NOW]
+    service = _service(
+        runtime_session_factory,
+        organization_id,
+        workspace.id,
+        clock=lambda: now[0],
+    )
+    job = _create(service, actor, organization_id, workspace.id)
+    claimed = service.claim_job(
+        _worker(),
+        organization_id,
+        workspace.id,
+        job.id,
+        worker_id="worker-a",
+        lease_duration=timedelta(seconds=10),
+    )
+    renewed = service.renew_job_lease(
+        _worker(),
+        organization_id,
+        workspace.id,
+        job.id,
+        claimed.claim_token,
+        lease_duration=timedelta(minutes=1),
+    )
+    assert renewed.lease_expires_at == NOW + timedelta(minutes=1)
+    with pytest.raises(JobNotClaimable):
+        service.renew_job_lease(
+            _worker(),
+            organization_id,
+            workspace.id,
+            job.id,
+            uuid4(),
+            lease_duration=timedelta(minutes=1),
         )
 
 

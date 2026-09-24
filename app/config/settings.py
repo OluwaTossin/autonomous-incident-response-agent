@@ -103,6 +103,48 @@ class Settings(BaseModel):
         validation_alias="AIRA_DATABASE_MIGRATION_URL",
     )
 
+    # Hosted queue/worker deployment settings. Credentials use the AWS provider chain.
+    aira_sqs_queue_url: str = Field(default="", validation_alias="AIRA_SQS_QUEUE_URL")
+    aira_aws_region: str = Field(default="us-east-1", validation_alias="AIRA_AWS_REGION")
+    aira_sqs_endpoint_url: str = Field(
+        default="", validation_alias="AIRA_SQS_ENDPOINT_URL"
+    )
+    aira_sqs_long_poll_seconds: int = Field(
+        default=20, ge=0, le=20, validation_alias="AIRA_SQS_LONG_POLL_SECONDS"
+    )
+    aira_sqs_receive_batch_size: int = Field(
+        default=10, ge=1, le=10, validation_alias="AIRA_SQS_RECEIVE_BATCH_SIZE"
+    )
+    aira_sqs_visibility_timeout_seconds: int = Field(
+        default=300,
+        ge=1,
+        validation_alias="AIRA_SQS_VISIBILITY_TIMEOUT_SECONDS",
+    )
+    aira_worker_heartbeat_seconds: float = Field(
+        default=60.0, gt=0, validation_alias="AIRA_WORKER_HEARTBEAT_SECONDS"
+    )
+    aira_worker_job_lease_seconds: int = Field(
+        default=900, ge=1, validation_alias="AIRA_WORKER_JOB_LEASE_SECONDS"
+    )
+    aira_worker_concurrency: int = Field(
+        default=4, ge=1, le=64, validation_alias="AIRA_WORKER_CONCURRENCY"
+    )
+    aira_dispatcher_batch_size: int = Field(
+        default=10, ge=1, le=100, validation_alias="AIRA_DISPATCHER_BATCH_SIZE"
+    )
+    aira_dispatcher_lease_seconds: int = Field(
+        default=30, ge=1, validation_alias="AIRA_DISPATCHER_LEASE_SECONDS"
+    )
+    aira_sqs_connect_timeout_seconds: float = Field(
+        default=3.0, gt=0, validation_alias="AIRA_SQS_CONNECT_TIMEOUT_SECONDS"
+    )
+    aira_sqs_read_timeout_seconds: float = Field(
+        default=25.0, gt=0, validation_alias="AIRA_SQS_READ_TIMEOUT_SECONDS"
+    )
+    aira_sqs_max_attempts: int = Field(
+        default=3, ge=1, le=10, validation_alias="AIRA_SQS_MAX_ATTEMPTS"
+    )
+
     # Hosted human identity. Empty issuer/client keeps Version 2 independent of OIDC.
     aira_oidc_issuer: str = Field(default="", validation_alias="AIRA_OIDC_ISSUER")
     aira_oidc_client_id: str = Field(

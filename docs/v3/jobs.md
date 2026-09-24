@@ -66,9 +66,14 @@ the same transaction as the job transition. Unpublished rows remain queryable af
 failure. Marking a dispatch published does not alter job authority, and duplicate delivery is
 safe because a worker must still claim the PostgreSQL job.
 
-V3.11 will publish these rows to SQS, define an identifier-only envelope, handle long polling
-and visibility, acknowledge publication, and configure DLQ/redrive. V3.10 contains no SQS
-client, worker loop, receipt handle, visibility extension, or AWS resource.
+V3.11 publishes these rows to SQS, defines an identifier-only envelope, handles long polling
+and visibility, and acknowledges publication while remaining compatible with configured
+DLQ/redrive. V3.10 itself contains no SQS client, worker loop, receipt handle, visibility
+extension, or AWS resource.
+
+The implemented V3.11 transport and worker guarantees are documented in
+[`sqs-worker.md`](sqs-worker.md). PostgreSQL remains authoritative and no AWS resource is
+created by that phase.
 
 ## Authorization And RLS
 

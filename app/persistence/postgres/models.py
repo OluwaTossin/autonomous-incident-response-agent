@@ -1110,6 +1110,16 @@ class JobDispatchRecord(Base, WorkspaceTenantColumns):
         CheckConstraint(
             "dispatch_generation > 0", name="ck_job_dispatch_outbox_generation"
         ),
+        CheckConstraint(
+            "publish_attempt_count >= 0",
+            name="ck_job_dispatch_outbox_publish_attempts",
+        ),
+        CheckConstraint(
+            "(claimed_by IS NULL AND claim_token IS NULL AND claim_expires_at IS NULL) OR "
+            "(claimed_by IS NOT NULL AND claim_token IS NOT NULL "
+            "AND claim_expires_at IS NOT NULL)",
+            name="ck_job_dispatch_outbox_claim_shape",
+        ),
         Index(
             "ix_job_dispatch_outbox_unpublished",
             "available_at",
@@ -1125,6 +1135,14 @@ class JobDispatchRecord(Base, WorkspaceTenantColumns):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     published_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    claimed_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    claim_token: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    claim_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    publish_attempt_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0
     )
 
 

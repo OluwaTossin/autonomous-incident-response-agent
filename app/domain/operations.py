@@ -300,6 +300,8 @@ class Job:
     ) -> Job:
         when = at or utc_now()
         self._require_active_claim(claim_token, when)
+        if self.cancellation_requested_at is not None:
+            raise DomainInvariantError("Job cancellation must be acknowledged")
         return replace(
             self,
             state=JobState.SUCCEEDED,
@@ -313,6 +315,25 @@ class Job:
             last_error=None,
             failed_at=None,
             result=result,
+        )
+
+    def renew_lease(
+        self,
+        claim_token: UUID,
+        *,
+        lease_expires_at: datetime,
+        at: datetime | None = None,
+    ) -> Job:
+        when = at or utc_now()
+        self._require_active_claim(claim_token, when)
+        require_aware(lease_expires_at, "lease_expires_at")
+        if lease_expires_at <= when:
+            raise DomainInvariantError("Renewed job lease must expire in the future")
+        return replace(
+            self,
+            lease_expires_at=lease_expires_at,
+            state_version=self.state_version + 1,
+            updated_at=when,
         )
 
     def fail_attempt(
