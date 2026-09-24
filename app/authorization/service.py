@@ -172,6 +172,23 @@ class AuthorizationService:
             str(actor.actor.actor_id),
         )
 
+    def authorize_workspace_creation(
+        self,
+        actor: ActorContext,
+        organization_id: OrganizationId,
+        workspace_id: WorkspaceId,
+    ) -> AuthorizedTenantContext:
+        organization_context = self.authorize(
+            actor, organization_id, Permission.WORKSPACE_CREATE
+        )
+        return self._issue(
+            actor,
+            organization_id,
+            workspace_id,
+            Permission.WORKSPACE_CREATE,
+            organization_context.authorization_source_id,
+        )
+
     def authorize_invitation_acceptance(
         self, actor: ActorContext, organization_id: OrganizationId
     ) -> tuple[AuthorizedTenantContext, MembershipId]:

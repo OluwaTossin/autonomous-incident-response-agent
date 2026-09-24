@@ -110,3 +110,6 @@ optional workspace scope, action, target, timestamp, correlation, and relevant d
 This hosted authorization composition does not alter Version 2 API/admin keys, filesystem
 workspaces, local FAISS, JSONL audit, or self-hosted runtime behavior. Hosted routes and the
 Next.js session flow remain later-phase work.
+
+V3.6 applies this boundary to durable workspace lifecycle and configuration as documented
+in [`workspaces.md`](workspaces.md).

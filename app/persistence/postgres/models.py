@@ -279,6 +279,64 @@ class WorkspaceRecord(Base, TimestampColumns, ActorColumns):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     slug: Mapped[str] = mapped_column(String(100), nullable=False)
     state: Mapped[str] = mapped_column(String(32), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class WorkspaceConfigurationRecord(Base):
+    __tablename__ = "workspace_configurations"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "workspace_id"],
+            ["workspaces.organization_id", "workspaces.id"],
+            name="fk_workspace_configurations_workspace_scope",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            "schema_version = 1",
+            name="ck_workspace_configurations_schema_version",
+        ),
+        CheckConstraint(
+            "version >= 1", name="ck_workspace_configurations_version"
+        ),
+        CheckConstraint(
+            "rag_top_k BETWEEN 1 AND 64",
+            name="ck_workspace_configurations_rag_top_k",
+        ),
+        CheckConstraint(
+            "llm_temperature BETWEEN 0 AND 2",
+            name="ck_workspace_configurations_llm_temperature",
+        ),
+        CheckConstraint(
+            "updated_by_kind IN ('human', 'service_account', 'system')",
+            name="ck_workspace_configurations_updated_actor_kind",
+        ),
+        Index(
+            "ix_workspace_configurations_scope",
+            "organization_id",
+            "workspace_id",
+        ),
+    )
+
+    workspace_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    organization_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    rag_top_k: Mapped[int] = mapped_column(Integer, nullable=False)
+    llm_temperature: Mapped[float] = mapped_column(Float, nullable=False)
+    updated_by_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    updated_by_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True
+    )
+    updated_by_system_name: Mapped[str | None] = mapped_column(
+        String(120), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
 
 class MembershipWorkspaceGrantRecord(Base, WorkspaceTenantColumns, ActorColumns):

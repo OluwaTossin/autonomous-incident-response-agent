@@ -86,6 +86,7 @@ from app.domain.tenancy import (
     User,
     Workspace,
     WorkspaceAccessMode,
+    WorkspaceConfiguration,
     WorkspaceState,
 )
 from app.models.incident import IncidentPayload
@@ -114,6 +115,7 @@ from app.persistence.postgres.models import (
     UsageEventRecord,
     UserRecord,
     WorkspaceRecord,
+    WorkspaceConfigurationRecord,
 )
 
 IdT = TypeVar("IdT")
@@ -496,6 +498,8 @@ def workspace_to_record(workspace: Workspace) -> WorkspaceRecord:
         name=workspace.name,
         slug=workspace.slug,
         state=workspace.state.value,
+        description=workspace.description,
+        version=workspace.version,
         created_at=workspace.created_at,
         updated_at=workspace.updated_at,
         **_actor_columns(workspace.created_by),
@@ -509,7 +513,47 @@ def workspace_from_record(record: WorkspaceRecord) -> Workspace:
         name=record.name,
         slug=record.slug,
         state=WorkspaceState(record.state),
+        description=record.description,
+        version=record.version,
         created_by=_actor(record.actor_kind, record.actor_id, record.actor_system_name),
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
+
+
+def workspace_configuration_to_record(
+    configuration: WorkspaceConfiguration,
+) -> WorkspaceConfigurationRecord:
+    updated_by = _actor_columns(configuration.updated_by)
+    return WorkspaceConfigurationRecord(
+        organization_id=_uuid(configuration.scope.organization_id),
+        workspace_id=_uuid(configuration.scope.workspace_id),
+        schema_version=configuration.schema_version,
+        version=configuration.version,
+        rag_top_k=configuration.rag_top_k,
+        llm_temperature=configuration.llm_temperature,
+        updated_by_kind=updated_by["actor_kind"],
+        updated_by_id=updated_by["actor_id"],
+        updated_by_system_name=updated_by["actor_system_name"],
+        created_at=configuration.created_at,
+        updated_at=configuration.updated_at,
+    )
+
+
+def workspace_configuration_from_record(
+    record: WorkspaceConfigurationRecord,
+) -> WorkspaceConfiguration:
+    return WorkspaceConfiguration(
+        scope=_scope(record.organization_id, record.workspace_id),
+        schema_version=record.schema_version,
+        version=record.version,
+        rag_top_k=record.rag_top_k,
+        llm_temperature=record.llm_temperature,
+        updated_by=_actor(
+            record.updated_by_kind,
+            record.updated_by_id,
+            record.updated_by_system_name,
+        ),
         created_at=record.created_at,
         updated_at=record.updated_at,
     )

@@ -20,6 +20,10 @@ The package boundaries are:
 - `app/persistence/postgres/repositories.py`: PostgreSQL repository adapters.
 - `app/persistence/postgres/unit_of_work.py`: one short transaction and one tenant context.
 - `app/persistence/postgres/tenant.py`: transaction-local RLS context.
+- `app/persistence/postgres/workspace_repositories.py`: hosted workspace and typed
+  configuration persistence with compare-and-swap updates.
+- `app/persistence/postgres/workspace_unit_of_work.py`: one authorized workspace
+  transaction; see [`workspaces.md`](workspaces.md).
 - `migrations/`: deterministic Alembic schema, privilege, and RLS changes.
 
 V3.3 intentionally does not wire existing FastAPI routes to these repositories. A hosted
