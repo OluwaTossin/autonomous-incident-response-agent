@@ -248,6 +248,11 @@ JOB = Job(
     created_at=NOW,
     updated_at=NOW,
     correlation=CorrelationContext(_id(CorrelationId, 15), job_id=_id(JobId, 14)),
+    idempotency_key="triage:5",
+    payload_version=1,
+    payload=(("triage_run_id", str(TRIAGE_ID)),),
+    payload_hash="a" * 64,
+    available_at=NOW,
 )
 ACTION = ActionProposal(
     id=_id(ActionId, 16),

@@ -111,6 +111,10 @@ produces a sealed `AuthorizedTenantContext`, which is the only hosted authorizat
 accepted by `authorized_tenant_transaction()`. RLS remains an independent defense-in-depth
 boundary, not an RBAC implementation.
 
+The durable asynchronous lifecycle and dispatch outbox use the same forced workspace RLS and
+short transaction rule. PostgreSQL job state is authoritative; future SQS messages cannot
+establish tenant context or claim ownership. See [`jobs.md`](jobs.md).
+
 ## Migrations And Recovery
 
 Alembic migrations are reviewed source artifacts and run only with the migration role.

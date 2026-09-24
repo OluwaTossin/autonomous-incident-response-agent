@@ -78,6 +78,43 @@ class PostgresHostedKnowledgeRepository:
                 ),
             )
 
+    def resolve_index_state(
+        self,
+        context: AuthorizedTenantContext,
+        index_version_id: KnowledgeIndexVersionId,
+    ) -> KnowledgeIndexState | None:
+        self._scope(context, Permission.KNOWLEDGE_MANAGE)
+        with authorized_tenant_transaction(self._session_factory, context) as session:
+            state = session.scalar(
+                select(KnowledgeIndexVersionRecord.state).where(
+                    KnowledgeIndexVersionRecord.id == UUID(str(index_version_id))
+                )
+            )
+            return KnowledgeIndexState(state) if state is not None else None
+
+    def resolve_index_reference(
+        self,
+        context: AuthorizedTenantContext,
+        index_version_id: KnowledgeIndexVersionId,
+    ) -> HostedKnowledgeIndexReference | None:
+        scope = self._scope(context, Permission.KNOWLEDGE_MANAGE)
+        with authorized_tenant_transaction(self._session_factory, context) as session:
+            record_id = session.scalar(
+                select(KnowledgeIndexVersionRecord.id).where(
+                    KnowledgeIndexVersionRecord.id == UUID(str(index_version_id))
+                )
+            )
+            if record_id is None:
+                return None
+            return HostedKnowledgeIndexReference(
+                scope,
+                index_version_id,
+                tuple(
+                    DocumentVersionId(str(value))
+                    for value in self._source_ids(session, record_id)
+                ),
+            )
+
     def resolve_active_publication(
         self, context: AuthorizedTenantContext
     ) -> PublishedKnowledgeIndexReference | None:

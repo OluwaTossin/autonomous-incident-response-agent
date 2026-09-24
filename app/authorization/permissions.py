@@ -24,6 +24,11 @@ class Permission(StrEnum):
     INCIDENT_READ = "incident.read"
     INCIDENT_CREATE = "incident.create"
     TRIAGE_RUN = "triage.run"
+    JOB_READ = "job.read"
+    JOB_CREATE = "job.create"
+    JOB_CANCEL = "job.cancel"
+    JOB_RETRY = "job.retry"
+    JOB_EXECUTE = "job.execute"
     KNOWLEDGE_READ = "knowledge.read"
     KNOWLEDGE_MANAGE = "knowledge.manage"
     INTEGRATION_READ = "integration.read"
@@ -43,6 +48,7 @@ _VIEWER = frozenset(
         Permission.ORGANIZATION_READ,
         Permission.WORKSPACE_READ,
         Permission.INCIDENT_READ,
+        Permission.JOB_READ,
         Permission.KNOWLEDGE_READ,
         Permission.INTEGRATION_READ,
         Permission.ACTION_READ,
@@ -52,6 +58,9 @@ _VIEWER = frozenset(
 _OPERATOR = _VIEWER | {
     Permission.INCIDENT_CREATE,
     Permission.TRIAGE_RUN,
+    Permission.JOB_CREATE,
+    Permission.JOB_CANCEL,
+    Permission.JOB_RETRY,
     Permission.KNOWLEDGE_MANAGE,
     Permission.ACTION_PROPOSE,
     Permission.AUDIT_READ,
@@ -59,8 +68,12 @@ _OPERATOR = _VIEWER | {
 _ADMIN = frozenset(Permission) - {
     Permission.ORGANIZATION_CREATE,
     Permission.ORGANIZATION_TRANSFER_OWNERSHIP,
+    Permission.JOB_EXECUTE,
 }
-_OWNER = frozenset(Permission) - {Permission.ORGANIZATION_CREATE}
+_OWNER = frozenset(Permission) - {
+    Permission.ORGANIZATION_CREATE,
+    Permission.JOB_EXECUTE,
+}
 
 ROLE_PERMISSIONS = MappingProxyType(
     {
@@ -79,6 +92,11 @@ WORKSPACE_SCOPED_PERMISSIONS = frozenset(
         Permission.INCIDENT_READ,
         Permission.INCIDENT_CREATE,
         Permission.TRIAGE_RUN,
+        Permission.JOB_READ,
+        Permission.JOB_CREATE,
+        Permission.JOB_CANCEL,
+        Permission.JOB_RETRY,
+        Permission.JOB_EXECUTE,
         Permission.KNOWLEDGE_READ,
         Permission.KNOWLEDGE_MANAGE,
         Permission.INTEGRATION_READ,
@@ -97,6 +115,10 @@ SERVICE_ACCOUNT_GRANTABLE_PERMISSIONS = frozenset(
         Permission.INCIDENT_READ,
         Permission.INCIDENT_CREATE,
         Permission.TRIAGE_RUN,
+        Permission.JOB_READ,
+        Permission.JOB_CREATE,
+        Permission.JOB_CANCEL,
+        Permission.JOB_RETRY,
         Permission.KNOWLEDGE_READ,
         Permission.INTEGRATION_READ,
         Permission.ACTION_READ,

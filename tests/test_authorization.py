@@ -121,6 +121,7 @@ def test_approved_role_permission_sets_are_exact() -> None:
         Permission.ORGANIZATION_READ,
         Permission.WORKSPACE_READ,
         Permission.INCIDENT_READ,
+        Permission.JOB_READ,
         Permission.KNOWLEDGE_READ,
         Permission.INTEGRATION_READ,
         Permission.ACTION_READ,
@@ -129,6 +130,9 @@ def test_approved_role_permission_sets_are_exact() -> None:
     operator = viewer | {
         Permission.INCIDENT_CREATE,
         Permission.TRIAGE_RUN,
+        Permission.JOB_CREATE,
+        Permission.JOB_CANCEL,
+        Permission.JOB_RETRY,
         Permission.KNOWLEDGE_MANAGE,
         Permission.ACTION_PROPOSE,
         Permission.AUDIT_READ,
@@ -136,8 +140,12 @@ def test_approved_role_permission_sets_are_exact() -> None:
     admin = set(Permission) - {
         Permission.ORGANIZATION_CREATE,
         Permission.ORGANIZATION_TRANSFER_OWNERSHIP,
+        Permission.JOB_EXECUTE,
     }
-    owner = set(Permission) - {Permission.ORGANIZATION_CREATE}
+    owner = set(Permission) - {
+        Permission.ORGANIZATION_CREATE,
+        Permission.JOB_EXECUTE,
+    }
     assert ROLE_PERMISSIONS == {
         MembershipRole.OWNER: owner,
         MembershipRole.ADMIN: admin,

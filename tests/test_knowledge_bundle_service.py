@@ -18,11 +18,13 @@ from app.domain.common import ActorKind, ActorReference, WorkspaceScope
 from app.domain.identifiers import (
     DocumentId,
     DocumentVersionId,
+    KnowledgeIndexVersionId,
     MembershipId,
     OrganizationId,
     UserId,
     WorkspaceId,
 )
+from app.domain.knowledge import KnowledgeIndexState
 from app.domain.tenancy import MembershipRole, WorkspaceAccessMode
 from app.knowledge.bundle import HostedKnowledgeBundleBuilder
 from app.knowledge.contracts import (
@@ -122,6 +124,7 @@ class Repository:
         self.publications = {}
         self.active = None
         self.integrity_failures = []
+        self.state_override = None
 
     def select_eligible_sources(self, context):
         return (self.source,)
@@ -154,6 +157,24 @@ class Repository:
 
     def resolve_active_publication(self, context):
         return self.active
+
+    def resolve_index_state(self, context, index_version_id):
+        if self.state_override is not None:
+            return self.state_override
+        if index_version_id not in self.publications:
+            return None
+        if self.active is not None and self.active.index.index_version_id == index_version_id:
+            return KnowledgeIndexState.ACTIVE
+        return KnowledgeIndexState.READY
+
+    def resolve_index_reference(self, context, index_version_id):
+        if self.created is None or self.created.id != index_version_id:
+            return None
+        return HostedKnowledgeIndexReference(
+            self.created.scope,
+            self.created.id,
+            self.created.source_document_versions,
+        )
 
     def record_integrity_failure(self, context, index_version_id, *, at):
         self.integrity_failures.append(index_version_id)
@@ -271,3 +292,47 @@ def test_active_resolution_records_integrity_failure(tmp_path) -> None:
 
     assert repository.integrity_failures == [published.index.index_version_id]
     assert observer.events[-1] == ("bundle_verify", "failed")
+
+
+def test_explicit_index_build_is_idempotent_after_activation(tmp_path) -> None:
+    repository = Repository(_source())
+    storage = Storage()
+    service = _service(tmp_path, repository, storage)
+    index_id = _id(KnowledgeIndexVersionId, 70)
+
+    first = service.build_publish_activate(
+        _actor(), ORG, WORKSPACE, index_version_id=index_id
+    )
+    puts = storage.puts
+    second = service.build_publish_activate(
+        _actor(), ORG, WORKSPACE, index_version_id=index_id
+    )
+
+    assert second == first
+    assert storage.puts == puts
+    assert repository.activations == [(index_id, False)]
+
+
+def test_completed_artifact_recovers_building_database_state(tmp_path) -> None:
+    repository = Repository(_source())
+    storage = Storage()
+    service = _service(tmp_path, repository, storage)
+    index_id = _id(KnowledgeIndexVersionId, 71)
+    published = service.build_publish_activate(
+        _actor(), ORG, WORKSPACE, index_version_id=index_id
+    )
+    puts = storage.puts
+    repository.state_override = KnowledgeIndexState.BUILDING
+    repository.publications.clear()
+    repository.active = None
+    repository.ready = None
+    repository.activations.clear()
+
+    recovered = service.build_publish_activate(
+        _actor(), ORG, WORKSPACE, index_version_id=index_id
+    )
+
+    assert recovered == published
+    assert storage.puts == puts
+    assert repository.ready == index_id
+    assert repository.activations == [(index_id, False)]

@@ -114,6 +114,6 @@ Version 2 still reads and writes loose `index.faiss`, `chunks.jsonl`, and `meta.
 filesystem workspace. Its `rag-build`, `rag-query`, triage, FastAPI, Gradio, ranking, score,
 evidence, and demo/user corpus behavior do not pass through hosted storage or cache.
 
-V3.10 and V3.11 will add durable jobs, queues, retries, and worker composition around this
-direct application-service lifecycle. No SQS, background loop, or deployed AWS resource is
-part of V3.9.
+V3.10 adds the transport-neutral durable job and representative index-build handler documented
+in [`jobs.md`](jobs.md). V3.11 will add queues and worker composition around that contract. No
+SQS, background loop, or deployed AWS resource is part of V3.9 or V3.10.

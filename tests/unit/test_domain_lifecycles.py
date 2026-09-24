@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from uuid import UUID
 
 import pytest
 
@@ -48,7 +49,16 @@ from app.domain.knowledge import (
     KnowledgeIndexState,
     KnowledgeIndexVersion,
 )
-from app.domain.operations import Integration, IntegrationState, Job, JobKind, JobState
+from app.domain.operations import (
+    Integration,
+    IntegrationState,
+    Job,
+    JobErrorCategory,
+    JobFailure,
+    JobKind,
+    JobResultReference,
+    JobState,
+)
 
 NOW = datetime(2026, 9, 23, 10, 0, tzinfo=UTC)
 LATER = NOW + timedelta(minutes=1)
@@ -105,6 +115,11 @@ def _job() -> Job:
         created_at=NOW,
         updated_at=NOW,
         correlation=CorrelationContext(_id(CorrelationId, 9), job_id=job_id),
+        idempotency_key="triage:99",
+        payload_version=1,
+        payload=(("triage_run_id", "00000000-0000-4000-8000-000000000099"),),
+        payload_hash="a" * 64,
+        available_at=NOW,
     )
 
 
@@ -210,15 +225,36 @@ def test_integration_can_disable_and_recover_from_error() -> None:
 
 
 def test_job_lifecycle_is_queue_implementation_independent_and_terminal() -> None:
-    succeeded = _job().start(at=LATER).succeed(at=DONE)
-    failed = _job().start(at=LATER).fail("LLM timeout", at=DONE)
-    cancelled = _job().cancel(at=LATER)
+    token = UUID("00000000-0000-4000-8000-000000000010")
+    claimed = _job().claim(
+        worker_id="worker-1",
+        claim_token=token,
+        lease_expires_at=DONE + timedelta(minutes=1),
+        at=LATER,
+    )
+    succeeded = claimed.succeed(
+        token,
+        JobResultReference("triage_run", _job().subject_id),
+        at=DONE,
+    )
+    failed = claimed.fail_attempt(
+        token,
+        JobFailure(
+            "llm_timeout",
+            JobErrorCategory.INTERNAL,
+            False,
+            "LLM request timed out",
+        ),
+        next_available_at=DONE,
+        at=DONE,
+    )
+    cancelled = _job().request_cancel(at=LATER)
 
     assert succeeded.state is JobState.SUCCEEDED
-    assert failed.error_message == "LLM timeout"
+    assert failed.last_error.code == "llm_timeout"
     assert cancelled.started_at is None
-    with pytest.raises(InvalidStateTransition):
-        succeeded.cancel(at=DONE)
+    with pytest.raises(DomainInvariantError, match="Terminal"):
+        succeeded.request_cancel(at=DONE)
 
 
 def test_informational_action_executes_without_approval() -> None:

@@ -78,7 +78,16 @@ from app.domain.knowledge import (
     KnowledgeIndexState,
     KnowledgeIndexVersion,
 )
-from app.domain.operations import Integration, IntegrationState, Job, JobKind, JobState
+from app.domain.operations import (
+    Integration,
+    IntegrationState,
+    Job,
+    JobErrorCategory,
+    JobFailure,
+    JobKind,
+    JobResultReference,
+    JobState,
+)
 from app.domain.tenancy import (
     MembershipRole,
     MembershipState,
@@ -913,6 +922,8 @@ def integration_from_record(record: IntegrationRecord) -> Integration:
 
 
 def job_to_record(job: Job) -> JobRecord:
+    failure = job.last_error
+    result = job.result
     return JobRecord(
         id=_uuid(job.id),
         organization_id=_uuid(job.scope.organization_id),
@@ -921,17 +932,60 @@ def job_to_record(job: Job) -> JobRecord:
         subject_type=job.subject_type,
         subject_id=job.subject_id,
         state=job.state.value,
+        idempotency_key=job.idempotency_key,
+        payload_version=job.payload_version,
+        payload=dict(job.payload),
+        payload_hash=job.payload_hash,
+        available_at=job.available_at,
+        attempt_count=job.attempt_count,
+        max_attempts=job.max_attempts,
+        state_version=job.state_version,
+        dispatch_generation=job.dispatch_generation,
+        claimed_by=job.claimed_by,
+        claim_token=job.claim_token,
+        lease_expires_at=job.lease_expires_at,
         created_at=job.created_at,
         updated_at=job.updated_at,
         started_at=job.started_at,
         completed_at=job.completed_at,
-        error_message=job.error_message,
+        failed_at=job.failed_at,
+        cancelled_at=job.cancelled_at,
+        cancellation_requested_at=job.cancellation_requested_at,
+        last_error_code=failure.code if failure else None,
+        last_error_category=failure.category.value if failure else None,
+        last_error_summary=failure.summary if failure else None,
+        last_error_retryable=failure.retryable if failure else None,
+        result_type=result.result_type if result else None,
+        result_id=result.result_id if result else None,
+        result_metadata=dict(result.metadata) if result else None,
         **_actor_columns(job.created_by),
         **_correlation_columns(job.correlation),
     )
 
 
 def job_from_record(record: JobRecord) -> Job:
+    failure = (
+        JobFailure(
+            record.last_error_code,
+            JobErrorCategory(record.last_error_category),
+            record.last_error_retryable,
+            record.last_error_summary,
+        )
+        if record.last_error_code is not None
+        and record.last_error_category is not None
+        and record.last_error_retryable is not None
+        and record.last_error_summary is not None
+        else None
+    )
+    result = (
+        JobResultReference(
+            record.result_type,
+            record.result_id,
+            tuple(sorted((record.result_metadata or {}).items())),
+        )
+        if record.result_type is not None and record.result_id is not None
+        else None
+    )
     return Job(
         id=_identifier(JobId, record.id),
         scope=_scope(record.organization_id, record.workspace_id),
@@ -943,9 +997,25 @@ def job_from_record(record: JobRecord) -> Job:
         created_at=record.created_at,
         updated_at=record.updated_at,
         correlation=_correlation(record),
+        idempotency_key=record.idempotency_key,
+        payload_version=record.payload_version,
+        payload=tuple(sorted(record.payload.items())),
+        payload_hash=record.payload_hash,
+        available_at=record.available_at,
+        attempt_count=record.attempt_count,
+        max_attempts=record.max_attempts,
+        state_version=record.state_version,
+        dispatch_generation=record.dispatch_generation,
+        claimed_by=record.claimed_by,
+        claim_token=record.claim_token,
+        lease_expires_at=record.lease_expires_at,
         started_at=record.started_at,
         completed_at=record.completed_at,
-        error_message=record.error_message,
+        failed_at=record.failed_at,
+        cancelled_at=record.cancelled_at,
+        cancellation_requested_at=record.cancellation_requested_at,
+        last_error=failure,
+        result=result,
     )
 
 

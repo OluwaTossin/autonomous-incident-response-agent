@@ -959,6 +959,16 @@ class JobRecord(
             name="fk_jobs_workspace_scope",
             ondelete="RESTRICT",
         ),
+        UniqueConstraint(
+            "organization_id", "workspace_id", "id", name="uq_jobs_scope_id"
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "workspace_id",
+            "kind",
+            "idempotency_key",
+            name="uq_jobs_idempotency",
+        ),
         CheckConstraint(
             "kind IN ('triage', 'index_build', 'context_collection', 'action_execution')",
             name="ck_jobs_kind",
@@ -967,13 +977,76 @@ class JobRecord(
             "state IN ('pending', 'running', 'succeeded', 'failed', 'cancelled')",
             name="ck_jobs_state",
         ),
+        CheckConstraint(
+            "payload_version > 0 AND max_attempts > 0 AND attempt_count >= 0 "
+            "AND attempt_count <= max_attempts AND state_version > 0 "
+            "AND dispatch_generation > 0",
+            name="ck_jobs_counters",
+        ),
+        CheckConstraint(
+            "payload_hash ~ '^[0-9a-f]{64}$'",
+            name="ck_jobs_payload_hash",
+        ),
+        CheckConstraint(
+            "(last_error_code IS NULL AND last_error_category IS NULL "
+            "AND last_error_summary IS NULL AND last_error_retryable IS NULL) OR "
+            "(last_error_code IS NOT NULL AND last_error_category IS NOT NULL "
+            "AND last_error_summary IS NOT NULL AND last_error_retryable IS NOT NULL)",
+            name="ck_jobs_error_shape",
+        ),
+        CheckConstraint(
+            "last_error_category IS NULL OR last_error_category IN "
+            "('transient', 'validation', 'authorization', 'configuration', 'internal')",
+            name="ck_jobs_error_category",
+        ),
+        CheckConstraint(
+            "last_error_retryable IS NULL OR "
+            "last_error_retryable = (last_error_category = 'transient')",
+            name="ck_jobs_retryable_category",
+        ),
+        CheckConstraint(
+            "((state = 'pending') AND claimed_by IS NULL AND claim_token IS NULL "
+            "AND lease_expires_at IS NULL AND completed_at IS NULL "
+            "AND cancelled_at IS NULL AND result_type IS NULL AND result_id IS NULL) OR "
+            "((state = 'running') AND claimed_by IS NOT NULL AND claim_token IS NOT NULL "
+            "AND lease_expires_at IS NOT NULL AND started_at IS NOT NULL "
+            "AND completed_at IS NULL AND cancelled_at IS NULL "
+            "AND result_type IS NULL AND result_id IS NULL) OR "
+            "((state = 'succeeded') AND claimed_by IS NULL AND claim_token IS NULL "
+            "AND lease_expires_at IS NULL AND started_at IS NOT NULL "
+            "AND completed_at IS NOT NULL AND result_type IS NOT NULL "
+            "AND result_id IS NOT NULL AND failed_at IS NULL AND cancelled_at IS NULL) OR "
+            "((state = 'failed') AND claimed_by IS NULL AND claim_token IS NULL "
+            "AND lease_expires_at IS NULL AND completed_at IS NOT NULL "
+            "AND failed_at IS NOT NULL AND last_error_code IS NOT NULL "
+            "AND result_type IS NULL AND result_id IS NULL) OR "
+            "((state = 'cancelled') AND claimed_by IS NULL AND claim_token IS NULL "
+            "AND lease_expires_at IS NULL AND completed_at IS NOT NULL "
+            "AND cancelled_at IS NOT NULL AND result_type IS NULL AND result_id IS NULL)",
+            name="ck_jobs_lifecycle_shape",
+        ),
         CheckConstraint(_ACTOR_CHECK, name="ck_jobs_actor_kind"),
         Index(
-            "ix_jobs_scope_state_created",
+            "ix_jobs_scope_created",
+            "organization_id",
+            "workspace_id",
+            "created_at",
+            "id",
+        ),
+        Index(
+            "ix_jobs_scope_runnable",
             "organization_id",
             "workspace_id",
             "state",
-            "created_at",
+            "available_at",
+            "id",
+        ),
+        Index(
+            "ix_jobs_lease_recovery",
+            "organization_id",
+            "workspace_id",
+            "lease_expires_at",
+            postgresql_where=text("state = 'running'"),
         ),
     )
 
@@ -982,13 +1055,77 @@ class JobRecord(
     subject_type: Mapped[str] = mapped_column(String(80), nullable=False)
     subject_id: Mapped[str] = mapped_column(String(255), nullable=False)
     state: Mapped[str] = mapped_column(String(32), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    payload_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    payload: Mapped[dict[str, str]] = mapped_column(JSONB, nullable=False)
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False)
+    state_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    dispatch_generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    claimed_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    claim_token: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    cancellation_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_error_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    last_error_category: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    last_error_summary: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    last_error_retryable: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    result_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    result_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    result_metadata: Mapped[dict[str, str] | None] = mapped_column(JSONB, nullable=True)
+
+
+class JobDispatchRecord(Base, WorkspaceTenantColumns):
+    __tablename__ = "job_dispatch_outbox"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "workspace_id", "job_id"],
+            ["jobs.organization_id", "jobs.workspace_id", "jobs.id"],
+            name="fk_job_dispatch_outbox_job_scope",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "workspace_id",
+            "job_id",
+            "dispatch_generation",
+            name="uq_job_dispatch_outbox_generation",
+        ),
+        CheckConstraint(
+            "dispatch_generation > 0", name="ck_job_dispatch_outbox_generation"
+        ),
+        Index(
+            "ix_job_dispatch_outbox_unpublished",
+            "available_at",
+            "created_at",
+            postgresql_where=text("published_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    job_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    dispatch_generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class ActionProposalRecord(

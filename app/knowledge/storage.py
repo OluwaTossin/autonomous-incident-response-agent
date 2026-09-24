@@ -116,6 +116,25 @@ class KnowledgeBundlePublisher:
             _require_payload(payload, entry.size_bytes, entry.checksum_sha256)
         return manifest
 
+    def discover(
+        self,
+        reference: HostedKnowledgeIndexReference,
+    ) -> KnowledgeBundlePublication | None:
+        prefix = artifact_prefix(reference)
+        try:
+            manifest_bytes = self._storage.get(prefix + MANIFEST_FILENAME)
+        except (ArtifactNotFound, KeyError):
+            return None
+        manifest = KnowledgeBundleManifest.from_bytes(manifest_bytes)
+        manifest.require_identity(reference)
+        publication = KnowledgeBundlePublication(
+            artifact_prefix=prefix,
+            manifest_schema_version=manifest.schema_version,
+            manifest_checksum_sha256=_sha256(manifest_bytes),
+        )
+        self.verify(reference, publication)
+        return publication
+
 
 def _require_payload(payload: bytes, size_bytes: int, checksum_sha256: str) -> None:
     if len(payload) != size_bytes:

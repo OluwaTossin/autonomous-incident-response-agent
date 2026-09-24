@@ -63,6 +63,8 @@ class KnowledgeBundleRepository(Protocol):
     def resolve_active_publication(
         self, context
     ) -> PublishedKnowledgeIndexReference | None: ...
+    def resolve_index_state(self, context, index_version_id) -> KnowledgeIndexState | None: ...
+    def resolve_index_reference(self, context, index_version_id) -> HostedKnowledgeIndexReference | None: ...
     def record_integrity_failure(self, context, index_version_id, *, at): ...
 
 
@@ -93,15 +95,67 @@ class HostedKnowledgeBundleService:
         actor: ActorContext,
         organization_id: OrganizationId,
         workspace_id: WorkspaceId,
+        *,
+        index_version_id: KnowledgeIndexVersionId | None = None,
     ) -> PublishedKnowledgeIndexReference:
         context = self._authorize(
             actor, organization_id, workspace_id, Permission.KNOWLEDGE_MANAGE
         )
+        existing_state = (
+            self._repository.resolve_index_state(context, index_version_id)
+            if index_version_id is not None
+            else None
+        )
+        if existing_state in {
+            KnowledgeIndexState.READY,
+            KnowledgeIndexState.ACTIVE,
+            KnowledgeIndexState.INACTIVE,
+        }:
+            existing = self._repository.resolve_publication(context, index_version_id)
+            if existing is None:
+                raise RuntimeError("Published knowledge index metadata is unavailable")
+            self._publisher.verify(existing.index, existing.publication)
+            if existing_state is KnowledgeIndexState.READY:
+                return self._repository.activate(
+                    context, index_version_id, at=self._clock(), rollback=False
+                )
+            return existing
+        if existing_state is KnowledgeIndexState.FAILED:
+            raise RuntimeError("Knowledge index build is terminally failed")
+        existing_reference = (
+            self._repository.resolve_index_reference(context, index_version_id)
+            if existing_state is KnowledgeIndexState.BUILDING
+            else None
+        )
+        if existing_state is KnowledgeIndexState.BUILDING:
+            if existing_reference is None:
+                raise RuntimeError("Building knowledge index metadata is unavailable")
+            discovered = self._publisher.discover(existing_reference)
+            if discovered is not None:
+                self._repository.mark_ready(
+                    context, index_version_id, discovered, at=self._clock()
+                )
+                return self._repository.activate(
+                    context, index_version_id, at=self._clock(), rollback=False
+                )
         tenant_sources = self._repository.select_eligible_sources(context)
+        if existing_reference is not None:
+            by_version = {
+                source.document_version_id: source for source in tenant_sources
+            }
+            if any(
+                version_id not in by_version
+                for version_id in existing_reference.source_document_versions
+            ):
+                raise RuntimeError("Building index source is no longer eligible")
+            tenant_sources = tuple(
+                by_version[version_id]
+                for version_id in existing_reference.source_document_versions
+            )
         sources = tenant_sources + self._system_corpus.selected_sources()
         now = self._clock()
         index = KnowledgeIndexVersion(
-            id=KnowledgeIndexVersionId.new(),
+            id=index_version_id or KnowledgeIndexVersionId.new(),
             scope=WorkspaceScope(organization_id, workspace_id),
             state=KnowledgeIndexState.BUILDING,
             source_document_versions=tuple(
@@ -113,8 +167,9 @@ class HostedKnowledgeBundleService:
             created_at=now,
             updated_at=now,
         )
-        self._repository.create_build(context, index, at=now)
-        reference = HostedKnowledgeIndexReference(
+        if existing_state is None:
+            self._repository.create_build(context, index, at=now)
+        reference = existing_reference or HostedKnowledgeIndexReference(
             index.scope, index.id, index.source_document_versions
         )
         phase = "bundle_build"

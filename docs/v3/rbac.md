@@ -26,6 +26,11 @@ becomes the first active, unrestricted Owner. It is not inherited from an existi
 | `incident.read` | Yes | Yes | Yes | Yes |
 | `incident.create` | Yes | Yes | Yes | No |
 | `triage.run` | Yes | Yes | Yes | No |
+| `job.read` | Yes | Yes | Yes | Yes |
+| `job.create` | Yes | Yes | Yes | No |
+| `job.cancel` | Yes | Yes | Yes | No |
+| `job.retry` | Yes | Yes | Yes | No |
+| `job.execute` | No | No | No | No |
 | `knowledge.read` | Yes | Yes | Yes | Yes |
 | `knowledge.manage` | Yes | Yes | Yes | No |
 | `integration.read` | Yes | Yes | Yes | Yes |
@@ -78,6 +83,10 @@ and changes are audited.
 System actors have no automatic bypass. They require an exact composition-owned policy
 matching system name, workload issuer, workload subject, organization, permissions, and
 optional workspace set.
+
+`job.execute` is reserved for explicitly granted workload identities. Human roles and
+external service-account grants cannot claim or complete hosted jobs. External service
+accounts may receive the separately grantable read/create/cancel/retry capabilities.
 
 ## Authorization To RLS
 
