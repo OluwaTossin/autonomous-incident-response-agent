@@ -38,7 +38,8 @@ def save_index(
     faiss.write_index(index, str(faiss_path))
     with chunks_path.open("w", encoding="utf-8") as f:
         for c in chunks:
-            f.write(json.dumps(asdict(c), ensure_ascii=False) + "\n")
+            row = {key: value for key, value in asdict(c).items() if value is not None}
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
     meta = {
         "embedding_model": embedding_model,
         "dim": index.d,
@@ -67,6 +68,12 @@ def load_index_bundle(base: Path | None = None) -> tuple[faiss.Index, list[TextC
                     source=d["source"],
                     doc_type=d["doc_type"],
                     chunk_index=int(d["chunk_index"]),
+                    origin=d.get("origin"),
+                    organization_id=d.get("organization_id"),
+                    workspace_id=d.get("workspace_id"),
+                    document_id=d.get("document_id"),
+                    document_version_id=d.get("document_version_id"),
+                    knowledge_index_version_id=d.get("knowledge_index_version_id"),
                 )
             )
     meta = json.loads(meta_path.read_text(encoding="utf-8"))

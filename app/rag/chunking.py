@@ -13,6 +13,12 @@ class TextChunk:
     source: str
     doc_type: str
     chunk_index: int
+    origin: str | None = None
+    organization_id: str | None = None
+    workspace_id: str | None = None
+    document_id: str | None = None
+    document_version_id: str | None = None
+    knowledge_index_version_id: str | None = None
 
 
 def chunk_documents(

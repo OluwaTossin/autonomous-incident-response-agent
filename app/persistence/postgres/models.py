@@ -816,8 +816,44 @@ class KnowledgeIndexVersionRecord(
             "organization_id", "workspace_id", "id", name="uq_index_versions_scope_id"
         ),
         CheckConstraint(
-            "state IN ('building', 'active', 'failed', 'inactive')",
+            "state IN ('building', 'ready', 'active', 'failed', 'inactive')",
             name="ck_index_versions_state",
+        ),
+        CheckConstraint(
+            "((state IN ('ready', 'active', 'inactive')) "
+            "AND published_at IS NOT NULL "
+            "AND manifest_schema_version IS NOT NULL "
+            "AND artifact_prefix IS NOT NULL "
+            "AND manifest_checksum_sha256 IS NOT NULL) OR "
+            "((state IN ('building', 'failed')) "
+            "AND published_at IS NULL "
+            "AND manifest_schema_version IS NULL "
+            "AND artifact_prefix IS NULL "
+            "AND manifest_checksum_sha256 IS NULL)",
+            name="ck_index_versions_publication_state",
+        ),
+        CheckConstraint(
+            "(state IN ('active', 'inactive') AND activated_at IS NOT NULL) OR "
+            "(state NOT IN ('active', 'inactive') AND activated_at IS NULL)",
+            name="ck_index_versions_activation_state",
+        ),
+        CheckConstraint(
+            "(state = 'inactive' AND superseded_at IS NOT NULL) OR "
+            "(state <> 'inactive' AND superseded_at IS NULL)",
+            name="ck_index_versions_superseded_state",
+        ),
+        CheckConstraint(
+            "manifest_schema_version IS NULL OR manifest_schema_version > 0",
+            name="ck_index_versions_manifest_schema_version",
+        ),
+        CheckConstraint(
+            "manifest_checksum_sha256 IS NULL OR "
+            "manifest_checksum_sha256 ~ '^[0-9a-f]{64}$'",
+            name="ck_index_versions_manifest_checksum",
+        ),
+        CheckConstraint(
+            "artifact_prefix IS NULL OR length(btrim(artifact_prefix)) > 0",
+            name="ck_index_versions_artifact_prefix",
         ),
         CheckConstraint(_ACTOR_CHECK, name="ck_index_versions_actor_kind"),
         Index(
@@ -836,6 +872,19 @@ class KnowledgeIndexVersionRecord(
     state: Mapped[str] = mapped_column(String(32), nullable=False)
     activated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    superseded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    manifest_schema_version: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    artifact_prefix: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    manifest_checksum_sha256: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
     )
     failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 

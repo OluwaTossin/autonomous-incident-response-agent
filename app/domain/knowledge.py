@@ -55,6 +55,7 @@ class ContentSafetyState(StrEnum):
 
 class KnowledgeIndexState(StrEnum):
     BUILDING = "building"
+    READY = "ready"
     ACTIVE = "active"
     FAILED = "failed"
     INACTIVE = "inactive"
@@ -71,11 +72,12 @@ _DOCUMENT_TRANSITIONS = {
 
 _INDEX_TRANSITIONS = {
     KnowledgeIndexState.BUILDING: frozenset(
-        {KnowledgeIndexState.ACTIVE, KnowledgeIndexState.FAILED, KnowledgeIndexState.INACTIVE}
+        {KnowledgeIndexState.READY, KnowledgeIndexState.FAILED}
     ),
+    KnowledgeIndexState.READY: frozenset({KnowledgeIndexState.ACTIVE}),
     KnowledgeIndexState.ACTIVE: frozenset({KnowledgeIndexState.INACTIVE}),
     KnowledgeIndexState.FAILED: frozenset(),
-    KnowledgeIndexState.INACTIVE: frozenset(),
+    KnowledgeIndexState.INACTIVE: frozenset({KnowledgeIndexState.ACTIVE}),
 }
 
 _DOCUMENT_VERSION_TRANSITIONS = {
@@ -88,7 +90,7 @@ _DOCUMENT_VERSION_TRANSITIONS = {
 
 DOCUMENT_TERMINAL_STATES = frozenset({DocumentState.FAILED, DocumentState.ARCHIVED})
 KNOWLEDGE_INDEX_TERMINAL_STATES = frozenset(
-    {KnowledgeIndexState.FAILED, KnowledgeIndexState.INACTIVE}
+    {KnowledgeIndexState.FAILED}
 )
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -317,6 +319,11 @@ class KnowledgeIndexVersion:
     created_at: datetime
     updated_at: datetime
     activated_at: datetime | None = None
+    published_at: datetime | None = None
+    superseded_at: datetime | None = None
+    manifest_schema_version: int | None = None
+    artifact_prefix: str | None = None
+    manifest_checksum_sha256: str | None = None
     failure_reason: str | None = None
 
     def __post_init__(self) -> None:
@@ -327,20 +334,86 @@ class KnowledgeIndexVersion:
                 raise DomainInvariantError("Knowledge index activated_at cannot precede created_at")
         if len(set(self.source_document_versions)) != len(self.source_document_versions):
             raise DomainInvariantError("Knowledge index source document versions must be unique")
-        if self.state is KnowledgeIndexState.ACTIVE and self.activated_at is None:
-            raise DomainInvariantError("Active knowledge indexes require activated_at")
-        if self.state is not KnowledgeIndexState.ACTIVE and self.activated_at is not None:
-            raise DomainInvariantError("Only active knowledge indexes may carry activated_at")
+        if self.published_at is not None:
+            require_aware(self.published_at, "published_at")
+        if self.superseded_at is not None:
+            require_aware(self.superseded_at, "superseded_at")
+        published = self.state in {
+            KnowledgeIndexState.READY,
+            KnowledgeIndexState.ACTIVE,
+            KnowledgeIndexState.INACTIVE,
+        }
+        publication_fields = (
+            self.published_at,
+            self.manifest_schema_version,
+            self.artifact_prefix,
+            self.manifest_checksum_sha256,
+        )
+        if published and any(value is None for value in publication_fields):
+            raise DomainInvariantError(
+                "Published knowledge indexes require immutable artifact metadata"
+            )
+        if not published and any(value is not None for value in publication_fields):
+            raise DomainInvariantError(
+                "Unpublished knowledge indexes cannot carry artifact metadata"
+            )
+        if self.manifest_schema_version is not None and self.manifest_schema_version < 1:
+            raise DomainInvariantError("Manifest schema version must be positive")
+        if self.artifact_prefix is not None and not self.artifact_prefix.strip():
+            raise DomainInvariantError("Artifact prefix cannot be blank")
+        if self.manifest_checksum_sha256 is not None and not _SHA256_RE.fullmatch(
+            self.manifest_checksum_sha256
+        ):
+            raise DomainInvariantError("Manifest checksum must be lowercase SHA-256")
+        if self.state in {KnowledgeIndexState.ACTIVE, KnowledgeIndexState.INACTIVE}:
+            if self.activated_at is None:
+                raise DomainInvariantError(
+                    "Activated knowledge indexes require activated_at"
+                )
+        elif self.activated_at is not None:
+            raise DomainInvariantError(
+                "Unactivated knowledge indexes cannot carry activated_at"
+            )
+        if self.state is KnowledgeIndexState.INACTIVE and self.superseded_at is None:
+            raise DomainInvariantError("Inactive knowledge indexes require superseded_at")
+        if self.state is not KnowledgeIndexState.INACTIVE and self.superseded_at is not None:
+            raise DomainInvariantError("Only inactive indexes may carry superseded_at")
         if self.state is KnowledgeIndexState.FAILED and not self.failure_reason:
             raise DomainInvariantError("Failed knowledge indexes require failure_reason")
         if self.state is not KnowledgeIndexState.FAILED and self.failure_reason is not None:
             raise DomainInvariantError("Only failed knowledge indexes may carry failure_reason")
 
+    def mark_ready(
+        self,
+        *,
+        published_at: datetime,
+        manifest_schema_version: int,
+        artifact_prefix: str,
+        manifest_checksum_sha256: str,
+    ) -> KnowledgeIndexVersion:
+        target = KnowledgeIndexState.READY
+        require_transition("KnowledgeIndexVersion", self.state, target, _INDEX_TRANSITIONS)
+        return replace(
+            self,
+            state=target,
+            published_at=published_at,
+            manifest_schema_version=manifest_schema_version,
+            artifact_prefix=artifact_prefix,
+            manifest_checksum_sha256=manifest_checksum_sha256,
+            updated_at=published_at,
+        )
+
     def activate(self, *, at: datetime | None = None) -> KnowledgeIndexVersion:
         target = KnowledgeIndexState.ACTIVE
         require_transition("KnowledgeIndexVersion", self.state, target, _INDEX_TRANSITIONS)
         when = at or utc_now()
-        return replace(self, state=target, activated_at=when, updated_at=when)
+        return replace(
+            self,
+            state=target,
+            activated_at=when,
+            superseded_at=None,
+            updated_at=when,
+        )
 
     def fail(self, reason: str, *, at: datetime | None = None) -> KnowledgeIndexVersion:
         target = KnowledgeIndexState.FAILED
@@ -354,9 +427,5 @@ class KnowledgeIndexVersion:
     def deactivate(self, *, at: datetime | None = None) -> KnowledgeIndexVersion:
         target = KnowledgeIndexState.INACTIVE
         require_transition("KnowledgeIndexVersion", self.state, target, _INDEX_TRANSITIONS)
-        return replace(
-            self,
-            state=target,
-            activated_at=None,
-            updated_at=at or utc_now(),
-        )
+        when = at or utc_now()
+        return replace(self, state=target, superseded_at=when, updated_at=when)

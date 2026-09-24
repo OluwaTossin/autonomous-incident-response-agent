@@ -85,9 +85,15 @@ resolves `rag_index_dir()` only in self-hosted execution. `rag-build`, `rag-quer
 FastAPI `/triage`, Gradio, demo/user corpus modes, and filesystem workspaces keep their current
 composition.
 
-## Deferred To V3.9
+## V3.9 Artifact Lifecycle
 
-V3.9 owns immutable bundle format manifests and checksums, index building, publication and
-activation transactions, S3 artifact keys, download verification, worker-local cache paths,
-locking, eviction, rollback, and garbage collection. None of those infrastructure details are
-tenant authority and none are introduced by the V3.8 contracts.
+V3.9 implements immutable hosted bundle construction, publication, activation, verified
+download, rollback, and worker-local caching without changing the V3.8 authority boundary.
+`PublishedKnowledgeIndexReference` combines an authorized hosted index identity with its
+immutable artifact prefix, manifest schema version, and manifest checksum. It contains no
+presigned URL or local path. The complete format and operating model are defined in
+[`knowledge-bundles.md`](knowledge-bundles.md).
+
+Durable scheduling, retries, and worker orchestration remain deferred to V3.10 and V3.11.
+Conservative retention means superseded published bundles are not automatically deleted;
+durable retention and garbage-collection policy remains deferred to V3.25.

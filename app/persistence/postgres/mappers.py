@@ -835,6 +835,11 @@ def knowledge_index_to_record(
         created_at=index.created_at,
         updated_at=index.updated_at,
         activated_at=index.activated_at,
+        published_at=index.published_at,
+        superseded_at=index.superseded_at,
+        manifest_schema_version=index.manifest_schema_version,
+        artifact_prefix=index.artifact_prefix,
+        manifest_checksum_sha256=index.manifest_checksum_sha256,
         failure_reason=index.failure_reason,
         **_actor_columns(index.created_by),
     )
@@ -869,6 +874,11 @@ def knowledge_index_from_record(
         created_at=record.created_at,
         updated_at=record.updated_at,
         activated_at=record.activated_at,
+        published_at=record.published_at,
+        superseded_at=record.superseded_at,
+        manifest_schema_version=record.manifest_schema_version,
+        artifact_prefix=record.artifact_prefix,
+        manifest_checksum_sha256=record.manifest_checksum_sha256,
         failure_reason=record.failure_reason,
     )
 

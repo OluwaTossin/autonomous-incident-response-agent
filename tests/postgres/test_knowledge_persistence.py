@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from uuid import UUID
 
 import pytest
@@ -9,6 +10,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.application.knowledge import HostedKnowledgeService
+from app.authorization.permissions import Permission
 from app.authorization.service import AuthorizationDenied, AuthorizationService
 from app.domain.identifiers import KnowledgeIndexVersionId
 from app.domain.knowledge import (
@@ -26,6 +28,7 @@ from app.persistence.postgres.mappers import (
     knowledge_index_to_record,
 )
 from app.persistence.postgres.models import (
+    AuditEventRecord,
     DocumentVersionRecord,
     KnowledgeIndexVersionRecord,
     OrganizationMembershipRecord,
@@ -90,11 +93,43 @@ def _seed_active_index(database, actor, workspace, version_ids):
         created_at=NOW,
         updated_at=NOW,
         activated_at=NOW,
+        published_at=NOW,
+        manifest_schema_version=1,
+        artifact_prefix=(
+            f"knowledge-indexes/{workspace.scope.organization_id}/"
+            f"{workspace.id}/placeholder/"
+        ),
+        manifest_checksum_sha256="9" * 64,
     )
     with Session(database.migration_engine) as session, session.begin():
         session.add(knowledge_index_to_record(index))
         session.flush()
         session.add_all(knowledge_index_document_records(index))
+    return index
+
+
+def _seed_ready_index(database, actor, workspace, suffix):
+    index_id = KnowledgeIndexVersionId(
+        f"00000000-0000-4000-8000-{suffix:012d}"
+    )
+    index = KnowledgeIndexVersion(
+        id=index_id,
+        scope=workspace.scope,
+        state=KnowledgeIndexState.READY,
+        source_document_versions=(),
+        created_by=actor.actor,
+        created_at=NOW,
+        updated_at=NOW,
+        published_at=NOW,
+        manifest_schema_version=1,
+        artifact_prefix=(
+            f"knowledge-indexes/{workspace.scope.organization_id}/"
+            f"{workspace.id}/{index_id}/"
+        ),
+        manifest_checksum_sha256=f"{suffix % 10}" * 64,
+    )
+    with Session(database.migration_engine) as session, session.begin():
+        session.add(knowledge_index_to_record(index))
     return index
 
 
@@ -255,3 +290,178 @@ def test_revoked_membership_is_checked_before_knowledge_resolution(
         _knowledge_service(runtime_session_factory).resolve_active_index(
             actor, organization_id, workspace.id
         )
+
+
+def test_activation_supersession_rollback_and_audit_are_atomic(
+    postgres_database: PostgresTestDatabase,
+    runtime_session_factory,
+) -> None:
+    actor, organization_id, _, workspace, _, _ = _setup(
+        postgres_database, runtime_session_factory, 100
+    )
+    first = _seed_ready_index(postgres_database, actor, workspace, 501)
+    second = _seed_ready_index(postgres_database, actor, workspace, 502)
+    authorization = AuthorizationService(
+        PostgresAuthorizationFactsRepository(runtime_session_factory),
+        PostgresTenantResourceValidator(runtime_session_factory),
+    )
+    context = authorization.authorize(
+        actor,
+        organization_id,
+        Permission.KNOWLEDGE_MANAGE,
+        workspace_id=workspace.id,
+    )
+    repository = PostgresHostedKnowledgeRepository(runtime_session_factory)
+
+    repository.activate(context, first.id, at=NOW)
+    repository.activate(context, second.id, at=NOW, rollback=False)
+    repository.activate(context, first.id, at=NOW, rollback=True)
+
+    with Session(postgres_database.migration_engine) as session:
+        records = {
+            record.id: record
+            for record in session.scalars(select(KnowledgeIndexVersionRecord)).all()
+        }
+        assert records[UUID(str(first.id))].state == "active"
+        assert records[UUID(str(first.id))].superseded_at is None
+        assert records[UUID(str(second.id))].state == "inactive"
+        events = session.scalars(select(AuditEventRecord)).all()
+        event_types = {event.event_type for event in events}
+        assert "knowledge_index.activated" in event_types
+        assert "knowledge_index.superseded" in event_types
+        assert "knowledge_index.rollback_activated" in event_types
+        assert all("knowledge-indexes/" not in str(event.details) for event in events)
+
+
+def test_concurrent_activation_serializes_to_one_active_version(
+    postgres_database: PostgresTestDatabase,
+    runtime_session_factory,
+) -> None:
+    actor, organization_id, _, workspace, _, _ = _setup(
+        postgres_database, runtime_session_factory, 110
+    )
+    first = _seed_ready_index(postgres_database, actor, workspace, 601)
+    second = _seed_ready_index(postgres_database, actor, workspace, 602)
+    authorization = AuthorizationService(
+        PostgresAuthorizationFactsRepository(runtime_session_factory),
+        PostgresTenantResourceValidator(runtime_session_factory),
+    )
+    context = authorization.authorize(
+        actor,
+        organization_id,
+        Permission.KNOWLEDGE_MANAGE,
+        workspace_id=workspace.id,
+    )
+    repository = PostgresHostedKnowledgeRepository(runtime_session_factory)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(repository.activate, context, index_id, at=NOW)
+            for index_id in (first.id, second.id)
+        ]
+        for future in futures:
+            future.result()
+
+    with Session(postgres_database.migration_engine) as session:
+        states = session.scalars(select(KnowledgeIndexVersionRecord.state)).all()
+        assert states.count("active") == 1
+        assert states.count("inactive") == 1
+
+
+def test_failed_activation_leaves_previous_active_unchanged(
+    postgres_database: PostgresTestDatabase,
+    runtime_session_factory,
+) -> None:
+    actor, organization_id, _, workspace, _, _ = _setup(
+        postgres_database, runtime_session_factory, 120
+    )
+    active = _seed_ready_index(postgres_database, actor, workspace, 701)
+    invalid = _seed_ready_index(postgres_database, actor, workspace, 702)
+    authorization = AuthorizationService(
+        PostgresAuthorizationFactsRepository(runtime_session_factory),
+        PostgresTenantResourceValidator(runtime_session_factory),
+    )
+    context = authorization.authorize(
+        actor,
+        organization_id,
+        Permission.KNOWLEDGE_MANAGE,
+        workspace_id=workspace.id,
+    )
+    repository = PostgresHostedKnowledgeRepository(runtime_session_factory)
+    repository.activate(context, active.id, at=NOW)
+    with Session(postgres_database.migration_engine) as session, session.begin():
+        record = session.get(KnowledgeIndexVersionRecord, UUID(str(invalid.id)))
+        record.state = "failed"
+        record.published_at = None
+        record.manifest_schema_version = None
+        record.artifact_prefix = None
+        record.manifest_checksum_sha256 = None
+        record.failure_reason = "publication failed"
+
+    with pytest.raises(RuntimeError, match="not eligible"):
+        repository.activate(context, invalid.id, at=NOW)
+
+    with Session(postgres_database.migration_engine) as session:
+        assert session.get(
+            KnowledgeIndexVersionRecord, UUID(str(active.id))
+        ).state == "active"
+
+
+def test_publication_and_integrity_failures_are_durably_attributed(
+    postgres_database: PostgresTestDatabase,
+    runtime_session_factory,
+) -> None:
+    actor, organization_id, _, workspace, _, _ = _setup(
+        postgres_database, runtime_session_factory, 130
+    )
+    authorization = AuthorizationService(
+        PostgresAuthorizationFactsRepository(runtime_session_factory),
+        PostgresTenantResourceValidator(runtime_session_factory),
+    )
+    manage_context = authorization.authorize(
+        actor,
+        organization_id,
+        Permission.KNOWLEDGE_MANAGE,
+        workspace_id=workspace.id,
+    )
+    repository = PostgresHostedKnowledgeRepository(runtime_session_factory)
+    index = KnowledgeIndexVersion(
+        id=KnowledgeIndexVersionId.new(),
+        scope=workspace.scope,
+        state=KnowledgeIndexState.BUILDING,
+        source_document_versions=(),
+        created_by=actor.actor,
+        created_at=NOW,
+        updated_at=NOW,
+    )
+
+    repository.create_build(manage_context, index, at=NOW)
+    repository.mark_failed(
+        manage_context,
+        index.id,
+        "Bundle integrity verification failed",
+        at=NOW,
+    )
+    read_context = authorization.authorize(
+        actor,
+        organization_id,
+        Permission.KNOWLEDGE_READ,
+        workspace_id=workspace.id,
+    )
+    repository.record_integrity_failure(read_context, index.id, at=NOW)
+
+    with Session(postgres_database.migration_engine) as session:
+        record = session.get(KnowledgeIndexVersionRecord, UUID(str(index.id)))
+        assert record.state == "failed"
+        events = session.scalars(
+            select(AuditEventRecord).where(
+                AuditEventRecord.target_id == str(index.id)
+            )
+        ).all()
+        assert {event.event_type for event in events} == {
+            "knowledge_index.build_started",
+            "knowledge_index.publication_failed",
+            "knowledge_index.integrity_verification_failed",
+        }
+        assert all(event.actor_id == UUID(str(actor.actor.actor_id)) for event in events)
+        assert all("knowledge-indexes/" not in str(event.details) for event in events)

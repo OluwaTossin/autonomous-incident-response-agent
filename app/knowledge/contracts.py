@@ -41,12 +41,15 @@ class LocalFaissIndexHandle:
 
     index_dir: Path
     format_version: str = "aira-faiss-local-v1"
+    embedding_model: str | None = None
 
     def __post_init__(self) -> None:
         if not str(self.index_dir):
             raise DomainInvariantError("Local FAISS index directory cannot be blank")
         if not self.format_version.strip():
             raise DomainInvariantError("Knowledge index format version cannot be blank")
+        if self.embedding_model is not None and not self.embedding_model.strip():
+            raise DomainInvariantError("Embedding model cannot be blank")
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +70,32 @@ class HostedKnowledgeIndexReference:
             raise DomainInvariantError(
                 "Knowledge index source document versions must be unique"
             )
+
+
+@dataclass(frozen=True, slots=True)
+class KnowledgeBundlePublication:
+    artifact_prefix: str
+    manifest_schema_version: int
+    manifest_checksum_sha256: str
+
+    def __post_init__(self) -> None:
+        if not self.artifact_prefix.strip():
+            raise DomainInvariantError("Artifact prefix cannot be blank")
+        if self.manifest_schema_version < 1:
+            raise DomainInvariantError("Manifest schema version must be positive")
+        checksum = self.manifest_checksum_sha256
+        if len(checksum) != 64 or any(c not in "0123456789abcdef" for c in checksum):
+            raise DomainInvariantError("Manifest checksum must be lowercase SHA-256")
+
+
+@dataclass(frozen=True, slots=True)
+class PublishedKnowledgeIndexReference:
+    index: HostedKnowledgeIndexReference
+    publication: KnowledgeBundlePublication
+
+    @property
+    def format_version(self) -> str:
+        return self.index.format_version
 
 
 @dataclass(frozen=True, slots=True)

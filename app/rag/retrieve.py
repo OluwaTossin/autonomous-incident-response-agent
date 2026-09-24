@@ -45,7 +45,11 @@ class LocalFaissRetriever:
         if not isinstance(index, LocalFaissIndexHandle):
             raise TypeError("LocalFaissRetriever requires a LocalFaissIndexHandle")
         faiss_index, chunks, _meta = load_index_bundle(index.index_dir)
-        q = embed_texts([query])
+        q = (
+            embed_texts([query], model=index.embedding_model)
+            if index.embedding_model is not None
+            else embed_texts([query])
+        )
         q = np.ascontiguousarray(q.astype("float32"))
         scores, indices = faiss_index.search(q, min(top_k, len(chunks)))
         hits: list[RetrievalHit] = []
@@ -60,6 +64,14 @@ class LocalFaissRetriever:
                     source=chunk.source,
                     doc_type=chunk.doc_type,
                     chunk_index=chunk.chunk_index,
+                    origin=(
+                        KnowledgeSourceOrigin(chunk.origin) if chunk.origin else None
+                    ),
+                    organization_id=chunk.organization_id,
+                    workspace_id=chunk.workspace_id,
+                    document_id=chunk.document_id,
+                    document_version_id=chunk.document_version_id,
+                    knowledge_index_version_id=chunk.knowledge_index_version_id,
                 )
             )
         return hits

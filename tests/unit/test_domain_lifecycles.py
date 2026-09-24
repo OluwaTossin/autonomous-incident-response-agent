@@ -168,15 +168,23 @@ def test_document_and_version_lifecycle_and_scope() -> None:
 
 
 def test_knowledge_index_activation_failure_and_terminal_states() -> None:
-    active = _index().activate(at=LATER)
-    inactive = active.deactivate(at=DONE)
+    ready = _index().mark_ready(
+        published_at=LATER,
+        manifest_schema_version=1,
+        artifact_prefix="knowledge-indexes/org/workspace/index/",
+        manifest_checksum_sha256="a" * 64,
+    )
+    active = ready.activate(at=DONE)
+    inactive = active.deactivate(at=DONE + timedelta(minutes=1))
     failed = _index().fail("invalid bundle", at=LATER)
 
-    assert active.activated_at == LATER
-    assert inactive.activated_at is None
+    assert active.activated_at == DONE
+    assert inactive.activated_at == DONE
+    assert inactive.superseded_at == DONE + timedelta(minutes=1)
     assert failed.failure_reason == "invalid bundle"
     with pytest.raises(InvalidStateTransition):
         failed.activate(at=DONE)
+    assert inactive.activate(at=DONE + timedelta(minutes=2)).state is KnowledgeIndexState.ACTIVE
 
 
 def test_integration_can_disable_and_recover_from_error() -> None:
