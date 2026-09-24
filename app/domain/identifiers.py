@@ -111,6 +111,18 @@ class ServiceAccountCredentialId(DomainId):
     pass
 
 
+class MembershipWorkspaceGrantId(DomainId):
+    pass
+
+
+class ServiceAccountGrantId(DomainId):
+    pass
+
+
+class ServiceAccountWorkspaceGrantId(DomainId):
+    pass
+
+
 class AuditEventId(DomainId):
     pass
 

@@ -219,6 +219,9 @@ class OrganizationMembershipRecord(Base, TimestampColumns, ActorColumns):
         UniqueConstraint(
             "organization_id", "user_id", name="uq_memberships_organization_user"
         ),
+        UniqueConstraint(
+            "organization_id", "id", name="uq_memberships_organization_id"
+        ),
         CheckConstraint(
             "role IN ('owner', 'admin', 'operator', 'viewer')",
             name="ck_memberships_role",
@@ -226,6 +229,14 @@ class OrganizationMembershipRecord(Base, TimestampColumns, ActorColumns):
         CheckConstraint(
             "state IN ('invited', 'active', 'suspended', 'revoked')",
             name="ck_memberships_state",
+        ),
+        CheckConstraint(
+            "workspace_access IN ('all', 'restricted')",
+            name="ck_memberships_workspace_access",
+        ),
+        CheckConstraint(
+            "role <> 'owner' OR workspace_access = 'all'",
+            name="ck_memberships_owner_unrestricted",
         ),
         CheckConstraint(_ACTOR_CHECK, name="ck_memberships_actor_kind"),
         Index("ix_memberships_user_state", "user_id", "state"),
@@ -244,6 +255,7 @@ class OrganizationMembershipRecord(Base, TimestampColumns, ActorColumns):
     )
     role: Mapped[str] = mapped_column(String(32), nullable=False)
     state: Mapped[str] = mapped_column(String(32), nullable=False)
+    workspace_access: Mapped[str] = mapped_column(String(32), nullable=False)
 
 
 class WorkspaceRecord(Base, TimestampColumns, ActorColumns):
@@ -267,6 +279,154 @@ class WorkspaceRecord(Base, TimestampColumns, ActorColumns):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     slug: Mapped[str] = mapped_column(String(100), nullable=False)
     state: Mapped[str] = mapped_column(String(32), nullable=False)
+
+
+class MembershipWorkspaceGrantRecord(Base, WorkspaceTenantColumns, ActorColumns):
+    __tablename__ = "membership_workspace_grants"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "membership_id"],
+            ["organization_memberships.organization_id", "organization_memberships.id"],
+            name="fk_membership_workspace_grants_membership_scope",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "workspace_id"],
+            ["workspaces.organization_id", "workspaces.id"],
+            name="fk_membership_workspace_grants_workspace_scope",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint(
+            "membership_id",
+            "workspace_id",
+            name="uq_membership_workspace_grants_membership_workspace",
+        ),
+        CheckConstraint(
+            _ACTOR_CHECK, name="ck_membership_workspace_grants_actor_kind"
+        ),
+        Index(
+            "ix_membership_workspace_grants_scope",
+            "organization_id",
+            "workspace_id",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    membership_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+
+class ServiceAccountAuthorizationGrantRecord(
+    Base, TimestampColumns, ActorColumns
+):
+    __tablename__ = "service_account_authorization_grants"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id"], ["organizations.id"], ondelete="CASCADE"
+        ),
+        ForeignKeyConstraint(
+            ["service_account_id"], ["service_accounts.id"], ondelete="CASCADE"
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "id",
+            name="uq_service_account_authorization_grants_organization_id",
+        ),
+        CheckConstraint(
+            "workspace_access IN ('all', 'restricted')",
+            name="ck_service_account_authorization_grants_workspace_access",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(permissions) = 'array' AND jsonb_array_length(permissions) > 0",
+            name="ck_service_account_authorization_grants_permissions",
+        ),
+        CheckConstraint(
+            _ACTOR_CHECK, name="ck_service_account_authorization_grants_actor_kind"
+        ),
+        CheckConstraint(
+            "revoked_by_kind IS NULL OR revoked_by_kind IN ('human', 'service_account', 'system')",
+            name="ck_service_account_authorization_grants_revoked_actor_kind",
+        ),
+        CheckConstraint(
+            "(revoked_at IS NULL AND revoked_by_kind IS NULL) OR "
+            "(revoked_at IS NOT NULL AND revoked_by_kind IS NOT NULL)",
+            name="ck_service_account_authorization_grants_revoked_attribution",
+        ),
+        Index(
+            "uq_service_account_authorization_grants_active",
+            "organization_id",
+            "service_account_id",
+            unique=True,
+            postgresql_where=text("revoked_at IS NULL"),
+        ),
+        Index(
+            "ix_service_account_authorization_grants_account",
+            "service_account_id",
+            "revoked_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    organization_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    service_account_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    permissions: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    workspace_access: Mapped[str] = mapped_column(String(32), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    revoked_by_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    revoked_by_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True
+    )
+    revoked_by_system_name: Mapped[str | None] = mapped_column(
+        String(120), nullable=True
+    )
+
+
+class ServiceAccountWorkspaceGrantRecord(
+    Base, WorkspaceTenantColumns, ActorColumns
+):
+    __tablename__ = "service_account_workspace_grants"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "service_account_grant_id"],
+            [
+                "service_account_authorization_grants.organization_id",
+                "service_account_authorization_grants.id",
+            ],
+            name="fk_service_account_workspace_grants_authorization_scope",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "workspace_id"],
+            ["workspaces.organization_id", "workspaces.id"],
+            name="fk_service_account_workspace_grants_workspace_scope",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint(
+            "service_account_grant_id",
+            "workspace_id",
+            name="uq_service_account_workspace_grants_grant_workspace",
+        ),
+        CheckConstraint(
+            _ACTOR_CHECK, name="ck_service_account_workspace_grants_actor_kind"
+        ),
+        Index(
+            "ix_service_account_workspace_grants_scope",
+            "organization_id",
+            "workspace_id",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    service_account_grant_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
 
 class IncidentRecord(

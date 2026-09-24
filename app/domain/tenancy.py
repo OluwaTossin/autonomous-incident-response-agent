@@ -41,11 +41,16 @@ class MembershipState(StrEnum):
     REVOKED = "revoked"
 
 
+class WorkspaceAccessMode(StrEnum):
+    ALL = "all"
+    RESTRICTED = "restricted"
+
+
 _MEMBERSHIP_TRANSITIONS = {
     MembershipState.INVITED: frozenset({MembershipState.ACTIVE, MembershipState.REVOKED}),
     MembershipState.ACTIVE: frozenset({MembershipState.SUSPENDED, MembershipState.REVOKED}),
     MembershipState.SUSPENDED: frozenset({MembershipState.ACTIVE, MembershipState.REVOKED}),
-    MembershipState.REVOKED: frozenset(),
+    MembershipState.REVOKED: frozenset({MembershipState.INVITED}),
 }
 
 
@@ -99,9 +104,12 @@ class OrganizationMembership:
     created_by: ActorReference
     created_at: datetime
     updated_at: datetime
+    workspace_access: WorkspaceAccessMode = WorkspaceAccessMode.ALL
 
     def __post_init__(self) -> None:
         validate_timestamps(self.created_at, self.updated_at)
+        if self.role is MembershipRole.OWNER and self.workspace_access is not WorkspaceAccessMode.ALL:
+            raise DomainInvariantError("Owner memberships must have unrestricted workspace access")
 
     def transition(
         self,

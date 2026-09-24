@@ -6,6 +6,12 @@ from collections.abc import Iterable
 from typing import Any, TypeVar
 from uuid import UUID
 
+from app.authorization.models import (
+    MembershipWorkspaceGrant,
+    ServiceAccountGrant,
+    ServiceAccountWorkspaceGrant,
+)
+from app.authorization.permissions import Permission
 from app.domain.actions import (
     ActionProposal,
     ActionReference,
@@ -38,9 +44,12 @@ from app.domain.identifiers import (
     JobId,
     KnowledgeIndexVersionId,
     MembershipId,
+    MembershipWorkspaceGrantId,
     OrganizationId,
+    ServiceAccountGrantId,
     ServiceAccountId,
     ServiceAccountCredentialId,
+    ServiceAccountWorkspaceGrantId,
     TriageRunId,
     UsageEventId,
     UserId,
@@ -76,6 +85,7 @@ from app.domain.tenancy import (
     OrganizationState,
     User,
     Workspace,
+    WorkspaceAccessMode,
     WorkspaceState,
 )
 from app.models.incident import IncidentPayload
@@ -93,10 +103,13 @@ from app.persistence.postgres.models import (
     JobRecord,
     KnowledgeIndexDocumentRecord,
     KnowledgeIndexVersionRecord,
+    MembershipWorkspaceGrantRecord,
     OrganizationMembershipRecord,
     OrganizationRecord,
+    ServiceAccountAuthorizationGrantRecord,
     ServiceAccountCredentialRecord,
     ServiceAccountRecord,
+    ServiceAccountWorkspaceGrantRecord,
     TriageRunRecord,
     UsageEventRecord,
     UserRecord,
@@ -352,6 +365,7 @@ def membership_to_record(
         user_id=_uuid(membership.user_id),
         role=membership.role.value,
         state=membership.state.value,
+        workspace_access=membership.workspace_access.value,
         created_at=membership.created_at,
         updated_at=membership.updated_at,
         **_actor_columns(membership.created_by),
@@ -367,9 +381,111 @@ def membership_from_record(
         user_id=_identifier(UserId, record.user_id),
         role=MembershipRole(record.role),
         state=MembershipState(record.state),
+        workspace_access=WorkspaceAccessMode(record.workspace_access),
         created_by=_actor(record.actor_kind, record.actor_id, record.actor_system_name),
         created_at=record.created_at,
         updated_at=record.updated_at,
+    )
+
+
+def membership_workspace_grant_to_record(
+    grant: MembershipWorkspaceGrant,
+) -> MembershipWorkspaceGrantRecord:
+    return MembershipWorkspaceGrantRecord(
+        id=_uuid(grant.id),
+        organization_id=_uuid(grant.scope.organization_id),
+        membership_id=_uuid(grant.membership_id),
+        workspace_id=_uuid(grant.scope.workspace_id),
+        created_at=grant.created_at,
+        **_actor_columns(grant.created_by),
+    )
+
+
+def membership_workspace_grant_from_record(
+    record: MembershipWorkspaceGrantRecord,
+) -> MembershipWorkspaceGrant:
+    return MembershipWorkspaceGrant(
+        id=_identifier(MembershipWorkspaceGrantId, record.id),
+        organization_id=_identifier(OrganizationId, record.organization_id),
+        membership_id=_identifier(MembershipId, record.membership_id),
+        workspace_id=_identifier(WorkspaceId, record.workspace_id),
+        created_by=_actor(record.actor_kind, record.actor_id, record.actor_system_name),
+        created_at=record.created_at,
+    )
+
+
+def service_account_grant_to_record(
+    grant: ServiceAccountGrant,
+) -> ServiceAccountAuthorizationGrantRecord:
+    revoked_by = (
+        _actor_columns(grant.revoked_by) if grant.revoked_by is not None else None
+    )
+    return ServiceAccountAuthorizationGrantRecord(
+        id=_uuid(grant.id),
+        organization_id=_uuid(grant.organization_id),
+        service_account_id=_uuid(grant.service_account_id),
+        permissions=sorted(permission.value for permission in grant.permissions),
+        workspace_access=grant.workspace_access.value,
+        created_at=grant.created_at,
+        updated_at=grant.updated_at,
+        revoked_at=grant.revoked_at,
+        revoked_by_kind=(revoked_by["actor_kind"] if revoked_by else None),
+        revoked_by_id=(revoked_by["actor_id"] if revoked_by else None),
+        revoked_by_system_name=(
+            revoked_by["actor_system_name"] if revoked_by else None
+        ),
+        **_actor_columns(grant.created_by),
+    )
+
+
+def service_account_grant_from_record(
+    record: ServiceAccountAuthorizationGrantRecord,
+) -> ServiceAccountGrant:
+    return ServiceAccountGrant(
+        id=_identifier(ServiceAccountGrantId, record.id),
+        organization_id=_identifier(OrganizationId, record.organization_id),
+        service_account_id=_identifier(ServiceAccountId, record.service_account_id),
+        permissions=frozenset(Permission(value) for value in record.permissions),
+        workspace_access=WorkspaceAccessMode(record.workspace_access),
+        created_by=_actor(record.actor_kind, record.actor_id, record.actor_system_name),
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+        revoked_at=record.revoked_at,
+        revoked_by=(
+            _actor(
+                record.revoked_by_kind,
+                record.revoked_by_id,
+                record.revoked_by_system_name,
+            )
+            if record.revoked_by_kind
+            else None
+        ),
+    )
+
+
+def service_account_workspace_grant_to_record(
+    grant: ServiceAccountWorkspaceGrant,
+) -> ServiceAccountWorkspaceGrantRecord:
+    return ServiceAccountWorkspaceGrantRecord(
+        id=_uuid(grant.id),
+        organization_id=_uuid(grant.scope.organization_id),
+        service_account_grant_id=_uuid(grant.service_account_grant_id),
+        workspace_id=_uuid(grant.scope.workspace_id),
+        created_at=grant.created_at,
+        **_actor_columns(grant.created_by),
+    )
+
+
+def service_account_workspace_grant_from_record(
+    record: ServiceAccountWorkspaceGrantRecord,
+) -> ServiceAccountWorkspaceGrant:
+    return ServiceAccountWorkspaceGrant(
+        id=_identifier(ServiceAccountWorkspaceGrantId, record.id),
+        organization_id=_identifier(OrganizationId, record.organization_id),
+        service_account_grant_id=_identifier(ServiceAccountGrantId, record.service_account_grant_id),
+        workspace_id=_identifier(WorkspaceId, record.workspace_id),
+        created_by=_actor(record.actor_kind, record.actor_id, record.actor_system_name),
+        created_at=record.created_at,
     )
 
 

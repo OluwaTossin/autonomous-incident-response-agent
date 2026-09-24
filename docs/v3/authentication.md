@@ -84,8 +84,9 @@ the revoking and replacement actor, and account disablement records its actor. T
 audit events for management operations require V3.5 authorization and are not fabricated
 before an organization relationship exists.
 
-Service accounts receive no organization/workspace access or RBAC scope in V3.4. V3.5 must
-define and authorize that relationship.
+Service accounts receive no organization/workspace access or RBAC scope in V3.4. V3.5
+adds separate durable grants as documented in [`rbac.md`](rbac.md); credentials themselves
+still do not define or authorize that relationship.
 
 ## System Actors And Jobs
 

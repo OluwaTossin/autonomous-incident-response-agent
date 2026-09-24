@@ -82,9 +82,10 @@ uv run alembic upgrade head
 
 ## Transactions And RLS
 
-Every tenant-scoped runtime transaction must receive trusted `TenantContext` from the
-composition boundary. V3.4 will derive it from verified identity; request payload values
-must never establish it.
+Every hosted tenant-scoped runtime transaction must receive a sealed
+`AuthorizedTenantContext` from the V3.5 authorization boundary; request payload and JWT
+tenant values must never establish it. The lower-level `TenantContext` remains available
+to persistence adapters and focused RLS tests, not as a public authorization result.
 
 `apply_tenant_context()` calls PostgreSQL `set_config(..., true)`, equivalent to transaction-
 local `SET LOCAL`, for `app.organization_id` and `app.workspace_id`. RLS policies read those
@@ -97,8 +98,10 @@ Tenant settings are valid only inside the current transaction. Code must use
 before retrieval, LLM calls, external APIs, or other potentially long work. Tests reuse
 the same one-connection pool to prove that one tenant's settings do not survive commit.
 
-Application authorization remains required in later phases. RLS is an independent
-defense-in-depth boundary, not an RBAC implementation.
+Application authorization is defined in [`rbac.md`](rbac.md). Successful policy resolution
+produces a sealed `AuthorizedTenantContext`, which is the only hosted authorization result
+accepted by `authorized_tenant_transaction()`. RLS remains an independent defense-in-depth
+boundary, not an RBAC implementation.
 
 ## Migrations And Recovery
 
