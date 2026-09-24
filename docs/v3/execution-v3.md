@@ -236,13 +236,15 @@ Version 3 preserves human authority over consequential actions. Version 4 is the
 
 **Dependencies:** V3.3, V3.5.
 
+**Status:** Complete in `86b38ab` (`feat: add hosted workspace persistence`).
+
 **Checklist:**
 
-- [ ] Implement workspace create/read/update/archive lifecycle.
-- [ ] Persist allowlisted workspace configuration with schema/version and actor audit.
-- [ ] Pass workspace context explicitly to services; remove hosted dependence on cached `WORKSPACE_ID`.
-- [ ] Preserve `app/workspace/paths.py` for self-hosted composition.
-- [ ] Define archive/deletion and dependent-resource behavior.
+- [x] Implement workspace create/read/update/archive lifecycle.
+- [x] Persist allowlisted workspace configuration with schema/version and actor audit.
+- [x] Pass workspace context explicitly to services; remove hosted dependence on cached `WORKSPACE_ID`.
+- [x] Preserve `app/workspace/paths.py` for self-hosted composition.
+- [x] Define archive/deletion and dependent-resource behavior.
 
 **Files/modules:** Expected workspace services/repositories/routes; adapt `app/api/operator_routes.py`, `app/config/settings.py`, and operator configuration UI contract.
 
