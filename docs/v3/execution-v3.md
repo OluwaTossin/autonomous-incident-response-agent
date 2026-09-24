@@ -331,13 +331,15 @@ Version 3 preserves human authority over consequential actions. Version 4 is the
 
 **Dependencies:** V3.2, V3.3.
 
+**Status:** Complete in `bd72e0d` (`feat: add durable asynchronous job model`).
+
 **Checklist:**
 
-- [ ] Implement `QUEUED`, `RUNNING`, `SUCCEEDED`, `FAILED`, and `CANCELLED` transitions.
-- [ ] Define job type/version, attempts, idempotency key, lease, timestamps, error classification, and result references.
-- [ ] Define cancellation and terminal-state invariants.
-- [ ] Add transactional job creation with incident/triage records.
-- [ ] Choose and implement an outbox or equivalent reliable publish boundary.
+- [x] Implement `QUEUED`, `RUNNING`, `SUCCEEDED`, `FAILED`, and `CANCELLED` transitions.
+- [x] Define job type/version, attempts, idempotency key, lease, timestamps, error classification, and result references.
+- [x] Define cancellation and terminal-state invariants.
+- [x] Add transactional job creation with incident/triage records.
+- [x] Choose and implement an outbox or equivalent reliable publish boundary.
 
 **Files/modules:** Expected job domain/application/repository modules, outbox tables/services, migrations, state-machine tests.
 
