@@ -574,19 +574,21 @@ Version 3 preserves human authority over consequential actions. Version 4 is the
 
 ## V3.20 - Human approval workflow
 
+**Status:** Complete in `d014a64` (`feat: add human approval workflow`).
+
 **Goal:** Require accountable approval before consequential action execution.
 
 **Dependencies:** V3.5, V3.19.
 
 **Checklist:**
 
-- [ ] Implement approval request, approve, reject, expire, cancel, and revalidation transitions.
-- [ ] Define which roles may approve and prevent self-approval where policy requires.
-- [ ] Bind approval to an immutable action version and current target context.
-- [ ] Add approval APIs, UI queue/detail, notifications, and durable audit.
-- [ ] Add emergency global/workspace connector disable controls.
+- [x] Implement approval request, approve, reject, expire, cancel, and revalidation transitions.
+- [x] Define which roles may approve and prevent self-approval where policy requires.
+- [x] Bind approval to an immutable action version and current target context.
+- [x] Add approval APIs, proposal detail/history UI, and durable audit.
+- [x] Keep notification delivery and connector disable controls in V3.21.
 
-**Files/modules:** Approval domain/services/routes/repositories, hosted approval UI, audit/notification hooks, tests.
+**Files/modules:** Approval domain/services/routes/repositories, hosted approval UI, audit/observer hooks, tests.
 
 **Validation:** Unauthorized/self/stale/expired/double approvals, action mutation, revocation, concurrent decisions, audit completeness.
 
