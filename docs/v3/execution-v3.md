@@ -405,16 +405,18 @@ Version 3 preserves human authority over consequential actions. Version 4 is the
 
 **Dependencies:** V3.4, V3.5, V3.12.
 
+**Status:** Complete in `942ce57` (`feat: add hosted web app and browser authentication`).
+
 **Checklist:**
 
-- [ ] Define separate hosted and self-hosted build/composition paths.
-- [ ] Containerize the server-capable hosted Next.js runtime as a distinct ECS/Fargate service; retain V2 static Next.js/S3 output.
-- [ ] Implement Cognito Authorization Code Flow with PKCE, Secure/HttpOnly cookie session, refresh, logout, and route protection.
-- [ ] Add CSRF, security headers, server-side API client, and no-store handling for tenant data.
-- [ ] Remove hosted dependence on `NEXT_PUBLIC_TRIAGE_API_KEY` and browser admin secrets.
-- [ ] Define health checks and ALB routing that may share the API ALB while preserving independent deployment and scaling.
-- [ ] Keep Vercel and Amplify out of the hosted dependency set.
-- [ ] Reuse presentational components without coupling hosted state to V2 static APIs.
+- [x] Define separate hosted and self-hosted build/composition paths.
+- [x] Containerize the server-capable hosted Next.js runtime as a distinct ECS/Fargate service; retain V2 static Next.js/S3 output.
+- [x] Implement Cognito Authorization Code Flow with PKCE, Secure/HttpOnly cookie session, refresh, logout, and route protection.
+- [x] Add CSRF, security headers, server-side API client, and no-store handling for tenant data.
+- [x] Remove hosted dependence on `NEXT_PUBLIC_TRIAGE_API_KEY` and browser admin secrets.
+- [x] Define health checks and ALB routing that may share the API ALB while preserving independent deployment and scaling.
+- [x] Keep Vercel and Amplify out of the hosted dependency set.
+- [x] Reuse presentational components without coupling hosted state to V2 static APIs.
 
 **Files/modules:** `frontend/` hosted app/session/API modules or clearly separated hosted frontend package; hosted frontend Dockerfile/runtime; current static build retained; frontend tests and CI; Terraform wiring in V3.22.
 
