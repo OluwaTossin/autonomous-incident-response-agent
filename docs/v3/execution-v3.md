@@ -8,16 +8,18 @@ This document is the dependency-ordered source of truth for Version 3 delivery. 
 
 ## Version 3 objective
 
-Evolve AIRA from the Version 2 self-hosted, single-operator BYOD product into a hosted platform that can securely receive alerts, collect authorized operational context, retrieve tenant-scoped knowledge, run evidence-grounded triage asynchronously, support operator review, and execute policy-approved follow-up actions.
+Evolve AIRA from the Version 2 self-hosted, single-operator BYOD product into a hosted platform that can securely receive alerts, collect authorized operational context, retrieve tenant-scoped knowledge, run evidence-grounded triage asynchronously, support operator review, and prepare immutable policy-approved execution intents.
 
 ```text
 Version 2: manual upload -> manual triage
 
 Version 3: alert -> automatic context collection -> retrieval -> triage
-          -> evidence -> operator review -> optional workflow action
+          -> evidence -> operator review -> approved execution intent
 ```
 
-Version 3 preserves human authority over consequential actions. Version 4 is the autonomous-action layer and is explicitly out of scope.
+Version 3 preserves human authority and stops at deterministic connector preparation.
+Version 4 owns actual controlled or autonomous remediation execution and is explicitly out
+of scope.
 
 ## Scope
 
@@ -30,7 +32,8 @@ Version 3 preserves human authority over consequential actions. Version 4 is the
 - SQS/DLQ asynchronous incident triage.
 - Authenticated, server-capable hosted Next.js ECS/Fargate service, independently deployable from the API.
 - CloudWatch/EventBridge alert intake and least-privilege logs/metrics enrichment.
-- Durable action proposals, approval gates, notifications, and ticket connectors.
+- Durable action proposals, approval gates, immutable execution intents, and deterministic
+  connector preparation without provider mutation.
 - Private hosted AWS application/data topology behind HTTPS with controlled NAT egress and selective VPC endpoints.
 - Tenant-aware audit, observability, usage, quotas, security, CI/CD, and validation.
 - Continued V2 self-hosted behavior through a separate composition root.
@@ -586,7 +589,8 @@ Version 3 preserves human authority over consequential actions. Version 4 is the
 - [x] Define which roles may approve and prevent self-approval where policy requires.
 - [x] Bind approval to an immutable action version and current target context.
 - [x] Add approval APIs, proposal detail/history UI, and durable audit.
-- [x] Keep notification delivery and connector disable controls in V3.21.
+- [x] Keep immutable intent preparation and deterministic connector validation in V3.21;
+  defer actual execution to Version 4.
 
 **Files/modules:** Approval domain/services/routes/repositories, hosted approval UI, audit/observer hooks, tests.
 
@@ -596,31 +600,47 @@ Version 3 preserves human authority over consequential actions. Version 4 is the
 
 **Risks:** Approval fatigue, race conditions, stale approvals, and role changes during pending approval.
 
-## V3.21 - Notification and ticket connectors
+## V3.21 - Immutable execution intents and connector preparation
 
-**Goal:** Execute configured informational notifications and ticket operations safely and idempotently.
+**Status:** Complete in `9b5a03e` (`feat: add immutable execution intents`).
 
-**Dependencies:** V3.16, V3.19, V3.20.
+**Goal:** Freeze one exact approved action into an immutable execution intent and prepare
+its allowlisted connector operation deterministically without executing it.
+
+**Dependencies:** V3.3, V3.5, V3.19, V3.20.
 
 **Checklist:**
 
-- [ ] Define connector port, secret references, capabilities, health, and allowlisted action types.
-- [ ] Implement first production notification/ticket connector(s); retain n8n compatibility where useful.
-- [ ] Store connector secrets in Secrets Manager and metadata in PostgreSQL.
-- [ ] Add idempotency keys, retry policy, delivery records, redaction, disable, and replay controls.
-- [ ] Enforce action policy before dispatch.
+- [x] Bind each intent to the exact proposal, human approval, tenant, target, typed
+  parameters, policy version, and canonical intent hash.
+- [x] Enforce one race-safe durable intent per approval and immutable execution-defining
+  fields with forced RLS and composite tenant foreign keys.
+- [x] Add a static allowlisted connector/operation registry with deterministic local
+  validation and no LLM, dynamic import, generic HTTP, shell, or arbitrary provider input.
+- [x] Preserve fail-closed AWS target authority and support only the justified internal
+  acknowledge-incident prepared operation.
+- [x] Add bounded preparation/intent lifetimes, invalidation, cancellation, audit,
+  observability hooks, API/BFF inspection, and explicit not-executed operator UX.
 
-**Files/modules:** Expected connector framework/adapters, action executor worker, secret references, n8n compatibility adapter/docs, tests.
+**Files/modules:** Execution-intent domain/application service, deterministic connector
+registry, PostgreSQL migration/repository, hosted API/BFF/UI, audit/observer hooks, tests,
+and `docs/v3/execution-intents.md`.
 
-**Validation:** Duplicate delivery, provider timeout/error, secret rotation, disabled connector, tenant isolation, redacted logs, approved-action enforcement.
+**Validation:** Exact approval/proposal binding, canonical hashing, concurrent idempotency,
+immutability, terminal-state protection, target-authority rejection, authorization/RLS,
+API/BFF/CSRF, no-execution routes, UI wording, V2 regressions, and production builds.
 
-**Deliverable / definition of done:** Informational actions execute with durable outcomes and consequential actions execute only after approval.
+**Deliverable / definition of done:** An authorized operator can create and inspect one
+immutable, bounded-lifetime, connector-validated intent for an exact approved action, while
+no provider mutation or execution endpoint exists.
 
-**Risks:** Duplicate external side effects, provider API drift, secret compromise, and broad connector permissions.
+**Risks:** Stale authorization, target drift, accidental intent mutation, overbroad future
+connector mappings, and confusing preparation with execution.
 
-## V3.22 - Hosted AWS infrastructure
+## V3.22 - Hosted AWS infrastructure and runtime wiring
 
-**Goal:** Provision the minimum secure AWS platform required by implemented Version 3 runtime components.
+**Goal:** Provision and wire the minimum secure AWS platform required by implemented Version
+3 runtime components without activating remediation execution.
 
 **Dependencies:** Runtime requirements from V3.3-V3.21 and approved infrastructure ADRs.
 
@@ -844,10 +864,13 @@ Version 3 is complete when:
 - [ ] Manual and CloudWatch alerts create durable incidents and asynchronous triage runs.
 - [ ] Automatic context collection is least privilege, bounded, attributable, and resilient to partial failure.
 - [ ] Operators can review incident history, evidence, triage, feedback, usage, and pending approvals in the hosted application.
-- [ ] Informational actions are idempotent and policy-controlled; consequential actions require human approval.
+- [ ] Approved actions produce immutable, policy-controlled execution intents; actual
+  controlled or autonomous remediation execution remains Version 4 work.
 - [ ] The AWS platform uses HTTPS public ingress with private API, worker, and PostgreSQL services.
 - [ ] Observability, quotas, security controls, CI/CD, failure recovery, and runbooks meet approved readiness criteria.
 - [ ] Multi-tenant isolation and V2 regression suites are release-blocking and passing.
 - [ ] Production-readiness review records no unresolved critical or high release blocker.
 
-Version 4 remains a separate future autonomous-action layer. Version 3 does not authorize autonomous consequential remediation.
+Version 4 remains the separate future execution layer for actual controlled or autonomous
+remediation. Version 3 stops at immutable approved intent and deterministic connector
+preparation; it does not execute remediation.
