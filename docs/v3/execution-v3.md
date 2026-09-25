@@ -474,30 +474,32 @@ Version 3 preserves human authority over consequential actions. Version 4 is the
 
 **Risks:** Large evidence payloads, expensive history queries, and accidental sensitive-data exposure.
 
-## V3.16 - CloudWatch onboarding
+## V3.16 - AWS integration onboarding and verification
 
 **Goal:** Securely connect a workspace to one or more customer AWS accounts/regions.
 
 **Dependencies:** V3.5-V3.7, V3.13-V3.14.
 
+**Status:** Complete in `2796437` (`feat: add AWS integration onboarding`).
+
 **Checklist:**
 
-- [ ] Document and validate CloudWatch Alarm -> EventBridge -> authenticated cross-account AIRA EventBridge ingestion as the preferred first alert-delivery mechanism.
-- [ ] Define integration records, external IDs, role ARNs, regions, allowed log groups/metrics, and status.
-- [ ] Implement separate STS AssumeRole context collection using a customer-managed least-privilege AIRA read role and no long-lived customer keys.
-- [ ] Validate exact multi-region EventBridge routing and onboarding mechanics without broadening initial AWS discovery scope.
-- [ ] Add connection test, permission diagnostics, rotation, disable, and deletion.
-- [ ] Add onboarding UI and explicit explanation of accessed resources.
+- [x] Define workspace-scoped AWS integration records, AIRA-generated external IDs, role ARNs, explicit regions, lifecycle state, and optimistic configuration versions.
+- [x] Implement short-lived STS AssumeRole trust using a customer-managed least-privilege AIRA read role and no long-lived customer keys.
+- [x] Verify caller identity and bounded CloudWatch alarm, metric, and log-read capabilities in each configured region before marking an integration ready.
+- [x] Add safe permission diagnostics, retry, verification invalidation, disable, durable audit history, authorization, and forced-RLS isolation.
+- [x] Add hosted APIs, BFF routes, and onboarding UI with copyable trust/read-policy artifacts and explicit customer actions.
+- [x] Keep EventBridge and CloudWatch alarm delivery in V3.17 and operational Logs/Metrics enrichment in V3.18.
 
-**Files/modules:** Expected `app/integrations/cloudwatch/`, integration routes/services/repositories, customer IAM template/docs, hosted UI, tests.
+**Files/modules:** AWS integration domain/application model, `app/integrations/aws.py`, integration routes/services/repositories, migration, hosted UI/BFF, documentation, and tests.
 
-**Validation:** Correct/incorrect external ID, denied permission, wrong account/region, disabled integration, role rotation, CloudTrail attribution.
+**Validation:** Generated external ID, denied permission, wrong account/role/region, identity mismatch, capability failures, disabled integration, stale verification, authorization/RLS, API/BFF/UI, and V2 regression coverage using injected AWS clients only.
 
-**Deliverable / definition of done:** An Admin can configure authenticated EventBridge alarm delivery and a separate constrained context-read role for supported accounts/regions using only documented permissions.
+**Deliverable / definition of done:** An Owner/Admin can configure and verify a constrained AssumeRole integration for supported AWS accounts/regions using documented permissions; no alert delivery or incident enrichment is claimed.
 
 **Risks:** Confused-deputy vulnerabilities, overly broad IAM, regional complexity, and onboarding support burden.
 
-## V3.17 - Alert ingestion
+## V3.17 - EventBridge / CloudWatch alarm delivery
 
 **Goal:** Convert authenticated cross-account EventBridge deliveries originating from CloudWatch Alarms into deduplicated workspace incidents and triage jobs.
 
@@ -519,7 +521,7 @@ Version 3 preserves human authority over consequential actions. Version 4 is the
 
 **Risks:** Duplicate alerts, forged delivery, alert storms, and retaining excessive raw provider data.
 
-## V3.18 - Automatic logs and metrics enrichment
+## V3.18 - CloudWatch Logs / Metrics enrichment
 
 **Goal:** Collect bounded, relevant CloudWatch context before triage using the authorized integration role.
 
