@@ -91,6 +91,14 @@ class IntegrationId(DomainId):
     pass
 
 
+class AlertReceiptId(DomainId):
+    pass
+
+
+class AwsAlarmStateId(DomainId):
+    pass
+
+
 class JobId(DomainId):
     pass
 

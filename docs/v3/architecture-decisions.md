@@ -160,6 +160,12 @@ workspace-scoped AWS integration, AIRA-generated ExternalId, deployment-configur
 principal, short-lived STS session, caller-identity check, and bounded regional capability
 probes. EventBridge delivery and operational context queries remain V3.17/V3.18.
 
+V3.17 implements the transport-neutral application intake: a machine-authenticated internal
+route treats tenant path values as routing hints, re-authorizes the machine actor, resolves
+the persisted READY integration under forced RLS, and atomically records deduplication,
+alarm state, incident, triage job/outbox, and audit state. V3.22 still owns production
+EventBridge resources and workload-identity wiring; V3.18 owns Logs/Metrics enrichment.
+
 **Context:** Current CloudWatch code observes AIRA's own ECS/ALB behavior. It does not onboard customer accounts, ingest alarms, or collect customer telemetry.
 
 **Chosen approach:** Authenticate the cross-account EventBridge delivery, map it to an integration/workspace, normalize and deduplicate the alarm, then enqueue context collection and triage. Store customer role ARN, external ID, allowed regions, log groups, and metric scope as integration metadata. Use STS `AssumeRole` only for bounded context reads; do not perform unrestricted account discovery.

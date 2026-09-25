@@ -1056,6 +1056,12 @@ class AwsIntegrationRecord(Base, WorkspaceTenantColumns, TimestampColumns, Actor
         ),
         CheckConstraint("version > 0", name="ck_aws_integrations_version"),
         CheckConstraint(_ACTOR_CHECK, name="ck_aws_integrations_actor_kind"),
+        UniqueConstraint(
+            "organization_id",
+            "workspace_id",
+            "id",
+            name="uq_aws_integrations_scope_id",
+        ),
         Index(
             "ix_aws_integrations_scope_created",
             "organization_id",
@@ -1080,6 +1086,141 @@ class AwsIntegrationRecord(Base, WorkspaceTenantColumns, TimestampColumns, Actor
     disabled_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+
+
+class AlertEventReceiptRecord(Base, WorkspaceTenantColumns, ActorColumns):
+    __tablename__ = "alert_event_receipts"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "workspace_id", "integration_id"],
+            [
+                "aws_integrations.organization_id",
+                "aws_integrations.workspace_id",
+                "aws_integrations.id",
+            ],
+            name="fk_alert_event_receipts_integration_scope",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "workspace_id", "incident_id"],
+            ["incidents.organization_id", "incidents.workspace_id", "incidents.id"],
+            name="fk_alert_event_receipts_incident_scope",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "workspace_id", "triage_run_id"],
+            [
+                "triage_runs.organization_id",
+                "triage_runs.workspace_id",
+                "triage_runs.id",
+            ],
+            name="fk_alert_event_receipts_triage_scope",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "workspace_id",
+            "integration_id",
+            "event_id",
+            name="uq_alert_event_receipts_delivery",
+        ),
+        CheckConstraint(
+            "status IN ('accepted', 'ignored_stale', 'ignored_policy')",
+            name="ck_alert_event_receipts_status",
+        ),
+        CheckConstraint(
+            "alarm_state IN ('ALARM', 'OK', 'INSUFFICIENT_DATA') "
+            "AND previous_alarm_state IN ('ALARM', 'OK', 'INSUFFICIENT_DATA')",
+            name="ck_alert_event_receipts_alarm_states",
+        ),
+        CheckConstraint(
+            "payload_hash ~ '^[0-9a-f]{64}$' "
+            "AND alarm_identity_hash ~ '^[0-9a-f]{64}$'",
+            name="ck_alert_event_receipts_hashes",
+        ),
+        CheckConstraint(_ACTOR_CHECK, name="ck_alert_event_receipts_actor_kind"),
+        Index(
+            "ix_alert_event_receipts_integration_received",
+            "organization_id",
+            "workspace_id",
+            "integration_id",
+            "received_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    integration_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    event_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    alarm_identity: Mapped[str] = mapped_column(String(1000), nullable=False)
+    alarm_identity_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    alarm_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    account_id: Mapped[str] = mapped_column(String(12), nullable=False)
+    region: Mapped[str] = mapped_column(String(64), nullable=False)
+    alarm_state: Mapped[str] = mapped_column(String(32), nullable=False)
+    previous_alarm_state: Mapped[str] = mapped_column(String(32), nullable=False)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    incident_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    triage_run_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+
+
+class AwsAlarmStateRecord(Base, WorkspaceTenantColumns):
+    __tablename__ = "aws_alarm_states"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "workspace_id", "integration_id"],
+            [
+                "aws_integrations.organization_id",
+                "aws_integrations.workspace_id",
+                "aws_integrations.id",
+            ],
+            name="fk_aws_alarm_states_integration_scope",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "workspace_id", "incident_id"],
+            ["incidents.organization_id", "incidents.workspace_id", "incidents.id"],
+            name="fk_aws_alarm_states_incident_scope",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "workspace_id",
+            "integration_id",
+            "alarm_identity_hash",
+            name="uq_aws_alarm_states_identity",
+        ),
+        CheckConstraint(
+            "latest_state IN ('ALARM', 'OK', 'INSUFFICIENT_DATA')",
+            name="ck_aws_alarm_states_state",
+        ),
+        CheckConstraint(
+            "alarm_identity_hash ~ '^[0-9a-f]{64}$'",
+            name="ck_aws_alarm_states_identity_hash",
+        ),
+        Index(
+            "ix_aws_alarm_states_integration_updated",
+            "organization_id",
+            "workspace_id",
+            "integration_id",
+            "updated_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    integration_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    alarm_identity: Mapped[str] = mapped_column(String(1000), nullable=False)
+    alarm_identity_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    alarm_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    latest_event_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    latest_state: Mapped[str] = mapped_column(String(32), nullable=False)
+    latest_observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    incident_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
 
 
 class JobRecord(

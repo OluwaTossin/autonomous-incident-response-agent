@@ -119,5 +119,6 @@ through PostgreSQL or SQS.
 
 V3.13 owns the hosted Next.js session, Cognito PKCE callback, cookies, CSRF, refresh, and
 operator UI. V3.15 history behavior is described in
-[`incident-history.md`](incident-history.md). CloudWatch/EventBridge intake, AssumeRole context collection, and enrichment
-remain V3.16-V3.18. Action proposals and approvals remain V3.19-V3.21.
+[`incident-history.md`](incident-history.md). V3.17 CloudWatch/EventBridge application intake
+is documented in [`alert-ingestion.md`](alert-ingestion.md); AssumeRole Logs/Metrics context
+collection and enrichment remain V3.18. Action proposals and approvals remain V3.19-V3.21.

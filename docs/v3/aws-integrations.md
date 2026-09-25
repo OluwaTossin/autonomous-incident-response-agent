@@ -77,9 +77,17 @@ events cover creation, configuration, verification success/failure, and disable.
 signals contain only low-cardinality event/outcome values, not tenant, account, workspace,
 or integration IDs.
 
+## Alert delivery
+
+V3.17 consumes authenticated CloudWatch Alarm State Change events through the machine-only
+contract documented in [`alert-ingestion.md`](alert-ingestion.md). Delivery requires a READY
+integration and validates the persisted account, configured region, and alarm-read
+capability. Event JSON never selects tenant scope.
+
 ## Phase boundaries
 
-V3.17 will add authenticated EventBridge alarm delivery and must require READY. V3.18 will
-use only verified capabilities and configured regions for bounded incident context
-collection. V3.22 owns the production AIRA workload principal, network/IAM deployment, and
-runtime configuration. No Terraform or live AWS change is part of V3.16.
+V3.17 provides the application intake contract but does not provision EventBridge. V3.18
+uses only verified capabilities and configured regions for bounded incident context
+collection. V3.22 owns the production AIRA workload principal, EventBridge resources,
+network/IAM deployment, and runtime configuration. No Terraform or live AWS change is part
+of V3.16 or V3.17.

@@ -30,6 +30,8 @@ describe("AWS integration onboarding", () => {
     expect(html).toContain("sts:AssumeRole");
     expect(html).toContain("AWS account identity");
     expect(html).toContain("Verify connection");
+    expect(html).toContain("Application intake is ready");
+    expect(html).toContain("Deployment target pending");
     expect(html).not.toContain("SecretAccessKey");
   });
 
