@@ -456,13 +456,15 @@ Version 3 preserves human authority over consequential actions. Version 4 is the
 
 **Dependencies:** V3.12-V3.14.
 
+**Status:** Complete in `aeff537` (`feat: add incident history and triage investigation`).
+
 **Checklist:**
 
-- [ ] Add incident list/detail, triage progress/result, evidence, timeline, feedback, and retry views.
-- [ ] Preserve severity, confidence, actions, evidence grouping, and correlation presentation from V2.
-- [ ] Add pagination/filtering without unbounded queries.
-- [ ] Show terminal failures and operator-safe diagnostics.
-- [ ] Ensure exports/downloads are authorized and audited.
+- [x] Add incident list/detail, triage progress/result, evidence, timeline, feedback, and retry views.
+- [x] Preserve severity, confidence, actions, evidence grouping, and correlation presentation from V2.
+- [x] Add pagination/filtering without unbounded queries.
+- [x] Show terminal failures and operator-safe diagnostics.
+- [x] Keep exports/downloads unavailable until an authorized and audited flow is implemented.
 
 **Files/modules:** Hosted incident/triage frontend routes; query APIs/repositories; reuse V2 display components where suitable.
 
