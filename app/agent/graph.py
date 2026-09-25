@@ -73,6 +73,10 @@ def run_triage_with_audit(
         "retrieval_hits": hits if isinstance(hits, list) else [],
         "llm_usage": llm_usage,
     }
+    if failure_code := final.get("failure_code"):
+        meta["failure_code"] = failure_code
+    if failure_category := final.get("failure_category"):
+        meta["failure_category"] = failure_category
     return result, meta
 
 

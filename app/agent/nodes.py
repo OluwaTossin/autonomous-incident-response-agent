@@ -35,6 +35,8 @@ class TriageState(TypedDict, total=False):
     draft: dict[str, Any]
     result: dict[str, Any]
     error: str
+    failure_code: str
+    failure_category: str
     llm_usage: dict[str, Any]
 
 
@@ -66,11 +68,19 @@ def parse_incident_payload(raw: dict[str, Any]) -> IncidentPayload:
 def node_normalize_input(state: TriageState) -> dict[str, Any]:
     raw = state.get("incident") or {}
     if not isinstance(raw, dict):
-        return {"error": "incident must be a JSON object"}
+        return {
+            "error": "incident must be a JSON object",
+            "failure_code": "incident_invalid",
+            "failure_category": "validation",
+        }
     try:
         payload = parse_incident_payload(raw)
     except ValidationError as e:
-        return {"error": f"Invalid incident payload: {e}"}
+        return {
+            "error": f"Invalid incident payload: {e}",
+            "failure_code": "incident_invalid",
+            "failure_category": "validation",
+        }
 
     lines = [
         f"**Alert title:** {payload.alert_title or '(none)'}",
@@ -135,6 +145,12 @@ def node_retrieval(
                 top_k=retrieval_context.top_k,
             )
     except Exception as e:
+        if retrieval_context is not None:
+            return {
+                "error": "Hosted knowledge retrieval failed",
+                "failure_code": "retrieval_failed",
+                "failure_category": _dependency_failure_category(e),
+            }
         return {
             "rag_context": (
                 f"(Vector retrieval failed — build index with "
@@ -198,11 +214,15 @@ Produce triage JSON matching the schema."""
             return {"draft": out, "llm_usage": usage}
         return {
             "error": f"Unexpected LLM output type: {type(out)!r}",
+            "failure_code": "model_result_invalid",
+            "failure_category": "validation",
             "llm_usage": usage,
         }
     except Exception as e:
         return {
             "error": f"LLM analysis failed: {e}",
+            "failure_code": "llm_provider_failed",
+            "failure_category": _dependency_failure_category(e),
             "llm_usage": aggregate_llm_usage(usage_cb),
         }
 
@@ -257,7 +277,11 @@ def node_decision(state: TriageState) -> dict[str, Any]:
         return {}
     draft = state.get("draft")
     if not draft:
-        return {"error": "No draft triage from analysis step"}
+        return {
+            "error": "No draft triage from analysis step",
+            "failure_code": "model_result_invalid",
+            "failure_category": "validation",
+        }
     incident = state.get("incident") if isinstance(state.get("incident"), dict) else {}
     draft = apply_operational_policy(incident, draft if isinstance(draft, dict) else {})
     sev = str(draft.get("severity", "")).upper()
@@ -301,6 +325,8 @@ def node_output_formatter(state: TriageState) -> dict[str, Any]:
     except ValidationError as e:
         return {
             "error": f"Output validation failed: {e}",
+            "failure_code": "model_result_invalid",
+            "failure_category": "validation",
             "result": {
                 "incident_summary": str(draft.get("incident_summary", "")),
                 "severity": "LOW",
@@ -311,3 +337,24 @@ def node_output_formatter(state: TriageState) -> dict[str, Any]:
                 **_empty_triage_extras(),
             },
         }
+
+
+def _dependency_failure_category(exc: Exception) -> str:
+    names = {candidate.__name__ for candidate in type(exc).mro()}
+    if names & {
+        "APIConnectionError",
+        "APITimeoutError",
+        "ConnectError",
+        "ConnectTimeout",
+        "InternalServerError",
+        "RateLimitError",
+        "ReadTimeout",
+        "TimeoutError",
+        "TimeoutException",
+    }:
+        return "transient"
+    if names & {"AuthenticationError", "PermissionDeniedError"}:
+        return "configuration"
+    if names & {"BadRequestError", "UnprocessableEntityError"}:
+        return "validation"
+    return "internal"

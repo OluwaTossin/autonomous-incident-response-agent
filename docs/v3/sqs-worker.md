@@ -6,6 +6,11 @@ PostgreSQL remains authoritative for job state, tenant scope, attempts, retry
 timing, claims, cancellation, and results. SQS visibility is transport
 protection only and never proves execution ownership.
 
+For `triage` jobs, V3.12 registers an optional lifecycle coordinator beside the typed
+handler. It synchronizes Job claim/completion/failure/cancellation with TriageRun state and
+performs scope reconciliation after lease recovery and before outbox publication.
+Expensive retrieval and model calls remain outside database transactions.
+
 ## Message Contract
 
 Schema version 1 contains only identifiers:

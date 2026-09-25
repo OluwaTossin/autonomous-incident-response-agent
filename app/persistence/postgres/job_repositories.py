@@ -54,6 +54,18 @@ class PostgresJobRepository:
         record = self._session.scalar(statement)
         return job_from_record(record) if record else None
 
+    def get_by_subject(
+        self, subject_type: str, subject_id: str, *, for_update: bool = False
+    ) -> Job | None:
+        statement = select(JobRecord).where(
+            JobRecord.subject_type == subject_type,
+            JobRecord.subject_id == subject_id,
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        record = self._session.scalar(statement)
+        return job_from_record(record) if record else None
+
     def list(
         self,
         *,

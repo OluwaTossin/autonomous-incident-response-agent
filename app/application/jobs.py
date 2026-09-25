@@ -22,6 +22,8 @@ from app.domain.identifiers import (
     JobId,
     KnowledgeIndexVersionId,
     OrganizationId,
+    IncidentId,
+    TriageRunId,
     WorkspaceId,
 )
 from app.domain.operations import (
@@ -74,6 +76,33 @@ class KnowledgeIndexBuildJobPayload:
 
 
 @dataclass(frozen=True, slots=True)
+class TriageJobPayload:
+    incident_id: IncidentId
+    triage_run_id: TriageRunId
+    schema_version: int = 1
+
+    @property
+    def kind(self) -> JobKind:
+        return JobKind.TRIAGE
+
+    @property
+    def subject_type(self) -> str:
+        return "triage_run"
+
+    @property
+    def subject_id(self) -> str:
+        return str(self.triage_run_id)
+
+    def metadata(self) -> tuple[tuple[str, str], ...]:
+        if self.schema_version != 1:
+            raise ValueError("Unsupported triage job payload version")
+        return (
+            ("incident_id", str(self.incident_id)),
+            ("triage_run_id", str(self.triage_run_id)),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class JobListCursor:
     created_at: datetime
     job_id: JobId
@@ -97,6 +126,9 @@ class JobDispatch:
 class JobRepository(Protocol):
     def create_or_get(self, job: Job) -> tuple[Job, bool]: ...
     def get(self, job_id: JobId, *, for_update: bool = False) -> Job | None: ...
+    def get_by_subject(
+        self, subject_type: str, subject_id: str, *, for_update: bool = False
+    ) -> Job | None: ...
     def list(
         self,
         *,
@@ -210,7 +242,7 @@ class HostedJobService:
             idempotency_key=idempotency_key,
             payload_version=payload.schema_version,
             payload=metadata,
-            payload_hash=_payload_hash(payload.kind, payload.schema_version, metadata),
+            payload_hash=job_payload_hash(payload.kind, payload.schema_version, metadata),
             available_at=available_at or now,
             max_attempts=max_attempts,
         )
@@ -707,6 +739,14 @@ class TransientJobExecutionError(RuntimeError):
     """A deterministic adapter classification indicating bounded retry."""
 
 
+class ClassifiedJobExecutionError(RuntimeError):
+    """A handler-supplied deterministic, client-safe failure classification."""
+
+    def __init__(self, failure: JobFailure) -> None:
+        super().__init__(failure.summary)
+        self.failure = failure
+
+
 class JobCancellationRequested(RuntimeError):
     """A typed handler reached a safe cancellation checkpoint."""
 
@@ -808,7 +848,7 @@ class KnowledgeIndexBuildJobHandler:
         )
 
 
-def _payload_hash(
+def job_payload_hash(
     kind: JobKind,
     schema_version: int,
     metadata: tuple[tuple[str, str], ...],

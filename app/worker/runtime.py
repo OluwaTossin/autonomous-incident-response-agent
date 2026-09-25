@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import signal
 import threading
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 
@@ -13,6 +14,7 @@ from app.application.job_dispatch import OutboxDispatcher
 from app.application.jobs import HostedJobService
 from app.auth.context import ActorContext
 from app.domain.common import WorkspaceScope
+from app.domain.identifiers import OrganizationId, WorkspaceId
 from app.worker.orchestration import MessageDisposition, WorkerMessageProcessor
 
 logger = logging.getLogger(__name__)
@@ -108,6 +110,10 @@ class HostedWorkerRuntime:
         polling_worker: PollingWorker,
         actor: ActorContext,
         scopes: tuple[WorkspaceScope, ...],
+        reconciler: Callable[
+            [ActorContext, OrganizationId, WorkspaceId], int
+        ]
+        | None = None,
     ) -> None:
         if not scopes:
             raise ValueError("Hosted worker requires at least one authorized scope")
@@ -116,6 +122,7 @@ class HostedWorkerRuntime:
         self._polling_worker = polling_worker
         self._actor = actor
         self._scopes = scopes
+        self._reconciler = reconciler
 
     def run(self, stop: threading.Event | None = None) -> None:
         stop_event = stop or threading.Event()
@@ -133,6 +140,12 @@ class HostedWorkerRuntime:
                     scope.organization_id,
                     scope.workspace_id,
                 )
+                if self._reconciler is not None:
+                    self._reconciler(
+                        self._actor,
+                        scope.organization_id,
+                        scope.workspace_id,
+                    )
                 self._dispatcher.publish_ready(
                     self._actor,
                     scope.organization_id,

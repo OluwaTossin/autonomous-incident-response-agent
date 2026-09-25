@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.job_dispatch import OutboxDispatcher
 from app.application.jobs import HostedJobService, KnowledgeIndexBuildJobHandler
+from app.application.triage_jobs import HostedTriageJobHandler, HostedTriageLifecycle
 from app.auth.context import ActorContext
 from app.authorization.service import AuthorizationService
 from app.config.settings import Settings
@@ -44,6 +45,8 @@ def build_hosted_worker(
     worker_id: str,
     publisher_id: str,
     sqs_client: Any | None = None,
+    triage_handler: HostedTriageJobHandler | None = None,
+    triage_lifecycle: HostedTriageLifecycle | None = None,
 ) -> HostedWorkerComposition:
     """Compose only injected, allowlisted hosted worker dependencies."""
     client = sqs_client or create_sqs_client(
@@ -63,9 +66,16 @@ def build_hosted_worker(
         index_build_operation,
         lease_duration=timedelta(seconds=settings.aira_worker_job_lease_seconds),
     )
+    handlers = {JobKind.INDEX_BUILD: handler}
+    coordinators = {}
+    if (triage_handler is None) is not (triage_lifecycle is None):
+        raise ValueError("TRIAGE handler and lifecycle must be configured together")
+    if triage_handler is not None and triage_lifecycle is not None:
+        handlers[JobKind.TRIAGE] = triage_handler
+        coordinators[JobKind.TRIAGE] = triage_lifecycle
     processor = WorkerMessageProcessor(
         jobs,
-        JobHandlerRegistry({JobKind.INDEX_BUILD: handler}),
+        JobHandlerRegistry(handlers, coordinators=coordinators),
         queue,
         actor,
         worker_id=worker_id,
@@ -92,5 +102,16 @@ def build_hosted_worker(
             concurrency=settings.aira_worker_concurrency,
         ),
     )
-    runtime = HostedWorkerRuntime(jobs, dispatcher, polling_worker, actor, scopes)
+    runtime = HostedWorkerRuntime(
+        jobs,
+        dispatcher,
+        polling_worker,
+        actor,
+        scopes,
+        reconciler=(
+            triage_lifecycle.reconcile_scope
+            if triage_lifecycle is not None
+            else None
+        ),
+    )
     return HostedWorkerComposition(runtime, jobs, queue, dispatcher)

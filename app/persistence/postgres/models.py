@@ -524,6 +524,7 @@ class IncidentRecord(
             "organization_id",
             "workspace_id",
             "created_at",
+            "id",
         ),
         Index("ix_incidents_scope_state", "organization_id", "workspace_id", "state"),
     )
@@ -565,6 +566,7 @@ class TriageRunRecord(
         UniqueConstraint(
             "organization_id", "workspace_id", "id", name="uq_triage_runs_scope_id"
         ),
+        CheckConstraint("state_version > 0", name="ck_triage_runs_state_version"),
         CheckConstraint(
             "state IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')",
             name="ck_triage_runs_state",
@@ -573,6 +575,13 @@ class TriageRunRecord(
         CheckConstraint(_CLASSIFICATION_CHECK, name="ck_triage_runs_classification"),
         Index("ix_triage_runs_incident_created", "incident_id", "created_at"),
         Index("ix_triage_runs_scope_state", "organization_id", "workspace_id", "state"),
+        Index(
+            "ix_triage_runs_scope_created",
+            "organization_id",
+            "workspace_id",
+            "created_at",
+            "id",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
@@ -586,6 +595,10 @@ class TriageRunRecord(
     )
     result: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    error_category: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    error_retryable: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    state_version: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
 class EvidenceRecord(Base, WorkspaceTenantColumns, ClassificationRetentionColumns):
@@ -612,7 +625,15 @@ class EvidenceRecord(Base, WorkspaceTenantColumns, ClassificationRetentionColumn
             name="ck_evidence_type",
         ),
         CheckConstraint(_CLASSIFICATION_CHECK, name="ck_evidence_classification"),
-        Index("ix_evidence_triage_run", "triage_run_id", "created_at"),
+        UniqueConstraint(
+            "organization_id",
+            "workspace_id",
+            "triage_run_id",
+            "sequence",
+            name="uq_evidence_triage_sequence",
+        ),
+        CheckConstraint("sequence >= 0", name="ck_evidence_sequence"),
+        Index("ix_evidence_triage_run", "triage_run_id", "sequence"),
     )
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
@@ -620,6 +641,15 @@ class EvidenceRecord(Base, WorkspaceTenantColumns, ClassificationRetentionColumn
     type: Mapped[str] = mapped_column(String(32), nullable=False)
     source: Mapped[str] = mapped_column(Text, nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    origin: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    document_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    document_version_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    knowledge_index_version_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
+    chunk_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )

@@ -5,11 +5,13 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Callable, Protocol
 
 from app.application.jobs import (
+    ClassifiedJobExecutionError,
     HostedJobService,
     JobCancellationRequested,
     JobNotClaimable,
@@ -45,7 +47,36 @@ class TypedJobHandler(Protocol):
         job: Job,
         *,
         cancellation_requested: Callable[[], bool],
-    ) -> JobResultReference: ...
+    ) -> JobResultReference | JobHandlerOutcome: ...
+
+
+@dataclass(frozen=True, slots=True)
+class JobHandlerOutcome:
+    result: JobResultReference
+    completion_payload: object | None = None
+
+
+class JobLifecycleCoordinator(Protocol):
+    def claim(
+        self,
+        actor: ActorContext,
+        job: Job,
+        *,
+        worker_id: str,
+        lease_duration: timedelta,
+    ) -> Job: ...
+
+    def complete(
+        self, actor: ActorContext, claimed: Job, outcome: JobHandlerOutcome
+    ) -> Job: ...
+
+    def fail(
+        self, actor: ActorContext, claimed: Job, failure: JobFailure
+    ) -> Job: ...
+
+    def acknowledge_cancellation(
+        self, actor: ActorContext, claimed: Job
+    ) -> Job: ...
 
 
 class WorkerObserver(Protocol):
@@ -58,13 +89,24 @@ class NoopWorkerObserver:
 
 
 class JobHandlerRegistry:
-    def __init__(self, handlers: dict[JobKind, TypedJobHandler]) -> None:
+    def __init__(
+        self,
+        handlers: dict[JobKind, TypedJobHandler],
+        *,
+        coordinators: dict[JobKind, JobLifecycleCoordinator] | None = None,
+    ) -> None:
         if len(handlers) != len(set(handlers)):
             raise ValueError("Duplicate job handlers are not allowed")
         self._handlers = dict(handlers)
+        self._coordinators = dict(coordinators or {})
+        if not set(self._coordinators).issubset(self._handlers):
+            raise ValueError("Lifecycle coordinators require a registered handler")
 
     def get(self, kind: JobKind) -> TypedJobHandler | None:
         return self._handlers.get(kind)
+
+    def coordinator(self, kind: JobKind) -> JobLifecycleCoordinator | None:
+        return self._coordinators.get(kind)
 
 
 class WorkerHeartbeat:
@@ -240,15 +282,25 @@ class WorkerMessageProcessor:
         handler = self._handlers.get(job.kind)
         if handler is None:
             return self._fail_without_handler(job, started)
+        coordinator = self._handlers.coordinator(job.kind)
 
         try:
-            claimed = self._jobs.claim_job(
-                self._actor,
-                job.scope.organization_id,
-                job.scope.workspace_id,
-                job.id,
-                worker_id=self._worker_id,
-                lease_duration=self._lease_duration,
+            claimed = (
+                coordinator.claim(
+                    self._actor,
+                    job,
+                    worker_id=self._worker_id,
+                    lease_duration=self._lease_duration,
+                )
+                if coordinator is not None
+                else self._jobs.claim_job(
+                    self._actor,
+                    job.scope.organization_id,
+                    job.scope.workspace_id,
+                    job.id,
+                    worker_id=self._worker_id,
+                    lease_duration=self._lease_duration,
+                )
             )
         except JobNotClaimable:
             self._observer.record("duplicate_delivery", _duration_ms(started), "claim_lost")
@@ -272,14 +324,24 @@ class WorkerMessageProcessor:
         try:
             if self._cancellation_requested(envelope):
                 raise JobCancellationRequested("Job cancellation was requested")
-            result = handler.handle(
+            raw_outcome = handler.handle(
                 self._actor,
                 claimed,
                 cancellation_requested=lambda: self._cancellation_requested(envelope),
             )
+            outcome = (
+                raw_outcome
+                if isinstance(raw_outcome, JobHandlerOutcome)
+                else JobHandlerOutcome(raw_outcome)
+            )
         except JobCancellationRequested:
             heartbeat.stop()
-            return self._acknowledge_cancellation(claimed, started)
+            return self._acknowledge_cancellation(claimed, started, coordinator)
+        except ClassifiedJobExecutionError as exc:
+            heartbeat.stop()
+            return self._record_failure(
+                claimed, exc.failure, started, coordinator
+            )
         except TransientJobExecutionError:
             heartbeat.stop()
             return self._record_failure(
@@ -291,6 +353,7 @@ class WorkerMessageProcessor:
                     "Job handler encountered a transient dependency failure",
                 ),
                 started,
+                coordinator,
             )
         except (KeyError, TypeError, ValueError):
             heartbeat.stop()
@@ -303,6 +366,7 @@ class WorkerMessageProcessor:
                     "Persisted job payload is invalid",
                 ),
                 started,
+                coordinator,
             )
         except Exception:
             heartbeat.stop()
@@ -316,24 +380,28 @@ class WorkerMessageProcessor:
                     "Job handler failed",
                 ),
                 started,
+                coordinator,
             )
         heartbeat.stop()
         if heartbeat.ownership_lost:
             return MessageDisposition.RETAIN
         if self._cancellation_requested(envelope):
-            return self._acknowledge_cancellation(claimed, started)
+            return self._acknowledge_cancellation(claimed, started, coordinator)
         try:
-            self._jobs.complete_job(
-                self._actor,
-                claimed.scope.organization_id,
-                claimed.scope.workspace_id,
-                claimed.id,
-                claimed.claim_token,
-                result,
-            )
+            if coordinator is not None:
+                coordinator.complete(self._actor, claimed, outcome)
+            else:
+                self._jobs.complete_job(
+                    self._actor,
+                    claimed.scope.organization_id,
+                    claimed.scope.workspace_id,
+                    claimed.id,
+                    claimed.claim_token,
+                    outcome.result,
+                )
         except Exception:
             if self._cancellation_requested(envelope):
-                return self._acknowledge_cancellation(claimed, started)
+                return self._acknowledge_cancellation(claimed, started, coordinator)
             logger.exception("Durable job completion failed")
             return MessageDisposition.RETAIN
         self._observer.record("worker_job", _duration_ms(started), "succeeded")
@@ -371,15 +439,20 @@ class WorkerMessageProcessor:
         claimed: Job,
         failure: JobFailure,
         started: float,
+        coordinator: JobLifecycleCoordinator | None = None,
     ) -> MessageDisposition:
         try:
-            updated = self._jobs.fail_job(
-                self._actor,
-                claimed.scope.organization_id,
-                claimed.scope.workspace_id,
-                claimed.id,
-                claimed.claim_token,
-                failure,
+            updated = (
+                coordinator.fail(self._actor, claimed, failure)
+                if coordinator is not None
+                else self._jobs.fail_job(
+                    self._actor,
+                    claimed.scope.organization_id,
+                    claimed.scope.workspace_id,
+                    claimed.id,
+                    claimed.claim_token,
+                    failure,
+                )
             )
         except Exception:
             logger.exception("Durable job failure transition failed")
@@ -389,16 +462,22 @@ class WorkerMessageProcessor:
         return MessageDisposition.DELETE
 
     def _acknowledge_cancellation(
-        self, claimed: Job, started: float
+        self,
+        claimed: Job,
+        started: float,
+        coordinator: JobLifecycleCoordinator | None = None,
     ) -> MessageDisposition:
         try:
-            self._jobs.acknowledge_cancellation(
-                self._actor,
-                claimed.scope.organization_id,
-                claimed.scope.workspace_id,
-                claimed.id,
-                claimed.claim_token,
-            )
+            if coordinator is not None:
+                coordinator.acknowledge_cancellation(self._actor, claimed)
+            else:
+                self._jobs.acknowledge_cancellation(
+                    self._actor,
+                    claimed.scope.organization_id,
+                    claimed.scope.workspace_id,
+                    claimed.id,
+                    claimed.claim_token,
+                )
         except Exception:
             logger.exception("Durable job cancellation acknowledgement failed")
             return MessageDisposition.RETAIN

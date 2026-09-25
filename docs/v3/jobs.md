@@ -14,6 +14,11 @@ compact JSON metadata with a canonical SHA-256 hash. They contain resource ident
 document bodies, credentials, presigned URLs, queue receipt handles, or arbitrary code. Future
 job kinds must add explicit schemas before use.
 
+V3.12 adds the version 1 `triage` payload containing only `incident_id` and
+`triage_run_id`. TriageRun result/evidence persistence and Job completion use one
+PostgreSQL transaction through the TRIAGE lifecycle coordinator. See
+`docs/v3/incident-triage-api.md`.
+
 ## State Machine
 
 ```text
