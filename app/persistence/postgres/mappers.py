@@ -13,12 +13,21 @@ from app.authorization.models import (
 )
 from app.authorization.permissions import Permission
 from app.domain.actions import (
+    ActionPolicyReason,
+    ActionPolicyStatus,
     ActionProposal,
+    ActionProposalState,
+    ActionProposalType,
     ActionReference,
-    ActionRisk,
-    ActionState,
+    ActionReversibility,
+    ActionRiskLevel,
+    ActionTarget,
+    ActionTargetProvenance,
+    ActionTargetType,
     Approval,
     ApprovalState,
+    action_parameters_from_dict,
+    action_parameters_to_dict,
 )
 from app.domain.common import (
     ActorKind,
@@ -495,7 +504,9 @@ def service_account_workspace_grant_from_record(
     return ServiceAccountWorkspaceGrant(
         id=_identifier(ServiceAccountWorkspaceGrantId, record.id),
         organization_id=_identifier(OrganizationId, record.organization_id),
-        service_account_grant_id=_identifier(ServiceAccountGrantId, record.service_account_grant_id),
+        service_account_grant_id=_identifier(
+            ServiceAccountGrantId, record.service_account_grant_id
+        ),
         workspace_id=_identifier(WorkspaceId, record.workspace_id),
         created_by=_actor(record.actor_kind, record.actor_id, record.actor_system_name),
         created_at=record.created_at,
@@ -1046,50 +1057,79 @@ def action_to_record(action: ActionProposal) -> ActionProposalRecord:
         id=_uuid(action.id),
         organization_id=_uuid(action.scope.organization_id),
         workspace_id=_uuid(action.scope.workspace_id),
-        action_type=action.action_type,
-        target=action.target,
-        parameters=dict(action.parameters),
-        risk=action.risk.value,
-        state=action.state.value,
-        incident_id=_uuid(action.incident.id) if action.incident else None,
-        triage_run_id=_uuid(action.triage_run.id) if action.triage_run else None,
-        completed_at=action.completed_at,
-        outcome_reference=action.outcome_reference,
-        error_message=action.error_message,
+        proposal_type=action.proposal_type.value,
+        target_type=action.target.type.value,
+        target_identifier=action.target.identifier,
+        target_provider=action.target.provider,
+        target_provenance=action.target.provenance.value,
+        integration_id=(
+            _uuid(action.target.integration_id)
+            if action.target.integration_id is not None
+            else None
+        ),
+        target_account_id=action.target.account_id,
+        target_region=action.target.region,
+        summary=action.summary,
+        rationale=action.rationale,
+        parameters=action_parameters_to_dict(action.parameters),
+        risk_level=action.risk_level.value,
+        reversibility=action.reversibility.value,
+        policy_status=action.policy_status.value,
+        policy_reason=action.policy_reason.value,
+        lifecycle_state=action.lifecycle_state.value,
+        incident_id=_uuid(action.incident.id),
+        triage_run_id=_uuid(action.triage_run.id),
+        source_result_version=action.source_result_version,
+        source_result_hash=action.source_result_hash,
+        normalized_action_hash=action.normalized_action_hash,
+        proposal_schema_version=action.proposal_schema_version,
+        source_recommendation=action.source_recommendation,
         created_at=action.created_at,
         updated_at=action.updated_at,
-        **_actor_columns(action.proposed_by),
+        **_actor_columns(action.created_by),
     )
 
 
 def action_from_record(record: ActionProposalRecord) -> ActionProposal:
     scope = _scope(record.organization_id, record.workspace_id)
+    proposal_type = ActionProposalType(record.proposal_type)
     return ActionProposal(
         id=_identifier(ActionId, record.id),
         scope=scope,
-        action_type=record.action_type,
-        target=record.target,
-        parameters=tuple(record.parameters.items()),
-        risk=ActionRisk(record.risk),
-        state=ActionState(record.state),
-        proposed_by=_actor(
-            record.actor_kind, record.actor_id, record.actor_system_name
+        incident=IncidentReference(_identifier(IncidentId, record.incident_id), scope),
+        triage_run=TriageRunReference(
+            _identifier(TriageRunId, record.triage_run_id), scope
         ),
+        proposal_type=proposal_type,
+        target=ActionTarget(
+            ActionTargetType(record.target_type),
+            record.target_identifier,
+            record.target_provider,
+            ActionTargetProvenance(record.target_provenance),
+            (
+                _identifier(IntegrationId, record.integration_id)
+                if record.integration_id is not None
+                else None
+            ),
+            record.target_account_id,
+            record.target_region,
+        ),
+        summary=record.summary,
+        rationale=record.rationale,
+        parameters=action_parameters_from_dict(proposal_type, dict(record.parameters)),
+        risk_level=ActionRiskLevel(record.risk_level),
+        reversibility=ActionReversibility(record.reversibility),
+        policy_status=ActionPolicyStatus(record.policy_status),
+        policy_reason=ActionPolicyReason(record.policy_reason),
+        lifecycle_state=ActionProposalState(record.lifecycle_state),
+        created_by=_actor(record.actor_kind, record.actor_id, record.actor_system_name),
         created_at=record.created_at,
         updated_at=record.updated_at,
-        incident=(
-            IncidentReference(_identifier(IncidentId, record.incident_id), scope)
-            if record.incident_id
-            else None
-        ),
-        triage_run=(
-            TriageRunReference(_identifier(TriageRunId, record.triage_run_id), scope)
-            if record.triage_run_id
-            else None
-        ),
-        completed_at=record.completed_at,
-        outcome_reference=record.outcome_reference,
-        error_message=record.error_message,
+        source_result_version=record.source_result_version,
+        source_result_hash=record.source_result_hash,
+        normalized_action_hash=record.normalized_action_hash,
+        proposal_schema_version=record.proposal_schema_version,
+        source_recommendation=record.source_recommendation,
     )
 
 

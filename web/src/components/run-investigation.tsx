@@ -2,24 +2,27 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Ban, CheckCircle2, LoaderCircle, Send } from "lucide-react";
-import type { BrowserError, TriageRun } from "@/lib/types";
+import type { ActionProposal, BrowserError, TriageRun } from "@/lib/types";
 
 const TERMINAL = new Set(["succeeded", "failed", "cancelled"]);
 
 export function RunInvestigation({
   initialRun,
+  initialProposals,
   organizationId,
   workspaceId,
   csrfToken,
   canOperate,
 }: {
   initialRun: TriageRun;
+  initialProposals: ActionProposal[];
   organizationId: string;
   workspaceId: string;
   csrfToken: string;
   canOperate: boolean;
 }) {
   const [run, setRun] = useState(initialRun);
+  const [proposals, setProposals] = useState(initialProposals);
   const [error, setError] = useState<string | null>(null);
   const [feedbackSent, setFeedbackSent] = useState(false);
   const stopped = useRef(false);
@@ -43,7 +46,15 @@ export function RunInvestigation({
         if (!response.ok) throw new Error(errorMessage(payload));
         const next = payload as TriageRun;
         setRun(next);
-        if (!TERMINAL.has(next.state)) {
+        if (next.state === "succeeded") {
+          const proposalResponse = await fetch(
+            `/api/triage-runs/${encodeURIComponent(run.triage_run_id)}/action-proposals?${scope}`,
+            { cache: "no-store" },
+          );
+          if (proposalResponse.ok) {
+            setProposals((await proposalResponse.json()) as ActionProposal[]);
+          }
+        } else if (!TERMINAL.has(next.state)) {
           delay = Math.min(Math.round(delay * 1.5), 8_000);
           timer = setTimeout(poll, delay);
         }
@@ -110,6 +121,7 @@ export function RunInvestigation({
       </section>
       {run.operational_context ? <OperationalContext run={run} /> : null}
       {run.result ? <Result run={run} /> : <section className="quiet-empty"><LoaderCircle className="spin" aria-hidden="true" size={18} />Triage output is not available yet.</section>}
+      {run.state === "succeeded" ? <ActionProposals proposals={proposals} /> : null}
       {run.state === "succeeded" && canOperate ? (
         <section className="feedback-panel">
           <div className="section-title"><div><h2>Operator feedback</h2><p>Record whether the diagnosis and actions helped this investigation.</p></div><Send aria-hidden="true" size={19} /></div>
@@ -126,6 +138,34 @@ export function RunInvestigation({
       {error ? <p className="form-error" role="alert">{error}</p> : null}
     </div>
   );
+}
+
+function ActionProposals({ proposals }: { proposals: ActionProposal[] }) {
+  return <section className="action-proposals" aria-labelledby="action-proposals-title">
+    <div className="section-title"><div><h2 id="action-proposals-title">Proposed actions</h2><p>Policy-evaluated recommendations for operator review. No action has been executed.</p></div></div>
+    {proposals.length ? <div className="proposal-list">{proposals.map((proposal) => <article key={proposal.action_proposal_id}>
+      <div className="proposal-heading"><div><span className="eyebrow">Proposed action</span><h3>{proposal.summary}</h3></div><span className={`proposal-status proposal-${proposal.policy_status}`}>{policyLabel(proposal.policy_status)}</span></div>
+      <p>{proposal.rationale}</p>
+      <dl className="provenance">
+        <div><dt>Type</dt><dd>{humanize(proposal.proposal_type)}</dd></div>
+        <div><dt>Target</dt><dd>{proposal.target.identifier}</dd></div>
+        <div><dt>Risk</dt><dd>{humanize(proposal.risk_level)}</dd></div>
+        <div><dt>Reversibility</dt><dd>{humanize(proposal.reversibility)}</dd></div>
+        <div><dt>Policy</dt><dd>{humanize(proposal.policy_reason)}</dd></div>
+        <div><dt>Source</dt><dd>Triage result v{proposal.source_result_version}</dd></div>
+      </dl>
+    </article>)}</div> : <div className="quiet-empty">No controlled action proposals are available for this run.</div>}
+  </section>;
+}
+
+function policyLabel(value: ActionProposal["policy_status"]): string {
+  if (value === "allowed_for_review") return "Requires review";
+  if (value === "manual_only") return "Manual only";
+  return "Blocked by policy";
+}
+
+function humanize(value: string): string {
+  return value.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
 }
 
 function OperationalContext({ run }: { run: TriageRun }) {

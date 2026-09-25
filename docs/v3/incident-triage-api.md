@@ -25,6 +25,9 @@ GET   /triage-runs
 GET   /triage-runs/{triage_run_id}
 GET   /triage-runs/{triage_run_id}/result
 GET   /triage-runs/{triage_run_id}/evidence
+GET   /triage-runs/{triage_run_id}/action-proposals
+GET   /incidents/{incident_id}/action-proposals
+GET   /action-proposals/{action_proposal_id}
 POST  /triage-runs/{triage_run_id}/cancel
 POST  /triage-runs/{triage_run_id}/feedback
 ```
@@ -87,6 +90,12 @@ committed-result/job-running window.
 Duplicate terminal messages are ignored by the V3.11 processor. Lease recovery keeps the
 same TriageRun; a scope reconciliation pass repairs running-to-queued drift before
 redispatch and repairs terminal failed/cancelled drift after a crash.
+
+After the success transaction commits, V3.19 deterministically derives action proposals in
+a separate short transaction. Proposal-generation failure cannot invalidate the completed
+TriageRun. Generation is idempotent for the run and result hash, and the hosted API exposes
+only read routes; approval and execution remain later phases. See
+[`action-proposals.md`](action-proposals.md).
 
 ## Evidence, Failure, And Cancellation
 

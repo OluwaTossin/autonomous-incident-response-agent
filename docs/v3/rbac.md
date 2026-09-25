@@ -48,6 +48,12 @@ Owner and Admin differ intentionally: only an Owner may transfer ownership. An A
 manage non-Owner memberships but may not suspend, remove, demote, or create an Owner.
 Permission checks use the centralized matrix, not scattered role-name conditions.
 
+V3.19 uses `action.propose` only at the trusted application/worker generation boundary.
+There is no browser endpoint that accepts an `ActionProposal` payload, so a human role or
+service-account grant cannot use this vocabulary entry to forge executable intent.
+`action.read` protects the read-only proposal routes. V3.20 may refine how authenticated
+humans request regeneration or review without changing this no-arbitrary-payload rule.
+
 ## Membership Lifecycle
 
 Membership state progresses through `invited -> active -> suspended/revoked` and

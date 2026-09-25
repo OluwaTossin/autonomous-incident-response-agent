@@ -1575,39 +1575,127 @@ class ActionProposalRecord(
             name="fk_actions_triage_run_scope",
             ondelete="RESTRICT",
         ),
+        ForeignKeyConstraint(
+            ["organization_id", "workspace_id", "integration_id"],
+            [
+                "aws_integrations.organization_id",
+                "aws_integrations.workspace_id",
+                "aws_integrations.id",
+            ],
+            name="fk_actions_aws_integration_scope",
+            ondelete="RESTRICT",
+        ),
         UniqueConstraint(
             "organization_id", "workspace_id", "id", name="uq_actions_scope_id"
         ),
-        CheckConstraint(
-            "risk IN ('informational', 'consequential')",
-            name="ck_actions_risk",
+        UniqueConstraint(
+            "organization_id",
+            "workspace_id",
+            "triage_run_id",
+            "source_result_hash",
+            "normalized_action_hash",
+            name="uq_actions_run_result_identity",
         ),
         CheckConstraint(
-            "state IN ('proposed', 'awaiting_approval', 'ready', 'executing', "
-            "'succeeded', 'failed', 'rejected', 'expired', 'cancelled')",
-            name="ck_actions_state",
+            "proposal_type IN ('acknowledge_incident', 'manual_investigation', "
+            "'restart_workload', 'scale_workload', 'rollback_deployment')",
+            name="ck_actions_proposal_type",
+        ),
+        CheckConstraint(
+            "target_type IN ('incident', 'service', 'aws_resource')",
+            name="ck_actions_target_type",
+        ),
+        CheckConstraint(
+            "target_provenance IN ('incident', 'operational_context', 'unknown')",
+            name="ck_actions_target_provenance",
+        ),
+        CheckConstraint(
+            "risk_level IN ('low', 'medium', 'high', 'critical')",
+            name="ck_actions_risk_level",
+        ),
+        CheckConstraint(
+            "reversibility IN ('reversible', 'partially_reversible', 'irreversible', 'unknown')",
+            name="ck_actions_reversibility",
+        ),
+        CheckConstraint(
+            "policy_status IN ('allowed_for_review', 'blocked', 'manual_only')",
+            name="ck_actions_policy_status",
+        ),
+        CheckConstraint(
+            "lifecycle_state IN ('ready_for_review', 'blocked', 'manual_only', "
+            "'superseded', 'cancelled')",
+            name="ck_actions_lifecycle_state",
+        ),
+        CheckConstraint(
+            "(policy_status = 'allowed_for_review' AND lifecycle_state IN "
+            "('ready_for_review', 'superseded', 'cancelled')) OR "
+            "(policy_status = 'blocked' AND lifecycle_state IN "
+            "('blocked', 'superseded', 'cancelled')) OR "
+            "(policy_status = 'manual_only' AND lifecycle_state IN "
+            "('manual_only', 'superseded', 'cancelled'))",
+            name="ck_actions_policy_lifecycle",
+        ),
+        CheckConstraint(
+            "proposal_schema_version = 1 AND source_result_version > 0",
+            name="ck_actions_schema_versions",
+        ),
+        CheckConstraint(
+            "(target_type = 'aws_resource' AND integration_id IS NOT NULL "
+            "AND target_account_id IS NOT NULL AND target_region IS NOT NULL "
+            "AND target_provenance = 'operational_context') OR "
+            "(target_type <> 'aws_resource' AND integration_id IS NULL "
+            "AND target_account_id IS NULL AND target_region IS NULL)",
+            name="ck_actions_target_authority",
         ),
         CheckConstraint(_ACTOR_CHECK, name="ck_actions_actor_kind"),
-        Index("ix_actions_scope_state", "organization_id", "workspace_id", "state"),
+        Index(
+            "ix_actions_scope_state",
+            "organization_id",
+            "workspace_id",
+            "lifecycle_state",
+        ),
+        Index(
+            "ix_actions_incident_created",
+            "organization_id",
+            "workspace_id",
+            "incident_id",
+            "created_at",
+        ),
+        Index(
+            "ix_actions_triage_run_created",
+            "organization_id",
+            "workspace_id",
+            "triage_run_id",
+            "created_at",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
-    action_type: Mapped[str] = mapped_column(String(120), nullable=False)
-    target: Mapped[str] = mapped_column(Text, nullable=False)
-    parameters: Mapped[dict[str, str]] = mapped_column(JSONB, nullable=False)
-    risk: Mapped[str] = mapped_column(String(32), nullable=False)
-    state: Mapped[str] = mapped_column(String(32), nullable=False)
-    incident_id: Mapped[UUID | None] = mapped_column(
+    proposal_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    target_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    target_identifier: Mapped[str] = mapped_column(Text, nullable=False)
+    target_provider: Mapped[str] = mapped_column(String(80), nullable=False)
+    target_provenance: Mapped[str] = mapped_column(String(40), nullable=False)
+    integration_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True), nullable=True
     )
-    triage_run_id: Mapped[UUID | None] = mapped_column(
-        PGUUID(as_uuid=True), nullable=True
-    )
-    completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    outcome_reference: Mapped[str | None] = mapped_column(Text, nullable=True)
-    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    target_account_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    target_region: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    summary: Mapped[str] = mapped_column(String(300), nullable=False)
+    rationale: Mapped[str] = mapped_column(Text, nullable=False)
+    parameters: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    risk_level: Mapped[str] = mapped_column(String(32), nullable=False)
+    reversibility: Mapped[str] = mapped_column(String(32), nullable=False)
+    policy_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    policy_reason: Mapped[str] = mapped_column(String(64), nullable=False)
+    lifecycle_state: Mapped[str] = mapped_column(String(32), nullable=False)
+    incident_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    triage_run_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    source_result_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_result_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    normalized_action_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    proposal_schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_recommendation: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class ApprovalRecord(Base, WorkspaceTenantColumns):

@@ -284,6 +284,35 @@ export interface TriageRunPage {
   next_cursor: string | null;
 }
 
+export interface ActionProposal {
+  action_proposal_id: string;
+  incident_id: string;
+  triage_run_id: string;
+  proposal_type: "acknowledge_incident" | "manual_investigation" | "restart_workload" | "scale_workload" | "rollback_deployment";
+  target: {
+    type: "incident" | "service" | "aws_resource";
+    identifier: string;
+    provider: string;
+    provenance: "incident" | "operational_context" | "unknown";
+    integration_id: string | null;
+    account_id: string | null;
+    region: string | null;
+  };
+  summary: string;
+  rationale: string;
+  parameters: Record<string, unknown>;
+  risk_level: "low" | "medium" | "high" | "critical";
+  reversibility: "reversible" | "partially_reversible" | "irreversible" | "unknown";
+  policy_status: "allowed_for_review" | "blocked" | "manual_only";
+  policy_reason: string;
+  lifecycle_state: "ready_for_review" | "blocked" | "manual_only" | "superseded" | "cancelled";
+  source_result_version: number;
+  source_result_hash: string;
+  proposal_schema_version: number;
+  created_by_type: "human" | "service_account" | "system";
+  created_at: string;
+}
+
 export interface FeedbackCreate {
   diagnosis_correct: boolean | null;
   actions_useful: boolean | null;

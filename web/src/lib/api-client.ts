@@ -1,6 +1,7 @@
 import "server-only";
 
 import type {
+  ActionProposal,
   AwsIntegration,
   AwsIntegrationCreate,
   AwsIntegrationPage,
@@ -132,6 +133,12 @@ export interface HostedApi {
     workspaceId: string,
     triageRunId: string,
   ): Promise<TriageEvidence[]>;
+  listActionProposals(
+    accessToken: string,
+    organizationId: string,
+    workspaceId: string,
+    triageRunId: string,
+  ): Promise<ActionProposal[]>;
   cancelTriage(
     accessToken: string,
     organizationId: string,
@@ -378,6 +385,22 @@ export class HostedApiClient implements HostedApi {
         organizationId,
         workspaceId,
         `/triage-runs/${encodeURIComponent(triageRunId)}/evidence`,
+      ),
+      accessToken,
+    );
+  }
+
+  listActionProposals(
+    accessToken: string,
+    organizationId: string,
+    workspaceId: string,
+    triageRunId: string,
+  ): Promise<ActionProposal[]> {
+    return this.request(
+      this.scope(
+        organizationId,
+        workspaceId,
+        `/triage-runs/${encodeURIComponent(triageRunId)}/action-proposals`,
       ),
       accessToken,
     );

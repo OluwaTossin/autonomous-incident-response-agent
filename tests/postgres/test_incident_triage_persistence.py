@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from uuid import UUID
 
 import pytest
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.exc import IntegrityError
 
 from app.application.incidents import HostedIncidentInput, HostedIncidentService
+from app.application.actions import HostedActionProposalService
 from app.application.triage_jobs import HostedTriageLifecycle, TriageCompletion
 from app.auth.context import trusted_system_actor
 from app.authorization.permissions import Permission
@@ -27,7 +30,12 @@ from app.persistence.postgres.authorization import (
 from app.persistence.postgres.incident_unit_of_work import (
     PostgresHostedIncidentUnitOfWork,
 )
-from app.persistence.postgres.models import EvidenceRecord, JobRecord, TriageRunRecord
+from app.persistence.postgres.models import (
+    ActionProposalRecord,
+    EvidenceRecord,
+    JobRecord,
+    TriageRunRecord,
+)
 from app.persistence.postgres.tenant import TenantContext, tenant_transaction
 from app.worker.orchestration import JobHandlerOutcome
 
@@ -44,7 +52,16 @@ def _worker():
     )
 
 
-def _services(runtime_session_factory, organization_id, workspace_id):
+_USE_ACTION_SERVICE = object()
+
+
+def _services(
+    runtime_session_factory,
+    organization_id,
+    workspace_id,
+    *,
+    proposal_generator=_USE_ACTION_SERVICE,
+):
     authorization = AuthorizationService(
         PostgresAuthorizationFactsRepository(runtime_session_factory),
         PostgresTenantResourceValidator(runtime_session_factory),
@@ -54,7 +71,7 @@ def _services(runtime_session_factory, organization_id, workspace_id):
                 "https://workload.example",
                 "worker-role",
                 organization_id,
-                frozenset({Permission.JOB_EXECUTE}),
+                frozenset({Permission.JOB_EXECUTE, Permission.ACTION_PROPOSE}),
                 frozenset({workspace_id}),
             ),
         ),
@@ -62,9 +79,19 @@ def _services(runtime_session_factory, organization_id, workspace_id):
     factory = lambda context: PostgresHostedIncidentUnitOfWork(  # noqa: E731
         runtime_session_factory, context
     )
+    actions = HostedActionProposalService(authorization, factory, clock=lambda: NOW)
+    generator = (
+        actions if proposal_generator is _USE_ACTION_SERVICE else proposal_generator
+    )
     return (
         HostedIncidentService(authorization, factory, clock=lambda: NOW),
-        HostedTriageLifecycle(authorization, factory, clock=lambda: NOW),
+        HostedTriageLifecycle(
+            authorization,
+            factory,
+            clock=lambda: NOW,
+            proposal_generator=generator,
+        ),
+        actions,
     )
 
 
@@ -75,7 +102,7 @@ def test_request_completion_evidence_and_stale_claim_are_atomic(
     actor, organization_id, _, workspace, _, _ = _setup(
         postgres_database, runtime_session_factory, 190
     )
-    service, lifecycle = _services(
+    service, lifecycle, actions = _services(
         runtime_session_factory, organization_id, workspace.id
     )
     incident = service.create_incident(
@@ -148,9 +175,7 @@ def test_request_completion_evidence_and_stale_claim_are_atomic(
     )
     completed = lifecycle.complete(_worker(), claimed, outcome)
     assert completed.state is JobState.SUCCEEDED
-    view = service.get_triage(
-        actor, organization_id, workspace.id, first.run.id
-    )
+    view = service.get_triage(actor, organization_id, workspace.id, first.run.id)
     assert view.run.state is TriageRunState.SUCCEEDED
     assert view.run.legacy_triage_id == str(first.run.id)
     assert view.evidence[0].document_version_id == "version-190"
@@ -166,9 +191,185 @@ def test_request_completion_evidence_and_stale_claim_are_atomic(
     assert incident_history[0].triage_run_count == 1
     assert triage_history[0].run.id == first.run.id
     assert triage_history[0].job.state is JobState.SUCCEEDED
+    proposals = actions.list_for_triage_run(
+        actor, organization_id, workspace.id, first.run.id
+    )
+    assert len(proposals) == 1
+    assert proposals[0].policy_status.value == "manual_only"
+    assert (
+        actions.generate_for_completed_run(
+            _worker(), organization_id, workspace.id, first.run.id
+        )
+        == proposals
+    )
+    with pytest.raises(IntegrityError):
+        with postgres_database.migration_engine.begin() as connection:
+            connection.execute(
+                update(ActionProposalRecord)
+                .where(ActionProposalRecord.id == UUID(str(proposals[0].id)))
+                .values(
+                    target_type="aws_resource",
+                    target_provenance="operational_context",
+                    integration_id=UUID("00000000-0000-4000-8000-000000000999"),
+                    target_account_id="123456789012",
+                    target_region="eu-west-2",
+                )
+            )
 
     with pytest.raises(Exception, match="stale"):
         lifecycle.complete(_worker(), claimed, outcome)
+
+
+def test_action_proposal_generation_is_concurrently_idempotent(
+    postgres_database: PostgresTestDatabase,
+    runtime_session_factory,
+) -> None:
+    actor, organization_id, _, workspace, _, _ = _setup(
+        postgres_database, runtime_session_factory, 195
+    )
+    service, lifecycle, actions = _services(
+        runtime_session_factory, organization_id, workspace.id
+    )
+    incident = service.create_incident(
+        actor,
+        organization_id,
+        workspace.id,
+        HostedIncidentInput(
+            title="Concurrent proposal",
+            description="Duplicate proposal generation",
+            service_name="api",
+            environment="production",
+            source_provider="manual",
+            source_type="operator",
+            observed_at=NOW,
+        ),
+    )
+    requested = service.request_triage(
+        actor,
+        organization_id,
+        workspace.id,
+        incident.id,
+        idempotency_key="triage-195",
+    )
+    claimed = lifecycle.claim(
+        _worker(),
+        requested.job,
+        worker_id="worker-a",
+        lease_duration=timedelta(minutes=5),
+    )
+    lifecycle.complete(
+        _worker(),
+        claimed,
+        JobHandlerOutcome(
+            JobResultReference("triage_run", str(requested.run.id)),
+            TriageCompletion(
+                TriageOutput(
+                    incident_summary="API degraded",
+                    service_name="api",
+                    severity="HIGH",
+                    likely_root_cause="Unknown",
+                    recommended_actions=["Acknowledge incident"],
+                    escalate=True,
+                    confidence=0.5,
+                ),
+                (),
+                10,
+            ),
+        ),
+    )
+    with postgres_database.migration_engine.begin() as connection:
+        connection.execute(delete(ActionProposalRecord))
+
+    def generate():
+        return actions.generate_for_completed_run(
+            _worker(), organization_id, workspace.id, requested.run.id
+        )[0].id
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        identifiers = tuple(executor.map(lambda _: generate(), range(2)))
+
+    assert identifiers[0] == identifiers[1]
+    with tenant_transaction(
+        runtime_session_factory, TenantContext(organization_id, workspace.id)
+    ) as session:
+        assert (
+            session.scalar(select(func.count()).select_from(ActionProposalRecord)) == 1
+        )
+
+
+def test_action_proposal_failure_does_not_corrupt_completed_triage(
+    postgres_database: PostgresTestDatabase,
+    runtime_session_factory,
+) -> None:
+    class FailingProposalGenerator:
+        def generate_for_completed_run(self, *args, **kwargs):
+            raise RuntimeError("proposal generation failed")
+
+    actor, organization_id, _, workspace, _, _ = _setup(
+        postgres_database, runtime_session_factory, 196
+    )
+    service, lifecycle, _ = _services(
+        runtime_session_factory,
+        organization_id,
+        workspace.id,
+        proposal_generator=FailingProposalGenerator(),
+    )
+    incident = service.create_incident(
+        actor,
+        organization_id,
+        workspace.id,
+        HostedIncidentInput(
+            title="Proposal failure isolation",
+            description="Completed triage must remain durable",
+            service_name="api",
+            environment="production",
+            source_provider="manual",
+            source_type="operator",
+            observed_at=NOW,
+        ),
+    )
+    requested = service.request_triage(
+        actor,
+        organization_id,
+        workspace.id,
+        incident.id,
+        idempotency_key="triage-196",
+    )
+    claimed = lifecycle.claim(
+        _worker(),
+        requested.job,
+        worker_id="worker-a",
+        lease_duration=timedelta(minutes=5),
+    )
+
+    completed = lifecycle.complete(
+        _worker(),
+        claimed,
+        JobHandlerOutcome(
+            JobResultReference("triage_run", str(requested.run.id)),
+            TriageCompletion(
+                TriageOutput(
+                    incident_summary="API degraded",
+                    service_name="api",
+                    severity="HIGH",
+                    likely_root_cause="Unknown",
+                    recommended_actions=["Inspect logs"],
+                    escalate=True,
+                    confidence=0.5,
+                ),
+                (),
+                10,
+            ),
+        ),
+    )
+
+    assert completed.state is JobState.SUCCEEDED
+    assert (
+        service.get_triage(
+            actor, organization_id, workspace.id, requested.run.id
+        ).run.state
+        is TriageRunState.SUCCEEDED
+    )
 
 
 def test_triage_and_evidence_rls_fail_closed_across_tenants(
@@ -181,7 +382,7 @@ def test_triage_and_evidence_rls_fail_closed_across_tenants(
     _, second_org, _, second_workspace, _, _ = _setup(
         postgres_database, runtime_session_factory, 192
     )
-    service, lifecycle = _services(
+    service, lifecycle, _ = _services(
         runtime_session_factory, first_org, first_workspace.id
     )
     incident = service.create_incident(
@@ -248,11 +449,17 @@ def test_triage_and_evidence_rls_fail_closed_across_tenants(
     with runtime_session_factory.begin() as session:
         assert session.scalar(select(func.count()).select_from(TriageRunRecord)) == 0
         assert session.scalar(select(func.count()).select_from(EvidenceRecord)) == 0
+        assert (
+            session.scalar(select(func.count()).select_from(ActionProposalRecord)) == 0
+        )
     with tenant_transaction(
         runtime_session_factory, TenantContext(second_org, second_workspace.id)
     ) as session:
         assert session.scalar(select(func.count()).select_from(TriageRunRecord)) == 0
         assert session.scalar(select(func.count()).select_from(EvidenceRecord)) == 0
+        assert (
+            session.scalar(select(func.count()).select_from(ActionProposalRecord)) == 0
+        )
 
 
 def test_lease_recovery_drift_is_reconciled_before_redispatch(
@@ -262,7 +469,7 @@ def test_lease_recovery_drift_is_reconciled_before_redispatch(
     actor, organization_id, _, workspace, _, _ = _setup(
         postgres_database, runtime_session_factory, 193
     )
-    service, lifecycle = _services(
+    service, lifecycle, _ = _services(
         runtime_session_factory, organization_id, workspace.id
     )
     incident = service.create_incident(
@@ -307,9 +514,7 @@ def test_lease_recovery_drift_is_reconciled_before_redispatch(
             )
         )
 
-    assert lifecycle.reconcile_scope(
-        _worker(), organization_id, workspace.id
-    ) == 1
+    assert lifecycle.reconcile_scope(_worker(), organization_id, workspace.id) == 1
     view = service.get_triage(actor, organization_id, workspace.id, requested.run.id)
     assert view.run.state is TriageRunState.QUEUED
     assert view.job.state is JobState.PENDING
@@ -322,7 +527,7 @@ def test_completion_loses_to_requested_cancellation_without_partial_result(
     actor, organization_id, _, workspace, _, _ = _setup(
         postgres_database, runtime_session_factory, 194
     )
-    service, lifecycle = _services(
+    service, lifecycle, _ = _services(
         runtime_session_factory, organization_id, workspace.id
     )
     incident = service.create_incident(
@@ -370,9 +575,7 @@ def test_completion_loses_to_requested_cancellation_without_partial_result(
     with pytest.raises(Exception, match="stale"):
         lifecycle.complete(_worker(), claimed, outcome)
     lifecycle.acknowledge_cancellation(_worker(), claimed)
-    view = service.get_triage(
-        actor, organization_id, workspace.id, requested.run.id
-    )
+    view = service.get_triage(actor, organization_id, workspace.id, requested.run.id)
     assert view.run.state is TriageRunState.CANCELLED
     assert view.run.result is None
     assert view.job.state is JobState.CANCELLED

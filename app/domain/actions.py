@@ -1,10 +1,11 @@
-"""Controlled action and human approval domain models."""
+"""Typed action proposals and the future human-approval domain boundary."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import StrEnum
+from typing import TypeAlias
 
 from app.domain.common import (
     ActorKind,
@@ -16,25 +17,269 @@ from app.domain.common import (
     utc_now,
     validate_timestamps,
 )
-from app.domain.identifiers import ActionId, ApprovalId
+from app.domain.identifiers import ActionId, ApprovalId, IntegrationId
 from app.domain.incidents import IncidentReference, TriageRunReference
 
 
-class ActionRisk(StrEnum):
-    INFORMATIONAL = "informational"
-    CONSEQUENTIAL = "consequential"
+class ActionProposalType(StrEnum):
+    ACKNOWLEDGE_INCIDENT = "acknowledge_incident"
+    MANUAL_INVESTIGATION = "manual_investigation"
+    RESTART_WORKLOAD = "restart_workload"
+    SCALE_WORKLOAD = "scale_workload"
+    ROLLBACK_DEPLOYMENT = "rollback_deployment"
 
 
-class ActionState(StrEnum):
-    PROPOSED = "proposed"
-    AWAITING_APPROVAL = "awaiting_approval"
-    READY = "ready"
-    EXECUTING = "executing"
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-    REJECTED = "rejected"
-    EXPIRED = "expired"
+class ActionTargetType(StrEnum):
+    INCIDENT = "incident"
+    SERVICE = "service"
+    AWS_RESOURCE = "aws_resource"
+
+
+class ActionTargetProvenance(StrEnum):
+    INCIDENT = "incident"
+    OPERATIONAL_CONTEXT = "operational_context"
+    UNKNOWN = "unknown"
+
+
+class ActionRiskLevel(StrEnum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class ActionReversibility(StrEnum):
+    REVERSIBLE = "reversible"
+    PARTIALLY_REVERSIBLE = "partially_reversible"
+    IRREVERSIBLE = "irreversible"
+    UNKNOWN = "unknown"
+
+
+class ActionPolicyStatus(StrEnum):
+    ALLOWED_FOR_REVIEW = "allowed_for_review"
+    BLOCKED = "blocked"
+    MANUAL_ONLY = "manual_only"
+
+
+class ActionPolicyReason(StrEnum):
+    READY_FOR_REVIEW = "ready_for_review"
+    MANUAL_GUIDANCE = "manual_guidance"
+    UNSAFE_RECOMMENDATION = "unsafe_recommendation"
+    UNKNOWN_TARGET = "unknown_target"
+    UNTRUSTED_TARGET = "untrusted_target"
+    UNSUPPORTED_ACTION = "unsupported_action"
+    IRREVERSIBLE = "irreversible"
+    CROSS_TENANT_TARGET = "cross_tenant_target"
+    CROSS_ACCOUNT_TARGET = "cross_account_target"
+    REGION_NOT_ALLOWED = "region_not_allowed"
+    INTEGRATION_NOT_READY = "integration_not_ready"
+    PARAMETER_OUT_OF_BOUNDS = "parameter_out_of_bounds"
+
+
+class ActionProposalState(StrEnum):
+    READY_FOR_REVIEW = "ready_for_review"
+    BLOCKED = "blocked"
+    MANUAL_ONLY = "manual_only"
+    SUPERSEDED = "superseded"
     CANCELLED = "cancelled"
+
+
+class ScaleDirection(StrEnum):
+    UP = "up"
+    DOWN = "down"
+
+
+@dataclass(frozen=True, slots=True)
+class ManualInvestigationParameters:
+    instruction: str
+    schema_version: int = 1
+
+    def __post_init__(self) -> None:
+        instruction = self.instruction.strip()
+        if not instruction or len(instruction) > 2000:
+            raise DomainInvariantError("Manual investigation instruction is invalid")
+        object.__setattr__(self, "instruction", instruction)
+
+
+@dataclass(frozen=True, slots=True)
+class AcknowledgeIncidentParameters:
+    schema_version: int = 1
+
+
+@dataclass(frozen=True, slots=True)
+class RestartWorkloadParameters:
+    schema_version: int = 1
+
+
+@dataclass(frozen=True, slots=True)
+class ScaleWorkloadParameters:
+    desired_count: int | None = None
+    direction: ScaleDirection | None = None
+    delta: int | None = None
+    schema_version: int = 1
+
+    def __post_init__(self) -> None:
+        if self.desired_count is not None and not 0 <= self.desired_count <= 1000:
+            raise DomainInvariantError(
+                "Scale desired_count is outside the supported bound"
+            )
+        if self.delta is not None and not 1 <= self.delta <= 100:
+            raise DomainInvariantError("Scale delta is outside the supported bound")
+        if self.direction is None and self.delta is not None:
+            raise DomainInvariantError("Scale delta requires a direction")
+
+
+@dataclass(frozen=True, slots=True)
+class RollbackDeploymentParameters:
+    target_revision: str | None = None
+    schema_version: int = 1
+
+    def __post_init__(self) -> None:
+        if self.target_revision is not None:
+            revision = self.target_revision.strip()
+            if not revision or len(revision) > 160:
+                raise DomainInvariantError("Rollback target revision is invalid")
+            object.__setattr__(self, "target_revision", revision)
+
+
+ActionParameters: TypeAlias = (
+    ManualInvestigationParameters
+    | AcknowledgeIncidentParameters
+    | RestartWorkloadParameters
+    | ScaleWorkloadParameters
+    | RollbackDeploymentParameters
+)
+
+
+_PARAMETER_TYPES = {
+    ActionProposalType.MANUAL_INVESTIGATION: ManualInvestigationParameters,
+    ActionProposalType.ACKNOWLEDGE_INCIDENT: AcknowledgeIncidentParameters,
+    ActionProposalType.RESTART_WORKLOAD: RestartWorkloadParameters,
+    ActionProposalType.SCALE_WORKLOAD: ScaleWorkloadParameters,
+    ActionProposalType.ROLLBACK_DEPLOYMENT: RollbackDeploymentParameters,
+}
+
+
+@dataclass(frozen=True, slots=True)
+class ActionTarget:
+    type: ActionTargetType
+    identifier: str
+    provider: str
+    provenance: ActionTargetProvenance
+    integration_id: IntegrationId | None = None
+    account_id: str | None = None
+    region: str | None = None
+
+    def __post_init__(self) -> None:
+        identifier = self.identifier.strip()
+        provider = self.provider.strip().lower()
+        if not identifier or len(identifier) > 1000:
+            raise DomainInvariantError("Action target identifier is invalid")
+        if not provider or len(provider) > 80:
+            raise DomainInvariantError("Action target provider is invalid")
+        if self.type is ActionTargetType.AWS_RESOURCE:
+            if (
+                self.integration_id is None
+                or self.account_id is None
+                or self.region is None
+                or self.provenance is not ActionTargetProvenance.OPERATIONAL_CONTEXT
+            ):
+                raise DomainInvariantError(
+                    "AWS targets require trusted integration provenance"
+                )
+        elif any((self.integration_id, self.account_id, self.region)):
+            raise DomainInvariantError(
+                "Only AWS targets may carry AWS authority metadata"
+            )
+        object.__setattr__(self, "identifier", identifier)
+        object.__setattr__(self, "provider", provider)
+
+
+@dataclass(frozen=True, slots=True)
+class ActionReference:
+    id: ActionId
+    scope: WorkspaceScope
+
+
+@dataclass(frozen=True, slots=True)
+class ActionProposal:
+    id: ActionId
+    scope: WorkspaceScope
+    incident: IncidentReference
+    triage_run: TriageRunReference
+    proposal_type: ActionProposalType
+    target: ActionTarget
+    summary: str
+    rationale: str
+    parameters: ActionParameters
+    risk_level: ActionRiskLevel
+    reversibility: ActionReversibility
+    policy_status: ActionPolicyStatus
+    policy_reason: ActionPolicyReason
+    lifecycle_state: ActionProposalState
+    created_by: ActorReference
+    created_at: datetime
+    updated_at: datetime
+    source_result_version: int
+    source_result_hash: str
+    normalized_action_hash: str
+    proposal_schema_version: int = 1
+    source_recommendation: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.scope != self.incident.scope or self.scope != self.triage_run.scope:
+            raise DomainInvariantError(
+                "Action proposal source must have the same workspace scope"
+            )
+        if not isinstance(self.parameters, _PARAMETER_TYPES[self.proposal_type]):
+            raise DomainInvariantError(
+                "Action proposal parameters do not match its type"
+            )
+        summary = self.summary.strip()
+        rationale = self.rationale.strip()
+        if not summary or len(summary) > 300:
+            raise DomainInvariantError("Action proposal summary is invalid")
+        if not rationale or len(rationale) > 2000:
+            raise DomainInvariantError("Action proposal rationale is invalid")
+        if self.source_recommendation is not None:
+            recommendation = self.source_recommendation.strip()
+            if not recommendation or len(recommendation) > 2000:
+                raise DomainInvariantError("Source recommendation is invalid")
+            object.__setattr__(self, "source_recommendation", recommendation)
+        if self.source_result_version < 1 or self.proposal_schema_version != 1:
+            raise DomainInvariantError("Action proposal schema version is invalid")
+        for name, value in (
+            ("source_result_hash", self.source_result_hash),
+            ("normalized_action_hash", self.normalized_action_hash),
+        ):
+            if len(value) != 64 or any(c not in "0123456789abcdef" for c in value):
+                raise DomainInvariantError(f"{name} is invalid")
+        validate_timestamps(self.created_at, self.updated_at)
+        expected_state = {
+            ActionPolicyStatus.ALLOWED_FOR_REVIEW: ActionProposalState.READY_FOR_REVIEW,
+            ActionPolicyStatus.BLOCKED: ActionProposalState.BLOCKED,
+            ActionPolicyStatus.MANUAL_ONLY: ActionProposalState.MANUAL_ONLY,
+        }[self.policy_status]
+        if self.lifecycle_state not in {
+            expected_state,
+            ActionProposalState.SUPERSEDED,
+            ActionProposalState.CANCELLED,
+        }:
+            raise DomainInvariantError(
+                "Action proposal lifecycle conflicts with policy"
+            )
+        if self.reversibility is ActionReversibility.IRREVERSIBLE and (
+            self.policy_status is ActionPolicyStatus.ALLOWED_FOR_REVIEW
+        ):
+            raise DomainInvariantError(
+                "Irreversible actions cannot be ready for review"
+            )
+        object.__setattr__(self, "summary", summary)
+        object.__setattr__(self, "rationale", rationale)
+
+    @property
+    def reference(self) -> ActionReference:
+        return ActionReference(self.id, self.scope)
 
 
 class ApprovalState(StrEnum):
@@ -44,24 +289,6 @@ class ApprovalState(StrEnum):
     EXPIRED = "expired"
     CANCELLED = "cancelled"
 
-
-_ACTION_TRANSITIONS = {
-    ActionState.PROPOSED: frozenset(
-        {ActionState.AWAITING_APPROVAL, ActionState.READY, ActionState.CANCELLED}
-    ),
-    ActionState.AWAITING_APPROVAL: frozenset(
-        {ActionState.READY, ActionState.REJECTED, ActionState.EXPIRED, ActionState.CANCELLED}
-    ),
-    ActionState.READY: frozenset(
-        {ActionState.EXECUTING, ActionState.EXPIRED, ActionState.CANCELLED}
-    ),
-    ActionState.EXECUTING: frozenset({ActionState.SUCCEEDED, ActionState.FAILED}),
-    ActionState.SUCCEEDED: frozenset(),
-    ActionState.FAILED: frozenset(),
-    ActionState.REJECTED: frozenset(),
-    ActionState.EXPIRED: frozenset(),
-    ActionState.CANCELLED: frozenset(),
-}
 
 _APPROVAL_TRANSITIONS = {
     ApprovalState.REQUESTED: frozenset(
@@ -78,15 +305,6 @@ _APPROVAL_TRANSITIONS = {
     ApprovalState.CANCELLED: frozenset(),
 }
 
-ACTION_TERMINAL_STATES = frozenset(
-    {
-        ActionState.SUCCEEDED,
-        ActionState.FAILED,
-        ActionState.REJECTED,
-        ActionState.EXPIRED,
-        ActionState.CANCELLED,
-    }
-)
 APPROVAL_TERMINAL_STATES = frozenset(
     {
         ApprovalState.APPROVED,
@@ -98,13 +316,9 @@ APPROVAL_TERMINAL_STATES = frozenset(
 
 
 @dataclass(frozen=True, slots=True)
-class ActionReference:
-    id: ActionId
-    scope: WorkspaceScope
-
-
-@dataclass(frozen=True, slots=True)
 class Approval:
+    """Reserved domain skeleton; V3.20 owns approval application behavior."""
+
     id: ApprovalId
     scope: WorkspaceScope
     action: ActionReference
@@ -119,7 +333,9 @@ class Approval:
 
     def __post_init__(self) -> None:
         if self.scope != self.action.scope:
-            raise DomainInvariantError("Approval and Action must have the same workspace scope")
+            raise DomainInvariantError(
+                "Approval and Action must have the same workspace scope"
+            )
         validate_timestamps(self.created_at, self.updated_at)
         require_aware(self.expires_at, "expires_at")
         if self.expires_at <= self.created_at:
@@ -127,18 +343,27 @@ class Approval:
         if self.decided_at is not None:
             require_aware(self.decided_at, "decided_at")
             if self.decided_at < self.created_at:
-                raise DomainInvariantError("Approval decided_at cannot precede created_at")
+                raise DomainInvariantError(
+                    "Approval decided_at cannot precede created_at"
+                )
         terminal = self.state in APPROVAL_TERMINAL_STATES
         if terminal and self.decided_at is None:
             raise DomainInvariantError("Terminal approvals require decided_at")
-        if self.state in {ApprovalState.APPROVED, ApprovalState.REJECTED} and self.decided_by is None:
-            raise DomainInvariantError("Approved or rejected approvals require decided_by")
+        if (
+            self.state in {ApprovalState.APPROVED, ApprovalState.REJECTED}
+            and self.decided_by is None
+        ):
+            raise DomainInvariantError(
+                "Approved or rejected approvals require decided_by"
+            )
         if (
             self.state is ApprovalState.APPROVED
             and self.decided_by is not None
             and self.decided_by.kind is not ActorKind.HUMAN
         ):
-            raise DomainInvariantError("Consequential action approval requires a human actor")
+            raise DomainInvariantError(
+                "Consequential action approval requires a human actor"
+            )
         if self.state is ApprovalState.REJECTED and not self.reason:
             raise DomainInvariantError("Rejected approvals require a reason")
         if self.state in {ApprovalState.APPROVED, ApprovalState.REJECTED} and (
@@ -150,7 +375,9 @@ class Approval:
         ):
             raise DomainInvariantError("Approval cannot expire before expires_at")
         if not terminal and any((self.decided_by, self.decided_at, self.reason)):
-            raise DomainInvariantError("Requested approvals cannot carry decision fields")
+            raise DomainInvariantError(
+                "Requested approvals cannot carry decision fields"
+            )
 
     def approve(self, actor: ActorReference, *, at: datetime | None = None) -> Approval:
         return self._decide(ApprovalState.APPROVED, actor=actor, at=at)
@@ -183,7 +410,10 @@ class Approval:
         if target is ApprovalState.REJECTED and not normalized_reason:
             raise DomainInvariantError("Rejected approvals require a reason")
         when = at or utc_now()
-        if target in {ApprovalState.APPROVED, ApprovalState.REJECTED} and when >= self.expires_at:
+        if (
+            target in {ApprovalState.APPROVED, ApprovalState.REJECTED}
+            and when >= self.expires_at
+        ):
             raise DomainInvariantError("Expired approval requests cannot be decided")
         if target is ApprovalState.EXPIRED and when < self.expires_at:
             raise DomainInvariantError("Approval cannot expire before expires_at")
@@ -197,120 +427,46 @@ class Approval:
         )
 
 
-@dataclass(frozen=True, slots=True)
-class ActionProposal:
-    id: ActionId
-    scope: WorkspaceScope
-    action_type: str
-    target: str
-    parameters: tuple[tuple[str, str], ...]
-    risk: ActionRisk
-    state: ActionState
-    proposed_by: ActorReference
-    created_at: datetime
-    updated_at: datetime
-    incident: IncidentReference | None = None
-    triage_run: TriageRunReference | None = None
-    completed_at: datetime | None = None
-    outcome_reference: str | None = None
-    error_message: str | None = None
+def action_parameters_to_dict(parameters: ActionParameters) -> dict[str, object]:
+    if isinstance(parameters, ManualInvestigationParameters):
+        return {"schema_version": 1, "instruction": parameters.instruction}
+    if isinstance(parameters, ScaleWorkloadParameters):
+        return {
+            "schema_version": 1,
+            "desired_count": parameters.desired_count,
+            "direction": parameters.direction.value if parameters.direction else None,
+            "delta": parameters.delta,
+        }
+    if isinstance(parameters, RollbackDeploymentParameters):
+        return {"schema_version": 1, "target_revision": parameters.target_revision}
+    return {"schema_version": 1}
 
-    def __post_init__(self) -> None:
-        if not self.action_type.strip() or not self.target.strip():
-            raise DomainInvariantError("Action action_type and target cannot be blank")
-        parameter_keys = [key.strip() for key, value in self.parameters if key.strip() and value.strip()]
-        if len(parameter_keys) != len(self.parameters) or len(set(parameter_keys)) != len(parameter_keys):
-            raise DomainInvariantError("Action parameters require unique non-blank keys and values")
-        if self.incident is not None and self.incident.scope != self.scope:
-            raise DomainInvariantError("Action and Incident must have the same workspace scope")
-        if self.triage_run is not None and self.triage_run.scope != self.scope:
-            raise DomainInvariantError("Action and TriageRun must have the same workspace scope")
-        validate_timestamps(self.created_at, self.updated_at)
-        if self.completed_at is not None:
-            require_aware(self.completed_at, "completed_at")
-            if self.completed_at < self.created_at:
-                raise DomainInvariantError("Action completed_at cannot precede created_at")
-        if self.state in ACTION_TERMINAL_STATES and self.completed_at is None:
-            raise DomainInvariantError("Terminal actions require completed_at")
-        if self.state not in ACTION_TERMINAL_STATES and self.completed_at is not None:
-            raise DomainInvariantError("Non-terminal actions cannot have completed_at")
-        if self.state is ActionState.FAILED and not self.error_message:
-            raise DomainInvariantError("Failed actions require error_message")
-        if self.state is not ActionState.FAILED and self.error_message is not None:
-            raise DomainInvariantError("Only failed actions may carry error_message")
-        if self.state is ActionState.SUCCEEDED and not self.outcome_reference:
-            raise DomainInvariantError("Succeeded actions require outcome_reference")
-        if self.state is not ActionState.SUCCEEDED and self.outcome_reference is not None:
-            raise DomainInvariantError("Only succeeded actions may carry outcome_reference")
 
-    @property
-    def reference(self) -> ActionReference:
-        return ActionReference(self.id, self.scope)
-
-    def request_approval(self, *, at: datetime | None = None) -> ActionProposal:
-        if self.risk is not ActionRisk.CONSEQUENTIAL:
-            raise DomainInvariantError("Only consequential actions require approval")
-        return self._transition(ActionState.AWAITING_APPROVAL, at=at)
-
-    def mark_ready(
-        self,
-        *,
-        approval: Approval | None = None,
-        at: datetime | None = None,
-    ) -> ActionProposal:
-        if self.risk is ActionRisk.CONSEQUENTIAL:
-            if approval is None or approval.state is not ApprovalState.APPROVED:
-                raise DomainInvariantError("Consequential actions require an approved approval")
-            if approval.action != self.reference:
-                raise DomainInvariantError("Approval does not authorize this action")
-        elif approval is not None:
-            raise DomainInvariantError("Informational actions do not consume approvals")
-        return self._transition(ActionState.READY, at=at)
-
-    def begin_execution(self, *, at: datetime | None = None) -> ActionProposal:
-        return self._transition(ActionState.EXECUTING, at=at)
-
-    def succeed(self, outcome_reference: str, *, at: datetime | None = None) -> ActionProposal:
-        normalized = outcome_reference.strip()
-        if not normalized:
-            raise DomainInvariantError("Successful actions require an outcome reference")
-        return self._transition(
-            ActionState.SUCCEEDED,
-            at=at,
-            outcome_reference=normalized,
+def action_parameters_from_dict(
+    proposal_type: ActionProposalType, values: dict[str, object]
+) -> ActionParameters:
+    if values.get("schema_version") != 1:
+        raise DomainInvariantError("Unsupported action parameter schema version")
+    if proposal_type is ActionProposalType.MANUAL_INVESTIGATION:
+        return ManualInvestigationParameters(str(values.get("instruction") or ""))
+    if proposal_type is ActionProposalType.ACKNOWLEDGE_INCIDENT:
+        return AcknowledgeIncidentParameters()
+    if proposal_type is ActionProposalType.RESTART_WORKLOAD:
+        return RestartWorkloadParameters()
+    if proposal_type is ActionProposalType.SCALE_WORKLOAD:
+        direction = values.get("direction")
+        return ScaleWorkloadParameters(
+            desired_count=(
+                int(values["desired_count"])
+                if values.get("desired_count") is not None
+                else None
+            ),
+            direction=ScaleDirection(str(direction)) if direction else None,
+            delta=int(values["delta"]) if values.get("delta") is not None else None,
         )
-
-    def fail(self, error: str, *, at: datetime | None = None) -> ActionProposal:
-        normalized = error.strip()
-        if not normalized:
-            raise DomainInvariantError("Failed actions require an error")
-        return self._transition(ActionState.FAILED, at=at, error_message=normalized)
-
-    def reject(self, *, at: datetime | None = None) -> ActionProposal:
-        return self._transition(ActionState.REJECTED, at=at)
-
-    def expire(self, *, at: datetime | None = None) -> ActionProposal:
-        return self._transition(ActionState.EXPIRED, at=at)
-
-    def cancel(self, *, at: datetime | None = None) -> ActionProposal:
-        return self._transition(ActionState.CANCELLED, at=at)
-
-    def _transition(
-        self,
-        target: ActionState,
-        *,
-        at: datetime | None,
-        outcome_reference: str | None = None,
-        error_message: str | None = None,
-    ) -> ActionProposal:
-        require_transition("ActionProposal", self.state, target, _ACTION_TRANSITIONS)
-        when = at or utc_now()
-        terminal_at = when if target in ACTION_TERMINAL_STATES else None
-        return replace(
-            self,
-            state=target,
-            completed_at=terminal_at,
-            outcome_reference=outcome_reference,
-            error_message=error_message,
-            updated_at=when,
+    if proposal_type is ActionProposalType.ROLLBACK_DEPLOYMENT:
+        revision = values.get("target_revision")
+        return RollbackDeploymentParameters(
+            str(revision) if revision is not None else None
         )
+    raise DomainInvariantError("Unsupported action proposal type")

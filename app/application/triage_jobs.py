@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -60,6 +61,8 @@ from app.knowledge.contracts import (
 from app.models.triage import TriageOutput
 from app.worker.orchestration import JobHandlerOutcome
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True, slots=True)
 class HostedTriageInputs:
@@ -86,6 +89,16 @@ class ActiveKnowledgeResolver(Protocol):
     ) -> PublishedKnowledgeIndexReference: ...
 
 
+class ActionProposalGenerator(Protocol):
+    def generate_for_completed_run(
+        self,
+        actor: ActorContext,
+        organization_id: OrganizationId,
+        workspace_id: WorkspaceId,
+        run_id: TriageRunId,
+    ) -> tuple[object, ...]: ...
+
+
 class HostedTriageLifecycle:
     """Coordinates Job and TriageRun state in the same PostgreSQL transaction."""
 
@@ -98,6 +111,7 @@ class HostedTriageLifecycle:
         retry_base: timedelta = timedelta(seconds=30),
         retry_max: timedelta = timedelta(minutes=15),
         observer: IncidentLifecycleObserver = NoopIncidentLifecycleObserver(),
+        proposal_generator: ActionProposalGenerator | None = None,
     ) -> None:
         self._authorization = authorization
         self._uow_factory = uow_factory
@@ -105,6 +119,7 @@ class HostedTriageLifecycle:
         self._retry_base = retry_base
         self._retry_max = retry_max
         self._observer = observer
+        self._proposal_generator = proposal_generator
 
     def load_inputs(self, actor: ActorContext, job: Job) -> HostedTriageInputs:
         context = self._context(actor, job)
@@ -305,6 +320,21 @@ class HostedTriageLifecycle:
             outcome.completion_payload.duration_ms,
             "succeeded",
         )
+        if self._proposal_generator is not None:
+            try:
+                self._proposal_generator.generate_for_completed_run(
+                    actor,
+                    completed_run.scope.organization_id,
+                    completed_run.scope.workspace_id,
+                    completed_run.id,
+                )
+            except Exception:
+                logger.exception(
+                    "Action proposal generation failed after triage completion"
+                )
+                self._observer.record("action_proposal_generation", 0, "failed")
+            else:
+                self._observer.record("action_proposal_generation", 0, "succeeded")
         return completed_job
 
     def fail(self, actor: ActorContext, claimed: Job, failure: JobFailure) -> Job:

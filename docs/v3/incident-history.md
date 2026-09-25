@@ -29,6 +29,12 @@ while the page is hidden. Backend terminal state is authoritative. The page show
 state, attempt counts, retry schedule, timing, terminal failure category/summary, validated
 triage result, severity, confidence, escalation recommendation, actions, and timeline.
 
+For successful runs, V3.19 also shows read-only controlled action proposals derived from
+the persisted recommended actions. The proposal section displays type, explicit target,
+deterministic risk, reversibility, policy state, and policy reason. It never displays an
+Approve or Execute control and never implies that a proposed action occurred. See
+[`action-proposals.md`](action-proposals.md).
+
 Evidence preserves ordered source/reason text and displays origin, document ID, document
 version ID, knowledge-index version ID, chunk index, and score where available. These are
 provenance identifiers, not object-store authority. V3.15 has no hosted document download

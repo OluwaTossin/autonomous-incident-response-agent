@@ -8,9 +8,7 @@ from uuid import UUID
 import pytest
 
 from app.domain.actions import (
-    ActionProposal,
-    ActionRisk,
-    ActionState,
+    ActionReference,
     Approval,
     ApprovalState,
 )
@@ -70,7 +68,9 @@ def _id(identifier_type, suffix: int):
 
 
 def _scope(organization: int = 1, workspace: int = 2) -> WorkspaceScope:
-    return WorkspaceScope(_id(OrganizationId, organization), _id(WorkspaceId, workspace))
+    return WorkspaceScope(
+        _id(OrganizationId, organization), _id(WorkspaceId, workspace)
+    )
 
 
 def _actor() -> ActorReference:
@@ -123,19 +123,8 @@ def _job() -> Job:
     )
 
 
-def _action(risk: ActionRisk = ActionRisk.INFORMATIONAL, suffix: int = 10) -> ActionProposal:
-    return ActionProposal(
-        id=_id(ActionId, suffix),
-        scope=_scope(),
-        action_type="create_ticket",
-        target="incident-queue",
-        parameters=(("priority", "high"),),
-        risk=risk,
-        state=ActionState.PROPOSED,
-        proposed_by=_actor(),
-        created_at=NOW,
-        updated_at=NOW,
-    )
+def _action_reference(suffix: int = 10) -> ActionReference:
+    return ActionReference(_id(ActionId, suffix), _scope())
 
 
 def test_document_and_version_lifecycle_and_scope() -> None:
@@ -199,7 +188,10 @@ def test_knowledge_index_activation_failure_and_terminal_states() -> None:
     assert failed.failure_reason == "invalid bundle"
     with pytest.raises(InvalidStateTransition):
         failed.activate(at=DONE)
-    assert inactive.activate(at=DONE + timedelta(minutes=2)).state is KnowledgeIndexState.ACTIVE
+    assert (
+        inactive.activate(at=DONE + timedelta(minutes=2)).state
+        is KnowledgeIndexState.ACTIVE
+    )
 
 
 def test_integration_can_disable_and_recover_from_error() -> None:
@@ -214,7 +206,9 @@ def test_integration_can_disable_and_recover_from_error() -> None:
         updated_at=NOW,
     )
 
-    errored = integration.transition(IntegrationState.ERROR, at=LATER, error="access denied")
+    errored = integration.transition(
+        IntegrationState.ERROR, at=LATER, error="access denied"
+    )
     recovered = errored.transition(IntegrationState.ACTIVE, at=DONE)
     disabled = recovered.transition(IntegrationState.DISABLED, at=DONE)
 
@@ -257,24 +251,12 @@ def test_job_lifecycle_is_queue_implementation_independent_and_terminal() -> Non
         succeeded.request_cancel(at=DONE)
 
 
-def test_informational_action_executes_without_approval() -> None:
-    ready = _action().mark_ready(at=LATER)
-    executing = ready.begin_execution(at=LATER)
-    succeeded = executing.succeed("ticket:INC-123", at=DONE)
-
-    assert succeeded.state is ActionState.SUCCEEDED
-    assert succeeded.outcome_reference == "ticket:INC-123"
-    with pytest.raises(InvalidStateTransition):
-        succeeded.cancel(at=DONE)
-
-
-def test_consequential_action_requires_matching_approved_human_approval() -> None:
-    action = _action(ActionRisk.CONSEQUENTIAL)
-    awaiting = action.request_approval(at=LATER)
+def test_future_approval_decision_is_terminal() -> None:
+    action = _action_reference()
     approval = Approval(
         id=_id(ApprovalId, 11),
         scope=action.scope,
-        action=action.reference,
+        action=action,
         state=ApprovalState.REQUESTED,
         requested_by=_actor(),
         created_at=NOW,
@@ -282,23 +264,18 @@ def test_consequential_action_requires_matching_approved_human_approval() -> Non
         expires_at=NOW + timedelta(hours=1),
     )
 
-    with pytest.raises(DomainInvariantError, match="approved approval"):
-        awaiting.mark_ready(at=LATER)
-
     approved = approval.approve(_actor(), at=LATER)
-    ready = awaiting.mark_ready(approval=approved, at=LATER)
-
-    assert ready.state is ActionState.READY
+    assert approved.state is ApprovalState.APPROVED
     with pytest.raises(InvalidStateTransition):
         approved.reject(_actor(), "changed mind", at=DONE)
 
 
 def test_service_account_cannot_approve_consequential_action() -> None:
-    action = _action(ActionRisk.CONSEQUENTIAL)
+    action = _action_reference()
     approval = Approval(
         id=_id(ApprovalId, 11),
         scope=action.scope,
-        action=action.reference,
+        action=action,
         state=ApprovalState.REQUESTED,
         requested_by=_actor(),
         created_at=NOW,
@@ -315,11 +292,11 @@ def test_service_account_cannot_approve_consequential_action() -> None:
 
 
 def test_approval_expiry_is_time_bounded() -> None:
-    action = _action(ActionRisk.CONSEQUENTIAL)
+    action = _action_reference()
     approval = Approval(
         id=_id(ApprovalId, 11),
         scope=action.scope,
-        action=action.reference,
+        action=action,
         state=ApprovalState.REQUESTED,
         requested_by=_actor(),
         created_at=NOW,

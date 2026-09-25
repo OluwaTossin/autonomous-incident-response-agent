@@ -23,10 +23,16 @@ from app.application.incidents import (
     TriageHistoryItem,
     TriageView,
 )
+from app.application.actions import (
+    ActionProposalNotFound,
+    HostedActionProposalService,
+)
 from app.auth.context import ActorContext
 from app.authorization.service import AuthorizationDenied
 from app.domain.identifiers import IncidentId, OrganizationId, TriageRunId, WorkspaceId
 from app.domain.incidents import Incident, IncidentState, TriageRun, TriageRunState
+from app.domain.actions import ActionProposal, action_parameters_to_dict
+from app.domain.identifiers import ActionId
 from app.models.triage import TriageOutput
 
 
@@ -212,9 +218,41 @@ class FeedbackResponse(BaseModel):
     created_at: datetime
 
 
+class ActionTargetResponse(BaseModel):
+    type: str
+    identifier: str
+    provider: str
+    provenance: str
+    integration_id: str | None
+    account_id: str | None
+    region: str | None
+
+
+class ActionProposalResponse(BaseModel):
+    action_proposal_id: str
+    incident_id: str
+    triage_run_id: str
+    proposal_type: str
+    target: ActionTargetResponse
+    summary: str
+    rationale: str
+    parameters: dict[str, Any]
+    risk_level: str
+    reversibility: str
+    policy_status: str
+    policy_reason: str
+    lifecycle_state: str
+    source_result_version: int
+    source_result_hash: str
+    proposal_schema_version: int
+    created_by_type: str
+    created_at: datetime
+
+
 def build_hosted_incident_router(
     service: HostedIncidentService,
     actor_dependency,
+    action_proposals: HostedActionProposalService | None = None,
 ) -> APIRouter:
     router = APIRouter(
         prefix="/v3/organizations/{organization_id}/workspaces/{workspace_id}",
@@ -494,6 +532,71 @@ def build_hosted_incident_router(
         except Exception as exc:
             raise _http_error(exc) from exc
 
+    if action_proposals is not None:
+
+        @router.get(
+            "/incidents/{incident_id}/action-proposals",
+            response_model=list[ActionProposalResponse],
+        )
+        def list_incident_action_proposals(
+            organization_id: str,
+            workspace_id: str,
+            incident_id: str,
+            actor: ActorContext = Depends(actor_dependency),
+        ) -> list[ActionProposalResponse]:
+            try:
+                proposals = action_proposals.list_for_incident(
+                    actor,
+                    OrganizationId(organization_id),
+                    WorkspaceId(workspace_id),
+                    IncidentId(incident_id),
+                )
+                return [_action_proposal_response(item) for item in proposals]
+            except Exception as exc:
+                raise _http_error(exc) from exc
+
+        @router.get(
+            "/triage-runs/{triage_run_id}/action-proposals",
+            response_model=list[ActionProposalResponse],
+        )
+        def list_triage_action_proposals(
+            organization_id: str,
+            workspace_id: str,
+            triage_run_id: str,
+            actor: ActorContext = Depends(actor_dependency),
+        ) -> list[ActionProposalResponse]:
+            try:
+                proposals = action_proposals.list_for_triage_run(
+                    actor,
+                    OrganizationId(organization_id),
+                    WorkspaceId(workspace_id),
+                    TriageRunId(triage_run_id),
+                )
+                return [_action_proposal_response(item) for item in proposals]
+            except Exception as exc:
+                raise _http_error(exc) from exc
+
+        @router.get(
+            "/action-proposals/{proposal_id}",
+            response_model=ActionProposalResponse,
+        )
+        def get_action_proposal(
+            organization_id: str,
+            workspace_id: str,
+            proposal_id: str,
+            actor: ActorContext = Depends(actor_dependency),
+        ) -> ActionProposalResponse:
+            try:
+                proposal = action_proposals.get(
+                    actor,
+                    OrganizationId(organization_id),
+                    WorkspaceId(workspace_id),
+                    ActionId(proposal_id),
+                )
+                return _action_proposal_response(proposal)
+            except Exception as exc:
+                raise _http_error(exc) from exc
+
     return router
 
 
@@ -632,6 +735,41 @@ def _context_response(snapshot) -> IncidentContextResponse:
     )
 
 
+def _action_proposal_response(proposal: ActionProposal) -> ActionProposalResponse:
+    return ActionProposalResponse(
+        action_proposal_id=str(proposal.id),
+        incident_id=str(proposal.incident.id),
+        triage_run_id=str(proposal.triage_run.id),
+        proposal_type=proposal.proposal_type.value,
+        target=ActionTargetResponse(
+            type=proposal.target.type.value,
+            identifier=proposal.target.identifier,
+            provider=proposal.target.provider,
+            provenance=proposal.target.provenance.value,
+            integration_id=(
+                str(proposal.target.integration_id)
+                if proposal.target.integration_id is not None
+                else None
+            ),
+            account_id=proposal.target.account_id,
+            region=proposal.target.region,
+        ),
+        summary=proposal.summary,
+        rationale=proposal.rationale,
+        parameters=action_parameters_to_dict(proposal.parameters),
+        risk_level=proposal.risk_level.value,
+        reversibility=proposal.reversibility.value,
+        policy_status=proposal.policy_status.value,
+        policy_reason=proposal.policy_reason.value,
+        lifecycle_state=proposal.lifecycle_state.value,
+        source_result_version=proposal.source_result_version,
+        source_result_hash=proposal.source_result_hash,
+        proposal_schema_version=proposal.proposal_schema_version,
+        created_by_type=proposal.created_by.kind.value,
+        created_at=proposal.created_at,
+    )
+
+
 def _triage_list_item(item: TriageHistoryItem) -> TriageRunListItem:
     run = item.run
     result = run.result
@@ -693,7 +831,10 @@ def _http_error(exc: Exception) -> HTTPException:
         return HTTPException(
             403, detail={"code": "forbidden", "message": "Access denied"}
         )
-    if isinstance(exc, (HostedIncidentNotFound, HostedTriageNotFound)):
+    if isinstance(
+        exc,
+        (HostedIncidentNotFound, HostedTriageNotFound, ActionProposalNotFound),
+    ):
         return HTTPException(404, detail={"code": "not_found", "message": str(exc)})
     if isinstance(exc, (HostedIncidentConflict, HostedTriageConflict)):
         return HTTPException(409, detail={"code": "conflict", "message": str(exc)})

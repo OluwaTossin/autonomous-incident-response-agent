@@ -11,15 +11,16 @@ export default async function TriageRunPage({ params }: { params: Promise<{ orga
   const { organizationId, workspaceId, incidentId, triageRunId } = await params;
   const { session, bootstrap } = await loadHostedPage();
   const organization = requireOrganization(bootstrap.organizations, organizationId);
-  const [workspace, incident, run] = await Promise.all([
+  const [workspace, incident, run, proposals] = await Promise.all([
     loadWorkspace(session.accessToken, organizationId, workspaceId),
     runtime().api.getIncident(session.accessToken, organizationId, workspaceId, incidentId),
     runtime().api.getTriageRun(session.accessToken, organizationId, workspaceId, triageRunId),
+    runtime().api.listActionProposals(session.accessToken, organizationId, workspaceId, triageRunId),
   ]);
   const incidentHref = `/app/orgs/${organizationId}/workspaces/${workspaceId}/incidents/${incidentId}`;
   return <AppShell organizations={bootstrap.organizations} organization={organization} workspace={workspace.workspace} user={session} csrfToken={session.csrfToken}>
     <Link className="back-link" href={incidentHref}><ArrowLeft aria-hidden="true" size={16} />{incident.title}</Link>
     <div className="page-intro"><div><span className="eyebrow">Triage investigation</span><h1>Run {run.triage_id.slice(0, 8)}</h1></div><p>Durable result, evidence provenance, and operator controls for this run.</p></div>
-    <RunInvestigation initialRun={run} organizationId={organizationId} workspaceId={workspaceId} csrfToken={session.csrfToken} canOperate={organization.permissions.includes("incident.create")} />
+    <RunInvestigation initialRun={run} initialProposals={proposals} organizationId={organizationId} workspaceId={workspaceId} csrfToken={session.csrfToken} canOperate={organization.permissions.includes("incident.create")} />
   </AppShell>;
 }

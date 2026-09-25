@@ -2,7 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { RunInvestigation } from "@/components/run-investigation";
-import type { TriageRun } from "@/lib/types";
+import type { ActionProposal, TriageRun } from "@/lib/types";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 
@@ -69,10 +69,39 @@ const run: TriageRun = {
   },
 };
 
+const proposals: ActionProposal[] = [{
+  action_proposal_id: "proposal-1",
+  incident_id: "incident-1",
+  triage_run_id: "run-1",
+  proposal_type: "manual_investigation",
+  target: {
+    type: "incident",
+    identifier: "incident-1",
+    provider: "aira",
+    provenance: "incident",
+    integration_id: null,
+    account_id: null,
+    region: null,
+  },
+  summary: "Manual investigation",
+  rationale: "Derived deterministically from the completed triage recommendation.",
+  parameters: { schema_version: 1, instruction: "Inspect dependency saturation" },
+  risk_level: "low",
+  reversibility: "unknown",
+  policy_status: "manual_only",
+  policy_reason: "manual_guidance",
+  lifecycle_state: "manual_only",
+  source_result_version: 1,
+  source_result_hash: "a".repeat(64),
+  proposal_schema_version: 1,
+  created_by_type: "system",
+  created_at: "2026-09-25T12:00:05Z",
+}];
+
 describe("incident investigation", () => {
   it("renders result, attempt history, provenance, and feedback controls", () => {
     const html = renderToStaticMarkup(
-      <RunInvestigation initialRun={run} organizationId="org-1" workspaceId="workspace-1" csrfToken="csrf" canOperate />,
+      <RunInvestigation initialRun={run} initialProposals={proposals} organizationId="org-1" workspaceId="workspace-1" csrfToken="csrf" canOperate />,
     );
     expect(html).toContain("2 / 3");
     expect(html).toContain("Dependency timeout");
@@ -83,11 +112,16 @@ describe("incident investigation", () => {
     expect(html).toContain("CloudWatch context");
     expect(html).toContain("redacted timeout");
     expect(html).toContain("truncated");
+    expect(html).toContain("Proposed actions");
+    expect(html).toContain("Manual only");
+    expect(html).toContain("No action has been executed");
+    expect(html).not.toContain("Approve");
+    expect(html).not.toContain("Execute");
   });
 
   it("does not expose mutation controls to read-only viewers", () => {
     const html = renderToStaticMarkup(
-      <RunInvestigation initialRun={run} organizationId="org-1" workspaceId="workspace-1" csrfToken="csrf" canOperate={false} />,
+      <RunInvestigation initialRun={run} initialProposals={proposals} organizationId="org-1" workspaceId="workspace-1" csrfToken="csrf" canOperate={false} />,
     );
     expect(html).not.toContain("Operator feedback");
     expect(html).not.toContain("Cancel run");
