@@ -355,14 +355,16 @@ Version 3 preserves human authority over consequential actions. Version 4 is the
 
 **Dependencies:** V3.8-V3.10.
 
+**Status:** Complete in `d7a481f` (`feat: add SQS worker transport`).
+
 **Checklist:**
 
-- [ ] Implement queue publisher and versioned tenant-qualified message envelope.
-- [ ] Implement worker entrypoint, claim/lease, heartbeat/visibility extension, graceful shutdown, and concurrency limits.
-- [ ] Load actor/workspace/incident/index context from authoritative IDs, not message payload assertions.
-- [ ] Make result writes, events, usage, and later actions idempotent.
-- [ ] Classify retryable versus terminal failures and configure DLQ redrive behavior.
-- [ ] Add replay tooling with authorization and audit.
+- [x] Implement queue publisher and versioned tenant-qualified message envelope.
+- [x] Implement worker entrypoint, claim/lease, heartbeat/visibility extension, graceful shutdown, and concurrency limits.
+- [x] Load actor/workspace/incident/index context from authoritative IDs, not message payload assertions.
+- [x] Make result writes, events, usage, and later actions idempotent.
+- [x] Classify retryable versus terminal failures and configure DLQ redrive behavior.
+- [x] Add replay tooling with authorization and audit.
 
 **Files/modules:** Expected `app/jobs/sqs/`, `app/worker/`, worker container command, local queue emulator/test harness if justified, worker tests.
 
