@@ -34,6 +34,69 @@ class Base(DeclarativeBase):
     pass
 
 
+class OAuthLoginTransactionRecord(Base):
+    """Single-use browser login state; secret payload is application-encrypted."""
+
+    __tablename__ = "oauth_login_transactions"
+    __table_args__ = (
+        CheckConstraint("expires_at > created_at", name="ck_oauth_login_expiry"),
+        Index("ix_oauth_login_transactions_expires", "expires_at"),
+    )
+
+    id_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    state_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    encrypted_payload: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    return_path: Mapped[str] = mapped_column(String(1000), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class BrowserSessionRecord(Base):
+    """Opaque hosted browser session with encrypted provider credentials."""
+
+    __tablename__ = "browser_sessions"
+    __table_args__ = (
+        CheckConstraint(
+            "inactivity_expires_at > created_at AND absolute_expires_at > created_at",
+            name="ck_browser_sessions_expiry",
+        ),
+        CheckConstraint("version > 0", name="ck_browser_sessions_version"),
+        Index("ix_browser_sessions_user_active", "user_id", "revoked_at"),
+        Index("ix_browser_sessions_absolute_expiry", "absolute_expires_at"),
+    )
+
+    id_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    provider_issuer: Mapped[str] = mapped_column(String(255), nullable=False)
+    provider_subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    encrypted_tokens: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    csrf_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    access_expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    inactivity_expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    absolute_expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+
 class TimestampColumns:
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False

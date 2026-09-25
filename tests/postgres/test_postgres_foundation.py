@@ -153,7 +153,7 @@ def test_fresh_migration_contains_expected_schema(
             ).scalars()
         )
 
-    assert revision == "d8a4c2e7f901"
+    assert revision == "f3a7c9e2b114"
     assert {
         "users",
         "organizations",
@@ -178,6 +178,8 @@ def test_fresh_migration_contains_expected_schema(
         "service_account_authorization_grants",
         "service_account_workspace_grants",
         "workspace_configurations",
+        "oauth_login_transactions",
+        "browser_sessions",
     } <= tables
 
 

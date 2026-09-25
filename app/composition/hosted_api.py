@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
+from app.api.hosted_bootstrap import build_hosted_bootstrap_router
 from app.api.hosted_incidents import build_hosted_incident_router
+from app.application.bootstrap import HostedBootstrapService
 from app.application.incidents import HostedIncidentService
 
 
 def build_hosted_api(
     incidents: HostedIncidentService,
     actor_dependency,
+    bootstrap: HostedBootstrapService | None = None,
 ) -> FastAPI:
     application = FastAPI(
         title="AIRA Hosted API",
@@ -20,4 +23,8 @@ def build_hosted_api(
     application.include_router(
         build_hosted_incident_router(incidents, actor_dependency)
     )
+    if bootstrap is not None:
+        application.include_router(
+            build_hosted_bootstrap_router(bootstrap, actor_dependency)
+        )
     return application

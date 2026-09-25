@@ -113,6 +113,14 @@ class AuthorizationService:
         self._resources = resources
         self._system_grants = system_grants
 
+    def human_membership_facts(
+        self, actor: ActorContext, organization_id: OrganizationId
+    ) -> HumanAuthorizationFacts | None:
+        """Return active membership facts without treating browser claims as authority."""
+        if actor.actor.kind is not ActorKind.HUMAN:
+            return None
+        return self._facts.human_facts(actor, organization_id, None)
+
     def authorize(
         self,
         actor: ActorContext,

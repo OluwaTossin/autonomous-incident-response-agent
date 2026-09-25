@@ -114,13 +114,18 @@ existing self-hosted composition.
 
 ## V3.13 Browser Session Contract
 
-V3.13 will implement Cognito Authorization Code Flow with PKCE in the server-capable hosted
-Next.js service. The Next.js server owns authorization redirects, state/nonce/PKCE checks,
-the callback, token refresh, logout, and expiry. Browser session cookies must be `Secure`,
-`HttpOnly`, appropriately `SameSite`, narrowly scoped, rotated against fixation, and backed
-by CSRF protection for state-changing requests.
+V3.13 implements Cognito Authorization Code Flow with PKCE in the server-capable hosted
+Next.js service under `web/`. The server owns authorization redirects, single-use
+state/nonce/PKCE login transactions, callback validation, token refresh, logout, inactivity
+expiry, and absolute expiry. The browser holds distinct opaque login/session identifiers in
+`HttpOnly`, `SameSite=Lax` cookies; production cookies are `Secure`.
 
-Refresh and access tokens must not be stored in `localStorage` or `sessionStorage`. Shared
-AIRA API/admin keys must not appear in browser code or bundles. The Next.js server calls the
-hosted API using the verified access-token contract above. Session behavior, cookie code,
-frontend route protection, and associated tests remain V3.13 work.
+PostgreSQL stores only SHA-256 digests of those opaque identifiers. PKCE and provider token
+material are encrypted with AES-256-GCM using the server-only
+`AIRA_WEB_SESSION_ENCRYPTION_KEY`. Refresh and access tokens are never placed in browser
+storage or responses. Exact-Origin checks plus a session-bound synchronizer token protect
+mutating BFF routes. The Next.js server calls the hosted API with the Cognito access token;
+FastAPI remains authoritative for identity mapping, membership, RBAC, and tenant scope.
+
+See [`hosted-web.md`](hosted-web.md) for the runtime, security, configuration, and local
+testing contract.
