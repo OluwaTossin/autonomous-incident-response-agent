@@ -9,6 +9,10 @@ from typing import Any
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.job_dispatch import OutboxDispatcher
+from app.application.incident_context import (
+    ContextCollectionPolicy,
+    IncidentContextEnricher,
+)
 from app.application.jobs import HostedJobService, KnowledgeIndexBuildJobHandler
 from app.application.triage_jobs import HostedTriageJobHandler, HostedTriageLifecycle
 from app.auth.context import ActorContext
@@ -17,6 +21,7 @@ from app.config.settings import Settings
 from app.domain.common import WorkspaceScope
 from app.domain.operations import JobKind
 from app.jobs.sqs import Boto3SqsQueue, create_sqs_client
+from app.integrations.aws import AwsRoleAssumer
 from app.persistence.postgres.job_unit_of_work import PostgresJobUnitOfWork
 from app.worker.orchestration import JobHandlerRegistry, WorkerMessageProcessor
 from app.worker.runtime import (
@@ -32,6 +37,28 @@ class HostedWorkerComposition:
     jobs: HostedJobService
     queue: Boto3SqsQueue
     dispatcher: OutboxDispatcher
+
+
+def build_incident_context_enricher(
+    settings: Settings,
+    role_assumer: AwsRoleAssumer,
+) -> IncidentContextEnricher:
+    """Build the deployment-owned bounded CloudWatch collection policy."""
+    return IncidentContextEnricher(
+        role_assumer,
+        policy=ContextCollectionPolicy(
+            metric_lookback=timedelta(
+                seconds=settings.aira_context_metric_lookback_seconds
+            ),
+            log_lookback=timedelta(seconds=settings.aira_context_log_lookback_seconds),
+            forward_window=timedelta(seconds=settings.aira_context_forward_seconds),
+            max_metric_points=settings.aira_context_max_metric_points,
+            max_log_events=settings.aira_context_max_log_events,
+            max_log_bytes=settings.aira_context_max_log_bytes,
+            max_provider_calls=settings.aira_context_max_provider_calls,
+            max_context_chars=settings.aira_context_max_chars,
+        ),
+    )
 
 
 def build_hosted_worker(
@@ -109,9 +136,7 @@ def build_hosted_worker(
         actor,
         scopes,
         reconciler=(
-            triage_lifecycle.reconcile_scope
-            if triage_lifecycle is not None
-            else None
+            triage_lifecycle.reconcile_scope if triage_lifecycle is not None else None
         ),
     )
     return HostedWorkerComposition(runtime, jobs, queue, dispatcher)

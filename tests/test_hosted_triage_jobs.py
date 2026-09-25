@@ -2,27 +2,46 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 import pytest
 
 from app.application.jobs import (
     ClassifiedJobExecutionError,
+    JobNotClaimable,
     TransientJobExecutionError,
 )
 from app.application.triage_jobs import (
     HostedTriageInputs,
     HostedTriageJobHandler,
+    _require_current_claim,
 )
 from app.auth.context import trusted_system_actor
-from app.domain.common import ActorKind, ActorReference, CorrelationContext, WorkspaceScope
+from app.domain.common import (
+    ActorKind,
+    ActorReference,
+    CorrelationContext,
+    WorkspaceScope,
+)
 from app.domain.identifiers import (
     CorrelationId,
+    IncidentContextItemId,
+    IncidentContextSnapshotId,
     IncidentId,
+    IntegrationId,
     JobId,
     OrganizationId,
     TriageRunId,
     WorkspaceId,
+)
+from app.domain.incident_context import (
+    CollectorDiagnostic,
+    CollectorStatus,
+    ContextCollectionStatus,
+    ContextItemType,
+    IncidentContextItem,
+    IncidentContextSnapshot,
 )
 from app.domain.incidents import IncidentReference, TriageRun, TriageRunState
 from app.domain.operations import Job, JobKind, JobState
@@ -162,6 +181,95 @@ def test_triage_handler_uses_shared_executor_and_preserves_provenance() -> None:
     assert completion.evidence[0].sequence == 0
     assert completion.evidence[0].origin == "tenant"
     assert completion.evidence[0].document_version_id == "doc-version-1"
+
+
+def test_aws_context_is_persisted_before_shared_triage_and_becomes_evidence() -> None:
+    snapshot_id = IncidentContextSnapshotId.new()
+    item = IncidentContextItem(
+        IncidentContextItemId.new(),
+        snapshot_id,
+        WorkspaceScope(ORG, WORKSPACE),
+        ContextItemType.LOG,
+        "/aws/lambda/payments:stream",
+        NOW,
+        {"timestamp": NOW.isoformat(), "message": "redacted timeout"},
+        0,
+    )
+    snapshot = IncidentContextSnapshot(
+        snapshot_id,
+        WorkspaceScope(ORG, WORKSPACE),
+        INCIDENT,
+        RUN,
+        IntegrationId.new(),
+        "aws.cloudwatch",
+        "eu-west-2",
+        NOW,
+        NOW,
+        NOW,
+        ContextCollectionStatus.COMPLETE,
+        "cloudwatch-context-v1",
+        (CollectorDiagnostic("logs", CollectorStatus.SUCCEEDED),),
+        (item,),
+    )
+
+    class AwsLifecycle(Lifecycle):
+        started = False
+        persisted = False
+
+        def load_inputs(self, actor, job):
+            inputs = super().load_inputs(actor, job)
+            return HostedTriageInputs(
+                inputs.run,
+                inputs.incident_payload,
+                aws_binding=object(),  # the injected fake enricher owns this test boundary
+            )
+
+        def mark_enrichment_started(self, actor, job):
+            self.started = True
+
+        def persist_context(self, actor, job, value):
+            assert value is snapshot
+            self.persisted = True
+            return value
+
+    class Enricher:
+        def collect(self, binding, *, cancellation_requested):
+            assert not cancellation_requested()
+            return snapshot
+
+    def pipeline(incident, *, retrieval_context):
+        assert "redacted timeout" in incident["logs"]
+        assert incident["operational_context"]["snapshot_id"] == str(snapshot.id)
+        return _pipeline(incident, retrieval_context=retrieval_context)
+
+    lifecycle = AwsLifecycle()
+    outcome = HostedTriageJobHandler(
+        lifecycle,
+        Knowledge(),
+        Retriever(),
+        lambda actor, organization_id, workspace_id: 8,
+        pipeline=pipeline,
+        context_enricher=Enricher(),
+    ).handle(_actor(), _job(), cancellation_requested=lambda: False)
+
+    assert lifecycle.started is True
+    assert lifecycle.persisted is True
+    context_evidence = outcome.completion_payload.evidence[-1]
+    assert context_evidence.origin == "operational"
+    assert context_evidence.type == "log"
+    assert "redacted timeout" in context_evidence.reason
+
+
+def test_expired_worker_claim_cannot_persist_context() -> None:
+    claimed = _job().claim(
+        worker_id="worker-a",
+        claim_token=uuid4(),
+        lease_expires_at=NOW + timedelta(minutes=1),
+        at=NOW,
+    )
+
+    with pytest.raises(JobNotClaimable, match="stale"):
+        _require_current_claim(claimed, claimed, NOW + timedelta(minutes=2))
 
 
 def test_missing_active_index_is_permanent_configuration_failure() -> None:

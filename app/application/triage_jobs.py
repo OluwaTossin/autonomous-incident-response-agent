@@ -22,6 +22,12 @@ from app.application.jobs import (
     TransientJobExecutionError,
 )
 from app.application.triage import TriageExecution, execute_triage
+from app.application.incident_context import (
+    AwsIncidentContextBinding,
+    ContextEnrichmentFailure,
+    IncidentContextEnricher,
+    project_context,
+)
 from app.auth.context import ActorContext
 from app.authorization.permissions import Permission
 from app.authorization.service import AuthorizationService, AuthorizedTenantContext
@@ -32,7 +38,12 @@ from app.domain.identifiers import (
     TriageRunId,
     WorkspaceId,
 )
-from app.domain.incidents import Evidence, TriageRun, TriageRunState
+from app.domain.incident_context import (
+    ContextCollectionStatus,
+    ContextItemType,
+    IncidentContextSnapshot,
+)
+from app.domain.incidents import Evidence, Incident, TriageRun, TriageRunState
 from app.domain.operations import (
     Job,
     JobErrorCategory,
@@ -54,6 +65,9 @@ from app.worker.orchestration import JobHandlerOutcome
 class HostedTriageInputs:
     run: TriageRun
     incident_payload: dict[str, object]
+    incident: Incident | None = None
+    aws_binding: AwsIncidentContextBinding | None = None
+    context_snapshot: IncidentContextSnapshot | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,7 +121,103 @@ class HostedTriageLifecycle:
                         "Triage input is unavailable",
                     )
                 )
-            return HostedTriageInputs(run, incident.to_legacy_payload())
+            snapshot = uow.context_snapshots.get_for_run(run.id)
+            binding = None
+            if incident.source.provider == "aws.cloudwatch":
+                receipt = uow.alert_receipts.get_for_triage_run(run.id)
+                integration = (
+                    uow.aws_integrations.get(receipt.integration_id)
+                    if receipt is not None
+                    else None
+                )
+                if receipt is None or integration is None:
+                    raise ClassifiedJobExecutionError(
+                        JobFailure(
+                            "aws_context_binding_missing",
+                            JobErrorCategory.CONFIGURATION,
+                            False,
+                            "AWS incident context binding is unavailable",
+                        )
+                    )
+                binding = AwsIncidentContextBinding(incident, run, receipt, integration)
+            return HostedTriageInputs(
+                run,
+                incident.to_legacy_payload(),
+                incident,
+                binding,
+                snapshot,
+            )
+
+    def mark_enrichment_started(self, actor: ActorContext, claimed: Job) -> None:
+        context = self._context(actor, claimed)
+        _, run_id = _payload_ids(claimed)
+        now = self._clock()
+        with self._uow_factory(context) as uow:
+            current_job = uow.jobs.get(claimed.id, for_update=True)
+            run = uow.triage_runs.get(run_id)
+            _require_current_claim(current_job, claimed, now)
+            if run is None or run.state is not TriageRunState.RUNNING:
+                raise JobNotClaimable("Triage enrichment state is unavailable")
+            uow.audit_events.add(
+                _audit(
+                    context, run, "context_enrichment.started", now, job_id=claimed.id
+                )
+            )
+
+    def persist_context(
+        self,
+        actor: ActorContext,
+        claimed: Job,
+        snapshot: IncidentContextSnapshot,
+    ) -> IncidentContextSnapshot:
+        context = self._context(actor, claimed)
+        incident_id, run_id = _payload_ids(claimed)
+        now = self._clock()
+        with self._uow_factory(context) as uow:
+            current_job = uow.jobs.get(claimed.id, for_update=True)
+            run = uow.triage_runs.get(run_id)
+            _require_current_claim(current_job, claimed, now)
+            if run is None or run.state is not TriageRunState.RUNNING:
+                raise JobNotClaimable("Triage context claim is stale")
+            existing = uow.context_snapshots.get_for_run(run_id)
+            if existing is not None:
+                return existing
+            if (
+                snapshot.scope != run.scope
+                or snapshot.triage_run_id != run_id
+                or snapshot.incident_id != incident_id
+            ):
+                raise JobNotClaimable("Triage context scope is invalid")
+            uow.context_snapshots.add(snapshot)
+            event = (
+                "context_enrichment.partial"
+                if snapshot.status is ContextCollectionStatus.PARTIAL
+                else "context_enrichment.completed"
+            )
+            uow.audit_events.add(_audit(context, run, event, now, job_id=claimed.id))
+        self._observer.record(
+            "context_enrichment_persisted",
+            0,
+            snapshot.status.value,
+        )
+        return snapshot
+
+    def record_enrichment_failed(self, actor: ActorContext, claimed: Job) -> None:
+        context = self._context(actor, claimed)
+        _, run_id = _payload_ids(claimed)
+        now = self._clock()
+        with self._uow_factory(context) as uow:
+            current_job = uow.jobs.get(claimed.id, for_update=True)
+            run = uow.triage_runs.get(run_id)
+            _require_current_claim(current_job, claimed, now)
+            if run is None or run.state is not TriageRunState.RUNNING:
+                raise JobNotClaimable("Triage enrichment state is unavailable")
+            uow.audit_events.add(
+                _audit(
+                    context, run, "context_enrichment.failed", now, job_id=claimed.id
+                )
+            )
+        self._observer.record("context_enrichment_failed", 0, "failed")
 
     def claim(
         self,
@@ -173,18 +283,12 @@ class HostedTriageLifecycle:
                 )
                 if run.state is not TriageRunState.RUNNING:
                     raise ValueError("Triage run is not running")
-                completed_run = run.succeed(
-                    outcome.completion_payload.result, at=now
-                )
+                completed_run = run.succeed(outcome.completion_payload.result, at=now)
                 uow.evidence.replace_for_run(
                     run.id, outcome.completion_payload.evidence
                 )
-                uow.triage_runs.save(
-                    completed_run, expected_version=run.state_version
-                )
-                uow.jobs.save(
-                    completed_job, expected_version=current_job.state_version
-                )
+                uow.triage_runs.save(completed_run, expected_version=run.state_version)
+                uow.jobs.save(completed_job, expected_version=current_job.state_version)
             except Exception as exc:
                 raise JobNotClaimable("Triage completion claim is stale") from exc
             uow.audit_events.add(
@@ -203,9 +307,7 @@ class HostedTriageLifecycle:
         )
         return completed_job
 
-    def fail(
-        self, actor: ActorContext, claimed: Job, failure: JobFailure
-    ) -> Job:
+    def fail(self, actor: ActorContext, claimed: Job, failure: JobFailure) -> Job:
         context = self._context(actor, claimed)
         _, run_id = _payload_ids(claimed)
         now = self._clock()
@@ -243,9 +345,7 @@ class HostedTriageLifecycle:
                         at=now,
                     )
                     event_type = "triage.failed"
-                uow.triage_runs.save(
-                    updated_run, expected_version=run.state_version
-                )
+                uow.triage_runs.save(updated_run, expected_version=run.state_version)
                 uow.jobs.save(updated_job, expected_version=current_job.state_version)
             except Exception as exc:
                 raise JobNotClaimable("Triage failure claim is stale") from exc
@@ -305,9 +405,7 @@ class HostedTriageLifecycle:
                 reconciled += 1
         return reconciled
 
-    def acknowledge_cancellation(
-        self, actor: ActorContext, claimed: Job
-    ) -> Job:
+    def acknowledge_cancellation(self, actor: ActorContext, claimed: Job) -> Job:
         context = self._context(actor, claimed)
         _, run_id = _payload_ids(claimed)
         now = self._clock()
@@ -321,9 +419,7 @@ class HostedTriageLifecycle:
                     claimed.claim_token, at=now
                 )
                 updated_run = run.cancel(at=now)
-                uow.triage_runs.save(
-                    updated_run, expected_version=run.state_version
-                )
+                uow.triage_runs.save(updated_run, expected_version=run.state_version)
                 uow.jobs.save(updated_job, expected_version=current_job.state_version)
             except Exception as exc:
                 raise JobNotClaimable("Triage cancellation claim is stale") from exc
@@ -339,9 +435,7 @@ class HostedTriageLifecycle:
         self._observer.record("triage_cancelled", 0, "succeeded")
         return updated_job
 
-    def _context(
-        self, actor: ActorContext, job: Job
-    ) -> AuthorizedTenantContext:
+    def _context(self, actor: ActorContext, job: Job) -> AuthorizedTenantContext:
         if job.kind is not JobKind.TRIAGE:
             raise ValueError("TRIAGE lifecycle received another job kind")
         return self._authorization.authorize(
@@ -367,12 +461,14 @@ class HostedTriageJobHandler:
         top_k: Callable[[ActorContext, OrganizationId, WorkspaceId], int],
         *,
         pipeline: Callable = run_triage_with_audit,
+        context_enricher: IncidentContextEnricher | None = None,
     ) -> None:
         self._lifecycle = lifecycle
         self._knowledge = knowledge
         self._retriever = retriever
         self._top_k = top_k
         self._pipeline = pipeline
+        self._context_enricher = context_enricher
 
     def handle(
         self,
@@ -388,6 +484,41 @@ class HostedTriageJobHandler:
 
             raise JobCancellationRequested("Job cancellation was requested")
         inputs = self._lifecycle.load_inputs(actor, job)
+        snapshot = inputs.context_snapshot
+        if inputs.aws_binding is not None:
+            if self._context_enricher is None:
+                raise ClassifiedJobExecutionError(
+                    JobFailure(
+                        "context_enricher_unavailable",
+                        JobErrorCategory.CONFIGURATION,
+                        False,
+                        "AWS incident context enrichment is unavailable",
+                    )
+                )
+            if snapshot is None:
+                self._lifecycle.mark_enrichment_started(actor, job)
+                try:
+                    collected = self._context_enricher.collect(
+                        inputs.aws_binding,
+                        cancellation_requested=cancellation_requested,
+                    )
+                except ContextEnrichmentFailure as exc:
+                    self._lifecycle.record_enrichment_failed(actor, job)
+                    if exc.retryable:
+                        raise TransientJobExecutionError(exc.summary) from exc
+                    raise ClassifiedJobExecutionError(
+                        JobFailure(exc.code, exc.category, False, exc.summary)
+                    ) from exc
+                if cancellation_requested():
+                    from app.application.jobs import JobCancellationRequested
+
+                    raise JobCancellationRequested("Job cancellation was requested")
+                snapshot = self._lifecycle.persist_context(actor, job, collected)
+        incident_payload = (
+            project_context(inputs.incident_payload, snapshot)
+            if snapshot is not None
+            else inputs.incident_payload
+        )
         try:
             index = self._knowledge.resolve_active(
                 actor, job.scope.organization_id, job.scope.workspace_id
@@ -401,17 +532,15 @@ class HostedTriageJobHandler:
                     "No active knowledge index is available",
                 )
             ) from exc
-        top_k = self._top_k(
-            actor, job.scope.organization_id, job.scope.workspace_id
-        )
+        top_k = self._top_k(actor, job.scope.organization_id, job.scope.workspace_id)
         retrieval = RetrievalContext(index, self._retriever, top_k)
         execution = execute_triage(
-            inputs.incident_payload,
+            incident_payload,
             pipeline=partial(self._pipeline, retrieval_context=retrieval),
             id_factory=lambda: str(inputs.run.id),
         )
         _raise_execution_failure(execution)
-        completion = _validated_completion(inputs.run, execution)
+        completion = _validated_completion(inputs.run, execution, snapshot=snapshot)
         if cancellation_requested():
             from app.application.jobs import JobCancellationRequested
 
@@ -438,7 +567,10 @@ def _payload_ids(job: Job) -> tuple[IncidentId, TriageRunId]:
 
 
 def _validated_completion(
-    run: TriageRun, execution: TriageExecution
+    run: TriageRun,
+    execution: TriageExecution,
+    *,
+    snapshot: IncidentContextSnapshot | None = None,
 ) -> TriageCompletion:
     if execution.triage_id != str(run.id):
         raise ValueError("Triage identifier does not match the durable run")
@@ -467,7 +599,50 @@ def _validated_completion(
                 score=item.score,
             )
         )
+    if snapshot is not None:
+        for item in snapshot.items:
+            evidence.append(
+                Evidence(
+                    id=EvidenceId.new(),
+                    scope=run.scope,
+                    triage_run=run.reference,
+                    type={
+                        ContextItemType.ALARM: "alert",
+                        ContextItemType.METRIC: "metric",
+                        ContextItemType.LOG: "log",
+                    }[item.type],
+                    source=item.source,
+                    reason=_context_evidence_reason(item),
+                    created_at=datetime.now(UTC),
+                    sequence=len(evidence),
+                    origin="operational",
+                )
+            )
     return TriageCompletion(result, tuple(evidence), execution.duration_ms)
+
+
+def _require_current_claim(current: Job | None, claimed: Job, now: datetime) -> None:
+    if (
+        current is None
+        or current.state is not JobState.RUNNING
+        or current.claim_token is None
+        or current.claim_token != claimed.claim_token
+        or current.lease_expires_at is None
+        or current.lease_expires_at <= now
+    ):
+        raise JobNotClaimable("Triage context claim is stale")
+
+
+def _context_evidence_reason(item) -> str:
+    if item.type is ContextItemType.LOG:
+        message = str(item.content.get("message", ""))[:1800]
+        return f"Redacted CloudWatch log event collected for this triage run: {message}"
+    if item.type is ContextItemType.METRIC:
+        name = str(item.content.get("metric_name") or "alarm metric")
+        return (
+            f"Bounded CloudWatch metric context collected for this triage run: {name}"
+        )
+    return "Persisted CloudWatch alarm identity and state for this triage run"
 
 
 def _raise_execution_failure(execution: TriageExecution) -> None:
@@ -476,9 +651,7 @@ def _raise_execution_failure(execution: TriageExecution) -> None:
     category_value = str(execution.metadata.get("failure_category") or "internal")
     code = str(execution.metadata.get("failure_code") or "triage_execution_failed")
     if category_value == JobErrorCategory.TRANSIENT.value:
-        raise TransientJobExecutionError(
-            "Triage dependency is temporarily unavailable"
-        )
+        raise TransientJobExecutionError("Triage dependency is temporarily unavailable")
     try:
         category = JobErrorCategory(category_value)
     except ValueError:
@@ -489,6 +662,4 @@ def _raise_execution_failure(execution: TriageExecution) -> None:
         JobErrorCategory.AUTHORIZATION: "Triage dependency authorization failed",
         JobErrorCategory.INTERNAL: "Triage execution failed",
     }.get(category, "Triage execution failed")
-    raise ClassifiedJobExecutionError(
-        JobFailure(code[:120], category, False, summary)
-    )
+    raise ClassifiedJobExecutionError(JobFailure(code[:120], category, False, summary))

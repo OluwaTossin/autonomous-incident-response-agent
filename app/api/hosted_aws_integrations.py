@@ -27,6 +27,7 @@ class AwsIntegrationCreateRequest(BaseModel):
     display_name: str = Field(min_length=1, max_length=200)
     aws_account_id: str = Field(pattern=r"^[0-9]{12}$")
     enabled_regions: list[str] = Field(min_length=1, max_length=20)
+    log_group_names: list[str] = Field(default_factory=list, max_length=20)
 
 
 class AwsIntegrationUpdateRequest(BaseModel):
@@ -36,6 +37,7 @@ class AwsIntegrationUpdateRequest(BaseModel):
     aws_account_id: str | None = Field(default=None, pattern=r"^[0-9]{12}$")
     role_arn: str | None = Field(default=None, min_length=1, max_length=600)
     enabled_regions: list[str] | None = Field(default=None, min_length=1, max_length=20)
+    log_group_names: list[str] | None = Field(default=None, max_length=20)
 
 
 class VersionRequest(BaseModel):
@@ -68,6 +70,7 @@ class AwsIntegrationResponse(BaseModel):
     aws_account_id: str
     role_arn: str | None
     enabled_regions: list[str]
+    log_group_names: list[str]
     state: str
     version: int
     verification: VerificationResponse | None
@@ -116,7 +119,9 @@ def build_hosted_aws_integration_router(
         except Exception as exc:
             raise _http_error(exc) from exc
 
-    @router.post("", response_model=AwsIntegrationResponse, status_code=status.HTTP_201_CREATED)
+    @router.post(
+        "", response_model=AwsIntegrationResponse, status_code=status.HTTP_201_CREATED
+    )
     def create_integration(
         organization_id: str,
         workspace_id: str,
@@ -131,6 +136,7 @@ def build_hosted_aws_integration_router(
                 display_name=body.display_name,
                 aws_account_id=body.aws_account_id,
                 enabled_regions=tuple(body.enabled_regions),
+                log_group_names=tuple(body.log_group_names),
             )
             return _response(integration)
         except Exception as exc:
@@ -168,6 +174,8 @@ def build_hosted_aws_integration_router(
             values.pop("expected_version")
             if "enabled_regions" in values:
                 values["enabled_regions"] = tuple(values["enabled_regions"])
+            if "log_group_names" in values:
+                values["log_group_names"] = tuple(values["log_group_names"])
             return _response(
                 service.update(
                     actor,
@@ -181,7 +189,9 @@ def build_hosted_aws_integration_router(
         except Exception as exc:
             raise _http_error(exc) from exc
 
-    @router.get("/{integration_id}/trust-instructions", response_model=TrustInstructionsResponse)
+    @router.get(
+        "/{integration_id}/trust-instructions", response_model=TrustInstructionsResponse
+    )
     def trust_instructions(
         organization_id: str,
         workspace_id: str,
@@ -252,6 +262,7 @@ def _response(integration: AwsIntegration) -> AwsIntegrationResponse:
         aws_account_id=integration.aws_account_id,
         role_arn=integration.role_arn,
         enabled_regions=list(integration.enabled_regions),
+        log_group_names=list(integration.log_group_names),
         state=integration.state.value,
         version=integration.version,
         verification=(
@@ -260,7 +271,9 @@ def _response(integration: AwsIntegration) -> AwsIntegrationResponse:
                 account_identity_passed=verification.account_identity_passed,
                 succeeded=verification.succeeded,
                 verified_at=verification.verified_at,
-                error_code=(verification.error_code.value if verification.error_code else None),
+                error_code=(
+                    verification.error_code.value if verification.error_code else None
+                ),
                 summary=verification.summary,
                 checks=[
                     CapabilityCheckResponse(
@@ -294,13 +307,26 @@ def _trust_response(value: AwsTrustInstructions) -> TrustInstructionsResponse:
 
 def _http_error(exc: Exception) -> HTTPException:
     if isinstance(exc, AuthorizationDenied):
-        return HTTPException(403, detail={"code": "forbidden", "message": "Access denied"})
+        return HTTPException(
+            403, detail={"code": "forbidden", "message": "Access denied"}
+        )
     if isinstance(exc, AwsIntegrationNotFound):
         return HTTPException(404, detail={"code": "not_found", "message": str(exc)})
     if isinstance(exc, (AwsIntegrationConflict, AwsIntegrationVersionConflict)):
         return HTTPException(409, detail={"code": "conflict", "message": str(exc)})
     if isinstance(exc, (ValueError, TypeError, DomainInvariantError)):
-        return HTTPException(422, detail={"code": "invalid_request", "message": str(exc)})
+        return HTTPException(
+            422, detail={"code": "invalid_request", "message": str(exc)}
+        )
     if isinstance(exc, AwsIntegrationConfigurationError):
-        return HTTPException(503, detail={"code": "unavailable", "message": "AWS onboarding is not configured"})
-    return HTTPException(500, detail={"code": "internal_error", "message": "Request could not be completed"})
+        return HTTPException(
+            503,
+            detail={
+                "code": "unavailable",
+                "message": "AWS onboarding is not configured",
+            },
+        )
+    return HTTPException(
+        500,
+        detail={"code": "internal_error", "message": "Request could not be completed"},
+    )

@@ -46,6 +46,27 @@ const run: TriageRun = {
     chunk_index: 4,
     score: 0.91,
   }],
+  operational_context: {
+    snapshot_id: "snapshot-1",
+    integration_id: "integration-1",
+    provider: "aws.cloudwatch",
+    region: "eu-west-2",
+    status: "partial",
+    window_start: "2026-09-25T11:45:00Z",
+    window_end: "2026-09-25T12:02:00Z",
+    collected_at: "2026-09-25T12:00:02Z",
+    policy_version: "cloudwatch-context-v1",
+    truncated: true,
+    diagnostics: [{ collector: "logs", status: "succeeded", code: null, summary: null }],
+    items: [{
+      sequence: 0,
+      type: "aws_cloudwatch_log",
+      source: "/aws/lambda/checkout:stream",
+      observed_at: "2026-09-25T12:00:00Z",
+      content: { message: "redacted timeout" },
+      truncated: false,
+    }],
+  },
 };
 
 describe("incident investigation", () => {
@@ -59,6 +80,9 @@ describe("incident investigation", () => {
     expect(html).toContain("version-2");
     expect(html).toContain("0.910");
     expect(html).toContain("Operator feedback");
+    expect(html).toContain("CloudWatch context");
+    expect(html).toContain("redacted timeout");
+    expect(html).toContain("truncated");
   });
 
   it("does not expose mutation controls to read-only viewers", () => {

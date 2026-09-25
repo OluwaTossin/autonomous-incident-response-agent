@@ -10,7 +10,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 const integration: AwsIntegration = {
   integration_id: "integration-1", provider: "aws", display_name: "Production AWS",
   aws_account_id: "123456789012", role_arn: "arn:aws:iam::123456789012:role/aira-read",
-  enabled_regions: ["eu-west-2"], state: "ready", version: 3,
+  enabled_regions: ["eu-west-2"], log_group_names: ["/aws/lambda/checkout"], state: "ready", version: 3,
   created_at: "2026-09-25T12:00:00Z", updated_at: "2026-09-25T12:01:00Z", disabled_at: null,
   verification: { assume_role_passed: true, account_identity_passed: true, succeeded: true,
     verified_at: "2026-09-25T12:01:00Z", error_code: null, summary: null,

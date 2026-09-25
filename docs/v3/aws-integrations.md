@@ -72,7 +72,9 @@ context, and relies on forced PostgreSQL RLS. URL identifiers and frontend role 
 not authority.
 
 `aws_integrations` stores account, role, ExternalId, regions, lifecycle/version, sanitized
-verification, timestamps, and actor attribution. It stores no temporary credentials. Audit
+verification, exact allowlisted log-group names, timestamps, and actor attribution. Changing
+the log-source allowlist increments the configuration version without invalidating unchanged
+trust/capability verification. It stores no temporary credentials. Audit
 events cover creation, configuration, verification success/failure, and disable. Observer
 signals contain only low-cardinality event/outcome values, not tenant, account, workspace,
 or integration IDs.
@@ -87,7 +89,8 @@ capability. Event JSON never selects tenant scope.
 ## Phase boundaries
 
 V3.17 provides the application intake contract but does not provision EventBridge. V3.18
-uses only verified capabilities and configured regions for bounded incident context
-collection. V3.22 owns the production AIRA workload principal, EventBridge resources,
+uses only verified capabilities, configured regions, and exact log-source allowlists for the
+bounded incident context collection documented in
+[`context-enrichment.md`](context-enrichment.md). V3.22 owns the production AIRA workload principal, EventBridge resources,
 network/IAM deployment, and runtime configuration. No Terraform or live AWS change is part
 of V3.16 or V3.17.

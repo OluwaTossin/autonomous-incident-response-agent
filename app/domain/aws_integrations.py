@@ -22,6 +22,7 @@ _ROLE_ARN_RE = re.compile(
 )
 _REGION_RE = re.compile(r"^[a-z]{2}(?:-gov)?-[a-z0-9-]+-[0-9]+$")
 _EXTERNAL_ID_RE = re.compile(r"^[A-Za-z0-9_-]{32,200}$")
+_LOG_GROUP_RE = re.compile(r"^[.\-_/#A-Za-z0-9]{1,512}$")
 
 
 class AwsIntegrationState(StrEnum):
@@ -69,7 +70,9 @@ class AwsCapabilityCheck:
         if self.passed and (self.error_code is not None or self.summary is not None):
             raise DomainInvariantError("Passed capability checks cannot carry errors")
         if not self.passed and (self.error_code is None or not self.summary):
-            raise DomainInvariantError("Failed capability checks require safe error details")
+            raise DomainInvariantError(
+                "Failed capability checks require safe error details"
+            )
         if self.summary is not None and len(self.summary) > 500:
             raise DomainInvariantError("Capability summary exceeds 500 characters")
 
@@ -86,7 +89,9 @@ class AwsVerificationResult:
     def __post_init__(self) -> None:
         require_aware(self.verified_at, "verified_at")
         if self.succeeded and (self.error_code is not None or self.summary is not None):
-            raise DomainInvariantError("Successful verification cannot carry a top-level error")
+            raise DomainInvariantError(
+                "Successful verification cannot carry a top-level error"
+            )
         if not self.succeeded and (self.error_code is None or not self.summary):
             raise DomainInvariantError("Failed verification requires a safe error")
         if self.summary is not None and len(self.summary) > 500:
@@ -118,6 +123,7 @@ class AwsIntegration:
     role_arn: str | None = None
     verification: AwsVerificationResult | None = None
     disabled_at: datetime | None = None
+    log_group_names: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         name = self.display_name.strip()
@@ -129,6 +135,9 @@ class AwsIntegration:
             raise DomainInvariantError("AWS integration ExternalId is invalid")
         regions = normalize_regions(self.enabled_regions)
         object.__setattr__(self, "enabled_regions", regions)
+        object.__setattr__(
+            self, "log_group_names", normalize_log_groups(self.log_group_names)
+        )
         if self.role_arn is not None:
             _validate_role_arn(self.role_arn, self.aws_account_id)
         if self.version < 1:
@@ -138,21 +147,34 @@ class AwsIntegration:
             require_aware(self.disabled_at, "disabled_at")
         if self.state is AwsIntegrationState.DRAFT and self.role_arn is not None:
             raise DomainInvariantError("Draft AWS integrations cannot have a role ARN")
-        if self.state not in {
-            AwsIntegrationState.DRAFT,
-            AwsIntegrationState.DISABLED,
-        } and self.role_arn is None:
+        if (
+            self.state
+            not in {
+                AwsIntegrationState.DRAFT,
+                AwsIntegrationState.DISABLED,
+            }
+            and self.role_arn is None
+        ):
             raise DomainInvariantError("Configured AWS integrations require a role ARN")
         if self.state is AwsIntegrationState.READY:
             if self.verification is None or not self.verification.succeeded:
-                raise DomainInvariantError("Ready AWS integrations require successful verification")
+                raise DomainInvariantError(
+                    "Ready AWS integrations require successful verification"
+                )
         if self.state is AwsIntegrationState.ERROR:
             if self.verification is None or self.verification.succeeded:
-                raise DomainInvariantError("Errored AWS integrations require failed verification")
+                raise DomainInvariantError(
+                    "Errored AWS integrations require failed verification"
+                )
         if self.state is AwsIntegrationState.DISABLED and self.disabled_at is None:
             raise DomainInvariantError("Disabled AWS integrations require disabled_at")
-        if self.state is not AwsIntegrationState.DISABLED and self.disabled_at is not None:
-            raise DomainInvariantError("Only disabled AWS integrations carry disabled_at")
+        if (
+            self.state is not AwsIntegrationState.DISABLED
+            and self.disabled_at is not None
+        ):
+            raise DomainInvariantError(
+                "Only disabled AWS integrations carry disabled_at"
+            )
 
     def configure(
         self,
@@ -161,6 +183,7 @@ class AwsIntegration:
         aws_account_id: str | None = None,
         role_arn: str | None = None,
         enabled_regions: tuple[str, ...] | None = None,
+        log_group_names: tuple[str, ...] | None = None,
         at: datetime,
     ) -> AwsIntegration:
         if self.state is AwsIntegrationState.DISABLED:
@@ -172,6 +195,11 @@ class AwsIntegration:
             if enabled_regions is not None
             else self.enabled_regions
         )
+        log_groups = (
+            normalize_log_groups(log_group_names)
+            if log_group_names is not None
+            else self.log_group_names
+        )
         trust_changed = (
             account != self.aws_account_id
             or (role or None) != self.role_arn
@@ -179,10 +207,13 @@ class AwsIntegration:
         )
         return replace(
             self,
-            display_name=display_name if display_name is not None else self.display_name,
+            display_name=display_name
+            if display_name is not None
+            else self.display_name,
             aws_account_id=account,
             role_arn=role or None,
             enabled_regions=regions,
+            log_group_names=log_groups,
             state=(
                 (
                     AwsIntegrationState.PENDING_VERIFICATION
@@ -204,7 +235,11 @@ class AwsIntegration:
             raise DomainInvariantError("AWS integration cannot be verified")
         return replace(
             self,
-            state=(AwsIntegrationState.READY if result.succeeded else AwsIntegrationState.ERROR),
+            state=(
+                AwsIntegrationState.READY
+                if result.succeeded
+                else AwsIntegrationState.ERROR
+            ),
             verification=result,
             updated_at=at,
             version=self.version + 1,
@@ -222,8 +257,19 @@ class AwsIntegration:
         )
 
 
+def normalize_log_groups(values: tuple[str, ...]) -> tuple[str, ...]:
+    if len(values) > 20:
+        raise DomainInvariantError("At most 20 CloudWatch log groups may be configured")
+    normalized = tuple(dict.fromkeys(value.strip() for value in values))
+    if any(not _LOG_GROUP_RE.fullmatch(value) for value in normalized):
+        raise DomainInvariantError("CloudWatch log group name is invalid")
+    return normalized
+
+
 def normalize_regions(values: tuple[str, ...]) -> tuple[str, ...]:
-    regions = tuple(sorted({value.strip().lower() for value in values if value.strip()}))
+    regions = tuple(
+        sorted({value.strip().lower() for value in values if value.strip()})
+    )
     if not regions or len(regions) > 20:
         raise DomainInvariantError("AWS integrations require 1 to 20 regions")
     for region in regions:

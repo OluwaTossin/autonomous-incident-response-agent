@@ -120,6 +120,7 @@ class HostedAwsIntegrationService:
         display_name: str,
         aws_account_id: str,
         enabled_regions: tuple[str, ...],
+        log_group_names: tuple[str, ...] = (),
     ) -> AwsIntegration:
         context = self._authorize(
             actor, organization_id, workspace_id, Permission.INTEGRATION_MANAGE
@@ -132,6 +133,7 @@ class HostedAwsIntegrationService:
             aws_account_id=aws_account_id,
             external_id=self._external_id_factory(),
             enabled_regions=enabled_regions,
+            log_group_names=log_group_names,
             state=AwsIntegrationState.DRAFT,
             created_by=context.actor,
             created_at=now,
@@ -187,6 +189,7 @@ class HostedAwsIntegrationService:
         aws_account_id: str | None = None,
         role_arn: str | None = None,
         enabled_regions: tuple[str, ...] | None = None,
+        log_group_names: tuple[str, ...] | None = None,
     ) -> AwsIntegration:
         context = self._authorize(
             actor, organization_id, workspace_id, Permission.INTEGRATION_MANAGE
@@ -200,6 +203,7 @@ class HostedAwsIntegrationService:
                 aws_account_id=aws_account_id,
                 role_arn=role_arn,
                 enabled_regions=enabled_regions,
+                log_group_names=log_group_names,
                 at=now,
             )
             self._save(uow, updated, expected_version)

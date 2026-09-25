@@ -224,7 +224,7 @@ textarea { resize: vertical; line-height: 1.45; }
 .incident-context h2, .incident-context h3 { margin: 0 0 8px; font-size: 18px; }
 .incident-context h3 { margin-top: 18px; font-size: 14px; }
 .incident-context p { margin: 0; color: var(--muted); line-height: 1.6; white-space: pre-wrap; }
-.history-section, .run-summary, .investigation-result, .feedback-panel { margin-top: 20px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.history-section, .run-summary, .investigation-result, .feedback-panel, .operational-context { margin-top: 20px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
 .run-list > a { display: grid; grid-template-columns: minmax(220px, 1.2fr) minmax(150px, .7fr) minmax(180px, .8fr) 18px; align-items: center; gap: 15px; padding: 14px 18px; border-bottom: 1px solid var(--line); color: inherit; text-decoration: none; }
 .run-list > a:last-child { border-bottom: 0; }
 .investigation-stack { display: grid; gap: 0; }
@@ -233,6 +233,14 @@ textarea { resize: vertical; line-height: 1.45; }
 .investigation-result { padding: 22px; }
 .investigation-result h2 { margin: 15px 0 8px; font-size: 26px; }
 .investigation-result h3 { margin: 24px 0 9px; font-size: 17px; }
+.operational-context { padding: 18px 20px; }
+.operational-context h2, .operational-context h3 { margin: 0; font-size: 17px; }
+.context-status { padding: 4px 8px; border: 1px solid var(--line); border-radius: 5px; font-size: 12px; text-transform: capitalize; }
+.context-partial { border-color: #d6a445; color: #78520b; background: #fff8e8; }
+.collector-list, .context-items { display: grid; gap: 1px; margin-top: 14px; background: var(--line); }
+.collector-list > div, .context-items article { display: grid; grid-template-columns: minmax(120px, auto) 1fr; gap: 8px; padding: 10px 12px; background: var(--surface-alt); }
+.collector-list p, .context-items p { grid-column: 1 / -1; margin: 0; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.context-items h3 { padding: 10px 12px; background: var(--surface); }
 .provenance { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 12px 0 0; }
 .provenance div { min-width: 0; }
 .provenance dt { color: var(--muted); font-size: 10px; text-transform: uppercase; }

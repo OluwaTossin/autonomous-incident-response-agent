@@ -47,6 +47,15 @@ class Client:
 
     def describe_alarms(self, **values):
         self._call("describe_alarms", values)
+        return {"MetricAlarms": [{"AlarmName": "known-alarm"}]}
+
+    def get_metric_data(self, **values):
+        self._call("get_metric_data", values)
+        return {"MetricDataResults": []}
+
+    def filter_log_events(self, **values):
+        self._call("filter_log_events", values)
+        return {"events": []}
 
     def list_metrics(self, **values):
         self._call("list_metrics", values)
@@ -56,7 +65,9 @@ class Client:
 
 
 def _client_error(code):
-    return ClientError({"Error": {"Code": code, "Message": "raw provider detail"}}, "op")
+    return ClientError(
+        {"Error": {"Code": code, "Message": "raw provider detail"}}, "op"
+    )
 
 
 def test_assume_role_encapsulates_credentials_and_uses_bounded_inputs() -> None:
@@ -83,9 +94,14 @@ def test_assume_role_encapsulates_credentials_and_uses_bounded_inputs() -> None:
     assert sts.calls[0]["ExternalId"] == "external-id"
     assert sts.calls[0]["DurationSeconds"] == 900
     assert [service for service, _ in created] == [
-        "sts", "cloudwatch", "cloudwatch", "logs"
+        "sts",
+        "cloudwatch",
+        "cloudwatch",
+        "logs",
     ]
-    assert all(values["aws_session_token"] == "temporary-token" for _, values in created)
+    assert all(
+        values["aws_session_token"] == "temporary-token" for _, values in created
+    )
     assert not hasattr(session, "access_key_id")
 
 
@@ -133,3 +149,39 @@ def test_capability_access_denied_and_network_errors_are_safe() -> None:
             duration_seconds=900,
         )
     assert raised.value.code is AwsVerificationError.NETWORK_ERROR
+
+
+def test_context_methods_keep_provider_calls_narrow_and_bounded() -> None:
+    clients = {}
+
+    def factory(service, **values):
+        client = Client(service)
+        clients[service] = client
+        return client
+
+    session = Boto3AwsRoleAssumer(Sts(), client_factory=factory).assume_role(
+        role_arn="arn:aws:iam::123456789012:role/aira-read",
+        external_id="external-id",
+        session_name="aira-context",
+        duration_seconds=900,
+    )
+    alarm = session.describe_alarm("known-alarm", "eu-west-2")
+    session.get_metric_data(
+        region="eu-west-2",
+        query={"Id": "alarmmetric", "MetricStat": {}},
+        start_time="start",
+        end_time="end",
+        max_datapoints=120,
+    )
+    session.filter_log_events(
+        region="eu-west-2",
+        log_group_name="/aws/lambda/checkout",
+        start_time_ms=1,
+        end_time_ms=2,
+        limit=100,
+    )
+
+    assert alarm == {"AlarmName": "known-alarm"}
+    assert clients["cloudwatch"].calls[-1][1]["MaxDatapoints"] == 120
+    assert clients["logs"].calls[-1][1]["logGroupName"] == "/aws/lambda/checkout"
+    assert "logGroupNamePrefix" not in clients["logs"].calls[-1][1]

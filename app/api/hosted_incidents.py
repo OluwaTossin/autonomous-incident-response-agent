@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 import json
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -121,6 +121,37 @@ class EvidenceResponse(BaseModel):
     score: float | None
 
 
+class ContextDiagnosticResponse(BaseModel):
+    collector: str
+    status: str
+    code: str | None
+    summary: str | None
+
+
+class ContextItemResponse(BaseModel):
+    sequence: int
+    type: str
+    source: str
+    observed_at: datetime
+    content: dict[str, Any]
+    truncated: bool
+
+
+class IncidentContextResponse(BaseModel):
+    snapshot_id: str
+    integration_id: str
+    provider: str
+    region: str
+    status: str
+    window_start: datetime
+    window_end: datetime
+    collected_at: datetime
+    policy_version: str
+    truncated: bool
+    diagnostics: list[ContextDiagnosticResponse]
+    items: list[ContextItemResponse]
+
+
 class TriageRunResponse(BaseModel):
     triage_run_id: str
     triage_id: str
@@ -140,6 +171,7 @@ class TriageRunResponse(BaseModel):
     failure_summary: str | None
     result: HostedTriageResult | None
     evidence: list[EvidenceResponse]
+    operational_context: IncidentContextResponse | None
 
 
 class TriageRunListItem(BaseModel):
@@ -481,7 +513,9 @@ def _incident_response(incident: Incident) -> IncidentResponse:
         description=payload.logs,
         metric_summary=payload.metric_summary,
         severity_hint=getattr(payload, "severity_hint", None),
-        observed_at=datetime.fromisoformat(payload.time_of_occurrence.replace("Z", "+00:00")),
+        observed_at=datetime.fromisoformat(
+            payload.time_of_occurrence.replace("Z", "+00:00")
+        ),
         created_at=incident.created_at,
         updated_at=incident.updated_at,
     )
@@ -555,6 +589,46 @@ def _triage_response(view: TriageView) -> TriageRunResponse:
             )
             for item in view.evidence
         ],
+        operational_context=(
+            _context_response(view.context_snapshot)
+            if view.context_snapshot is not None
+            else None
+        ),
+    )
+
+
+def _context_response(snapshot) -> IncidentContextResponse:
+    return IncidentContextResponse(
+        snapshot_id=str(snapshot.id),
+        integration_id=str(snapshot.integration_id),
+        provider=snapshot.provider,
+        region=snapshot.region,
+        status=snapshot.status.value,
+        window_start=snapshot.window_start,
+        window_end=snapshot.window_end,
+        collected_at=snapshot.collected_at,
+        policy_version=snapshot.policy_version,
+        truncated=snapshot.truncated,
+        diagnostics=[
+            ContextDiagnosticResponse(
+                collector=item.collector,
+                status=item.status.value,
+                code=item.code,
+                summary=item.summary,
+            )
+            for item in snapshot.diagnostics
+        ],
+        items=[
+            ContextItemResponse(
+                sequence=item.sequence,
+                type=item.type.value,
+                source=item.source,
+                observed_at=item.observed_at,
+                content=item.content,
+                truncated=item.truncated,
+            )
+            for item in snapshot.items
+        ],
     )
 
 
@@ -616,13 +690,17 @@ def _decode_triage_cursor(value: str) -> TriageRunListCursor:
 
 def _http_error(exc: Exception) -> HTTPException:
     if isinstance(exc, AuthorizationDenied):
-        return HTTPException(403, detail={"code": "forbidden", "message": "Access denied"})
+        return HTTPException(
+            403, detail={"code": "forbidden", "message": "Access denied"}
+        )
     if isinstance(exc, (HostedIncidentNotFound, HostedTriageNotFound)):
         return HTTPException(404, detail={"code": "not_found", "message": str(exc)})
     if isinstance(exc, (HostedIncidentConflict, HostedTriageConflict)):
         return HTTPException(409, detail={"code": "conflict", "message": str(exc)})
     if isinstance(exc, (ValueError, TypeError)):
-        return HTTPException(422, detail={"code": "invalid_request", "message": str(exc)})
+        return HTTPException(
+            422, detail={"code": "invalid_request", "message": str(exc)}
+        )
     return HTTPException(
         500,
         detail={"code": "internal_error", "message": "Request could not be completed"},

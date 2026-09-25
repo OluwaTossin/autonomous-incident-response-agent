@@ -93,6 +93,14 @@ class PostgresAlertReceiptRepository:
             raise RuntimeError("Alert receipt update conflicted")
         self._session.flush()
 
+    def get_for_triage_run(self, run_id: TriageRunId) -> AlertEventReceipt | None:
+        record = self._session.scalar(
+            select(AlertEventReceiptRecord).where(
+                AlertEventReceiptRecord.triage_run_id == UUID(str(run_id))
+            )
+        )
+        return _receipt_from_record(record) if record is not None else None
+
 
 class PostgresAlarmStateRepository:
     def __init__(self, session: Session) -> None:

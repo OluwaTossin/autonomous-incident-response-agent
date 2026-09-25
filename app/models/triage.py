@@ -25,7 +25,7 @@ class EvidenceItem(BaseModel):
     type: EvidenceType
     source: str = Field(..., min_length=1, description="Filename, path, or stable source id")
     reason: str = Field(..., min_length=1, description="Why this evidence supports the triage")
-    origin: Literal["tenant", "system", "self_hosted"] | None = None
+    origin: Literal["tenant", "system", "self_hosted", "operational"] | None = None
     organization_id: str | None = None
     workspace_id: str | None = None
     document_id: str | None = None

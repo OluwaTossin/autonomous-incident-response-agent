@@ -99,6 +99,14 @@ class AwsAlarmStateId(DomainId):
     pass
 
 
+class IncidentContextSnapshotId(DomainId):
+    pass
+
+
+class IncidentContextItemId(DomainId):
+    pass
+
+
 class JobId(DomainId):
     pass
 

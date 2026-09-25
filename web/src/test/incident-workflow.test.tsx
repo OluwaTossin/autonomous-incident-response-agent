@@ -54,6 +54,7 @@ function run(state: string): TriageRun {
       state === "succeeded"
         ? [{ sequence: 0, type: "metric", source: "latency", reason: "p95 increased", origin: "retrieval", score: 0.9 }]
         : [],
+    operational_context: null,
   };
 }
 

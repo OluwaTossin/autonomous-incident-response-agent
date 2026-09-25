@@ -129,6 +129,7 @@ def _to_record(integration: AwsIntegration) -> AwsIntegrationRecord:
         role_arn=integration.role_arn,
         external_id=integration.external_id,
         enabled_regions=list(integration.enabled_regions),
+        log_group_names=list(integration.log_group_names),
         state=integration.state.value,
         version=integration.version,
         verification=_verification_to_json(verification) if verification else None,
@@ -152,6 +153,7 @@ def _from_record(record: AwsIntegrationRecord) -> AwsIntegration:
         role_arn=record.role_arn,
         external_id=record.external_id,
         enabled_regions=tuple(record.enabled_regions),
+        log_group_names=tuple(record.log_group_names),
         state=AwsIntegrationState(record.state),
         version=record.version,
         verification=(

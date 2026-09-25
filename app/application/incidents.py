@@ -42,6 +42,7 @@ from app.domain.incidents import (
     TriageRun,
     TriageRunState,
 )
+from app.domain.incident_context import IncidentContextSnapshot
 from app.domain.operations import Job, JobKind, JobState
 from app.models.incident import IncidentPayload
 
@@ -149,6 +150,7 @@ class TriageView:
     run: TriageRun
     job: Job
     evidence: tuple[Evidence, ...]
+    context_snapshot: IncidentContextSnapshot | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -214,6 +216,13 @@ class EvidenceRepository(Protocol):
     def replace_for_run(self, run_id: TriageRunId, evidence: Sequence[Evidence]) -> None: ...
 
 
+class IncidentContextRepository(Protocol):
+    def get_for_run(
+        self, run_id: TriageRunId, *, for_update: bool = False
+    ) -> IncidentContextSnapshot | None: ...
+    def add(self, snapshot: IncidentContextSnapshot) -> None: ...
+
+
 class FeedbackRepository(Protocol):
     def add(self, feedback: Feedback) -> None: ...
 
@@ -222,6 +231,7 @@ class HostedIncidentUnitOfWork(Protocol):
     incidents: IncidentRepository
     triage_runs: TriageRunRepository
     evidence: EvidenceRepository
+    context_snapshots: IncidentContextRepository
     feedback: FeedbackRepository
     jobs: JobRepository
     dispatches: JobDispatchRepository
@@ -508,7 +518,17 @@ class HostedIncidentService:
             if job is None:
                 raise HostedTriageConflict("Triage job is unavailable")
             evidence = tuple(uow.evidence.list_for_run(run.id))
-            return TriageView(run, job, evidence)
+            context_repository = getattr(uow, "context_snapshots", None)
+            return TriageView(
+                run,
+                job,
+                evidence,
+                (
+                    context_repository.get_for_run(run.id)
+                    if context_repository is not None
+                    else None
+                ),
+            )
 
     def list_triage_runs(
         self,

@@ -128,6 +128,31 @@ class Settings(BaseModel):
         le=5,
         validation_alias="AIRA_AWS_VERIFICATION_MAX_ATTEMPTS",
     )
+    # Hosted incident-time CloudWatch collection. Values are deployment-owned bounds.
+    aira_context_metric_lookback_seconds: int = Field(
+        default=900, ge=60, le=86400, validation_alias="AIRA_CONTEXT_METRIC_LOOKBACK_SECONDS"
+    )
+    aira_context_log_lookback_seconds: int = Field(
+        default=900, ge=60, le=86400, validation_alias="AIRA_CONTEXT_LOG_LOOKBACK_SECONDS"
+    )
+    aira_context_forward_seconds: int = Field(
+        default=120, ge=0, le=900, validation_alias="AIRA_CONTEXT_FORWARD_SECONDS"
+    )
+    aira_context_max_metric_points: int = Field(
+        default=120, ge=1, le=1000, validation_alias="AIRA_CONTEXT_MAX_METRIC_POINTS"
+    )
+    aira_context_max_log_events: int = Field(
+        default=100, ge=1, le=1000, validation_alias="AIRA_CONTEXT_MAX_LOG_EVENTS"
+    )
+    aira_context_max_log_bytes: int = Field(
+        default=65536, ge=1024, le=1048576, validation_alias="AIRA_CONTEXT_MAX_LOG_BYTES"
+    )
+    aira_context_max_provider_calls: int = Field(
+        default=8, ge=2, le=50, validation_alias="AIRA_CONTEXT_MAX_PROVIDER_CALLS"
+    )
+    aira_context_max_chars: int = Field(
+        default=80000, ge=4096, le=500000, validation_alias="AIRA_CONTEXT_MAX_CHARS"
+    )
     aira_sqs_endpoint_url: str = Field(
         default="", validation_alias="AIRA_SQS_ENDPOINT_URL"
     )

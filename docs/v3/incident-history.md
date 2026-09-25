@@ -36,6 +36,11 @@ route, presigned URL, export, or raw object-key exposure; therefore the UI does 
 download/export controls. A later phase must add authorization and audit before introducing
 either capability.
 
+AWS-backed run detail also exposes the immutable normalized operational-context snapshot:
+collection status and window, integration/provider/region provenance, safe collector
+diagnostics, metric context, redacted log excerpts, and truncation markers. The browser reads
+persisted context only; it cannot initiate arbitrary CloudWatch queries or log searches.
+
 Operators with `incident.create` may request a new triage run, transition the incident using
 the existing domain state machine, cancel a non-terminal run, and submit bounded feedback.
 Viewers receive the same authorized investigation data without mutation controls. UI hiding
@@ -49,6 +54,6 @@ API key, provider error, claim token, queue receipt, lease, object key, prompt, 
 path. Every mutation requires the session-bound CSRF token. Dynamic pages and API responses
 remain `no-store`.
 
-Version 2 synchronous triage, static frontend, CLI, Gradio, filesystem workspace, local
-FAISS, JSONL audit, and metrics behavior are unchanged. CloudWatch intake and context
-collection remain V3.16-V3.18 work.
+Operational context is incident/run scoped and remains separate from uploaded documents and
+the workspace knowledge index. Version 2 synchronous triage, static frontend, CLI, Gradio,
+filesystem workspace, local FAISS, JSONL audit, and metrics behavior are unchanged.

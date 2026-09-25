@@ -93,6 +93,7 @@ export interface AwsIntegration {
   aws_account_id: string;
   role_arn: string | null;
   enabled_regions: string[];
+  log_group_names: string[];
   state: "draft" | "pending_verification" | "ready" | "error" | "disabled";
   version: number;
   verification: AwsVerification | null;
@@ -107,6 +108,7 @@ export interface AwsIntegrationCreate {
   display_name: string;
   aws_account_id: string;
   enabled_regions: string[];
+  log_group_names?: string[];
 }
 
 export interface AwsIntegrationUpdate {
@@ -115,6 +117,7 @@ export interface AwsIntegrationUpdate {
   aws_account_id?: string;
   role_arn?: string;
   enabled_regions?: string[];
+  log_group_names?: string[];
 }
 
 export interface AwsTrustInstructions {
@@ -208,6 +211,33 @@ export interface TriageResult {
   triage_id: string;
 }
 
+export interface IncidentContext {
+  snapshot_id: string;
+  integration_id: string;
+  provider: string;
+  region: string;
+  status: "complete" | "partial";
+  window_start: string;
+  window_end: string;
+  collected_at: string;
+  policy_version: string;
+  truncated: boolean;
+  diagnostics: Array<{
+    collector: string;
+    status: string;
+    code: string | null;
+    summary: string | null;
+  }>;
+  items: Array<{
+    sequence: number;
+    type: "aws_cloudwatch_alarm" | "aws_cloudwatch_metric" | "aws_cloudwatch_log";
+    source: string;
+    observed_at: string;
+    content: Record<string, unknown>;
+    truncated: boolean;
+  }>;
+}
+
 export interface TriageRun {
   triage_run_id: string;
   triage_id: string;
@@ -227,6 +257,7 @@ export interface TriageRun {
   failure_summary: string | null;
   result: TriageResult | null;
   evidence: TriageEvidence[];
+  operational_context: IncidentContext | null;
 }
 
 export interface TriageRunSummary {

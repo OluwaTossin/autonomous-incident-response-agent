@@ -108,6 +108,7 @@ export function RunInvestigation({
         {run.failure_summary ? <div className="failure-state" role="alert"><strong>{run.failure_category || "Failure"}</strong><p>{run.failure_summary}</p></div> : null}
         {canOperate && !TERMINAL.has(run.state) ? <button className="icon-command danger" type="button" onClick={() => void cancel()}><Ban aria-hidden="true" size={17} />Cancel run</button> : null}
       </section>
+      {run.operational_context ? <OperationalContext run={run} /> : null}
       {run.result ? <Result run={run} /> : <section className="quiet-empty"><LoaderCircle className="spin" aria-hidden="true" size={18} />Triage output is not available yet.</section>}
       {run.state === "succeeded" && canOperate ? (
         <section className="feedback-panel">
@@ -125,6 +126,24 @@ export function RunInvestigation({
       {error ? <p className="form-error" role="alert">{error}</p> : null}
     </div>
   );
+}
+
+function OperationalContext({ run }: { run: TriageRun }) {
+  const context = run.operational_context!;
+  const metrics = context.items.filter((item) => item.type === "aws_cloudwatch_metric");
+  const logs = context.items.filter((item) => item.type === "aws_cloudwatch_log");
+  return <section className="operational-context">
+    <div className="section-title"><div><h2>CloudWatch context</h2><p>Redacted, bounded evidence collected for this run.</p></div><span className={`context-status context-${context.status}`}>{context.status}</span></div>
+    <dl className="run-metadata">
+      <div><dt>Region</dt><dd>{context.region}</dd></div>
+      <div><dt>Window</dt><dd>{formatTime(context.window_start)} to {formatTime(context.window_end)}</dd></div>
+      <div><dt>Metrics</dt><dd>{metrics.length}</dd></div>
+      <div><dt>Log events</dt><dd>{logs.length}{context.truncated ? " (truncated)" : ""}</dd></div>
+    </dl>
+    <div className="collector-list">{context.diagnostics.map((item) => <div key={item.collector}><strong>{item.collector}</strong><span>{item.status}</span>{item.summary ? <p>{item.summary}</p> : null}</div>)}</div>
+    {metrics.length ? <div className="context-items"><h3>Alarm metrics</h3>{metrics.map((item) => <article key={item.sequence}><strong>{String(item.content.metric_name || "Alarm metric")}</strong><span>{Array.isArray(item.content.points) ? item.content.points.length : 0} datapoints</span></article>)}</div> : null}
+    {logs.length ? <div className="context-items"><h3>Log excerpts</h3>{logs.map((item) => <article key={item.sequence}><strong>{item.source}</strong><p>{String(item.content.message || "")}</p></article>)}</div> : null}
+  </section>;
 }
 
 function Result({ run }: { run: TriageRun }) {

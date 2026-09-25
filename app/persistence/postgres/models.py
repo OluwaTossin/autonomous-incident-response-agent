@@ -47,8 +47,12 @@ class OAuthLoginTransactionRecord(Base):
     state_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     encrypted_payload: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     return_path: Mapped[str] = mapped_column(String(1000), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
     consumed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -81,7 +85,9 @@ class BrowserSessionRecord(Base):
     access_expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
     last_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
@@ -359,9 +365,7 @@ class WorkspaceConfigurationRecord(Base):
             "schema_version = 1",
             name="ck_workspace_configurations_schema_version",
         ),
-        CheckConstraint(
-            "version >= 1", name="ck_workspace_configurations_version"
-        ),
+        CheckConstraint("version >= 1", name="ck_workspace_configurations_version"),
         CheckConstraint(
             "rag_top_k BETWEEN 1 AND 64",
             name="ck_workspace_configurations_rag_top_k",
@@ -422,9 +426,7 @@ class MembershipWorkspaceGrantRecord(Base, WorkspaceTenantColumns, ActorColumns)
             "workspace_id",
             name="uq_membership_workspace_grants_membership_workspace",
         ),
-        CheckConstraint(
-            _ACTOR_CHECK, name="ck_membership_workspace_grants_actor_kind"
-        ),
+        CheckConstraint(_ACTOR_CHECK, name="ck_membership_workspace_grants_actor_kind"),
         Index(
             "ix_membership_workspace_grants_scope",
             "organization_id",
@@ -439,9 +441,7 @@ class MembershipWorkspaceGrantRecord(Base, WorkspaceTenantColumns, ActorColumns)
     )
 
 
-class ServiceAccountAuthorizationGrantRecord(
-    Base, TimestampColumns, ActorColumns
-):
+class ServiceAccountAuthorizationGrantRecord(Base, TimestampColumns, ActorColumns):
     __tablename__ = "service_account_authorization_grants"
     __table_args__ = (
         ForeignKeyConstraint(
@@ -491,7 +491,9 @@ class ServiceAccountAuthorizationGrantRecord(
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
     organization_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
-    service_account_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    service_account_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), nullable=False
+    )
     permissions: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     workspace_access: Mapped[str] = mapped_column(String(32), nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(
@@ -506,9 +508,7 @@ class ServiceAccountAuthorizationGrantRecord(
     )
 
 
-class ServiceAccountWorkspaceGrantRecord(
-    Base, WorkspaceTenantColumns, ActorColumns
-):
+class ServiceAccountWorkspaceGrantRecord(Base, WorkspaceTenantColumns, ActorColumns):
     __tablename__ = "service_account_workspace_grants"
     __table_args__ = (
         ForeignKeyConstraint(
@@ -718,6 +718,114 @@ class EvidenceRecord(Base, WorkspaceTenantColumns, ClassificationRetentionColumn
     )
 
 
+class IncidentContextSnapshotRecord(Base, WorkspaceTenantColumns):
+    __tablename__ = "incident_context_snapshots"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "workspace_id", "incident_id"],
+            ["incidents.organization_id", "incidents.workspace_id", "incidents.id"],
+            name="fk_context_snapshots_incident_scope",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "workspace_id", "triage_run_id"],
+            [
+                "triage_runs.organization_id",
+                "triage_runs.workspace_id",
+                "triage_runs.id",
+            ],
+            name="fk_context_snapshots_triage_scope",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "workspace_id", "integration_id"],
+            [
+                "aws_integrations.organization_id",
+                "aws_integrations.workspace_id",
+                "aws_integrations.id",
+            ],
+            name="fk_context_snapshots_integration_scope",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "workspace_id",
+            "id",
+            name="uq_context_snapshots_scope_id",
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "workspace_id",
+            "triage_run_id",
+            name="uq_context_snapshots_triage_run",
+        ),
+        CheckConstraint(
+            "status IN ('complete', 'partial')", name="ck_context_snapshots_status"
+        ),
+        Index("ix_context_snapshots_incident", "incident_id", "collected_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    incident_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    triage_run_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    integration_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    provider: Mapped[str] = mapped_column(String(80), nullable=False)
+    region: Mapped[str] = mapped_column(String(64), nullable=False)
+    window_start: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    window_end: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    collected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    policy_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    diagnostics: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
+    truncated: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+
+class IncidentContextItemRecord(Base, WorkspaceTenantColumns):
+    __tablename__ = "incident_context_items"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "workspace_id", "snapshot_id"],
+            [
+                "incident_context_snapshots.organization_id",
+                "incident_context_snapshots.workspace_id",
+                "incident_context_snapshots.id",
+            ],
+            name="fk_context_items_snapshot_scope",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "workspace_id",
+            "snapshot_id",
+            "sequence",
+            name="uq_context_items_snapshot_sequence",
+        ),
+        CheckConstraint(
+            "type IN ('aws_cloudwatch_alarm', 'aws_cloudwatch_metric', 'aws_cloudwatch_log')",
+            name="ck_context_items_type",
+        ),
+        CheckConstraint("sequence >= 0", name="ck_context_items_sequence"),
+        Index("ix_context_items_snapshot", "snapshot_id", "sequence"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    snapshot_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    type: Mapped[str] = mapped_column(String(64), nullable=False)
+    source: Mapped[str] = mapped_column(Text, nullable=False)
+    observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    content: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    truncated: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+
 class FeedbackRecord(Base, WorkspaceTenantColumns, ClassificationRetentionColumns):
     __tablename__ = "feedback"
     __table_args__ = (
@@ -876,9 +984,7 @@ class DocumentVersionRecord(Base, WorkspaceTenantColumns, ActorColumns):
         String(64), nullable=True
     )
     verified_size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    verified_media_type: Mapped[str | None] = mapped_column(
-        String(255), nullable=True
-    )
+    verified_media_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
@@ -972,9 +1078,7 @@ class KnowledgeIndexVersionRecord(
     superseded_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    manifest_schema_version: Mapped[int | None] = mapped_column(
-        Integer, nullable=True
-    )
+    manifest_schema_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     artifact_prefix: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     manifest_checksum_sha256: Mapped[str | None] = mapped_column(
         String(64), nullable=True
@@ -1041,7 +1145,9 @@ class IntegrationRecord(Base, WorkspaceTenantColumns, TimestampColumns, ActorCol
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
-class AwsIntegrationRecord(Base, WorkspaceTenantColumns, TimestampColumns, ActorColumns):
+class AwsIntegrationRecord(
+    Base, WorkspaceTenantColumns, TimestampColumns, ActorColumns
+):
     __tablename__ = "aws_integrations"
     __table_args__ = (
         ForeignKeyConstraint(
@@ -1077,6 +1183,9 @@ class AwsIntegrationRecord(Base, WorkspaceTenantColumns, TimestampColumns, Actor
     role_arn: Mapped[str | None] = mapped_column(String(600), nullable=True)
     external_id: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
     enabled_regions: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    log_group_names: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
     state: Mapped[str] = mapped_column(String(32), nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     verification: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
@@ -1159,8 +1268,12 @@ class AlertEventReceiptRecord(Base, WorkspaceTenantColumns, ActorColumns):
     region: Mapped[str] = mapped_column(String(64), nullable=False)
     alarm_state: Mapped[str] = mapped_column(String(32), nullable=False)
     previous_alarm_state: Mapped[str] = mapped_column(String(32), nullable=False)
-    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     incident_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
     triage_run_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
@@ -1219,7 +1332,9 @@ class AwsAlarmStateRecord(Base, WorkspaceTenantColumns):
     latest_observed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
     incident_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
 
 
@@ -1334,13 +1449,17 @@ class JobRecord(
     payload_version: Mapped[int] = mapped_column(Integer, nullable=False)
     payload: Mapped[dict[str, str]] = mapped_column(JSONB, nullable=False)
     payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    available_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False)
     max_attempts: Mapped[int] = mapped_column(Integer, nullable=False)
     state_version: Mapped[int] = mapped_column(Integer, nullable=False)
     dispatch_generation: Mapped[int] = mapped_column(Integer, nullable=False)
     claimed_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    claim_token: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    claim_token: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True
+    )
     lease_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -1350,7 +1469,9 @@ class JobRecord(
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    failed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     cancelled_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -1406,13 +1527,19 @@ class JobDispatchRecord(Base, WorkspaceTenantColumns):
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
     job_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     dispatch_generation: Mapped[int] = mapped_column(Integer, nullable=False)
-    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    available_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
     published_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     claimed_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    claim_token: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    claim_token: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True
+    )
     claim_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

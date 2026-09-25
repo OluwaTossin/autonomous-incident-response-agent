@@ -153,7 +153,7 @@ def test_fresh_migration_contains_expected_schema(
             ).scalars()
         )
 
-    assert revision == "3a6f8c1d9e42"
+    assert revision == "6b4e9d2c7a10"
     assert {
         "users",
         "organizations",
@@ -183,6 +183,8 @@ def test_fresh_migration_contains_expected_schema(
         "aws_integrations",
         "alert_event_receipts",
         "aws_alarm_states",
+        "incident_context_snapshots",
+        "incident_context_items",
     } <= tables
 
 

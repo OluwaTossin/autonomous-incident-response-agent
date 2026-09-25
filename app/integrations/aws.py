@@ -27,6 +27,26 @@ class AwsCallerIdentity:
 class AwsAssumedSession(Protocol):
     def caller_identity(self) -> AwsCallerIdentity: ...
     def probe(self, capability: AwsCapability, region: str) -> None: ...
+    def describe_alarm(self, alarm_name: str, region: str) -> dict[str, Any] | None: ...
+    def get_metric_data(
+        self,
+        *,
+        region: str,
+        query: dict[str, Any],
+        start_time,
+        end_time,
+        max_datapoints: int,
+    ) -> dict[str, Any]: ...
+    def filter_log_events(
+        self,
+        *,
+        region: str,
+        log_group_name: str,
+        start_time_ms: int,
+        end_time_ms: int,
+        limit: int,
+        next_token: str | None = None,
+    ) -> dict[str, Any]: ...
 
 
 class AwsRoleAssumer(Protocol):
@@ -117,6 +137,62 @@ class _Boto3AssumedSession:
         except Exception as exc:
             raise _safe_aws_error(exc, operation=capability.value) from exc
 
+    def describe_alarm(self, alarm_name: str, region: str) -> dict[str, Any] | None:
+        try:
+            response = self._client("cloudwatch", region).describe_alarms(
+                AlarmNames=[alarm_name], MaxRecords=1
+            )
+            alarms = [*response.get("MetricAlarms", []), *response.get("CompositeAlarms", [])]
+            return dict(alarms[0]) if alarms else None
+        except Exception as exc:
+            raise _safe_aws_error(exc, operation="cloudwatch:DescribeAlarms") from exc
+
+    def get_metric_data(
+        self,
+        *,
+        region: str,
+        query: dict[str, Any],
+        start_time,
+        end_time,
+        max_datapoints: int,
+    ) -> dict[str, Any]:
+        try:
+            return dict(
+                self._client("cloudwatch", region).get_metric_data(
+                    MetricDataQueries=[query],
+                    StartTime=start_time,
+                    EndTime=end_time,
+                    ScanBy="TimestampAscending",
+                    MaxDatapoints=max_datapoints,
+                )
+            )
+        except Exception as exc:
+            raise _safe_aws_error(exc, operation="cloudwatch:GetMetricData") from exc
+
+    def filter_log_events(
+        self,
+        *,
+        region: str,
+        log_group_name: str,
+        start_time_ms: int,
+        end_time_ms: int,
+        limit: int,
+        next_token: str | None = None,
+    ) -> dict[str, Any]:
+        parameters: dict[str, Any] = {
+            "logGroupName": log_group_name,
+            "startTime": start_time_ms,
+            "endTime": end_time_ms,
+            "limit": limit,
+            "interleaved": True,
+        }
+        if next_token:
+            parameters["nextToken"] = next_token
+        try:
+            return dict(self._client("logs", region).filter_log_events(**parameters))
+        except Exception as exc:
+            raise _safe_aws_error(exc, operation="logs:FilterLogEvents") from exc
+
 
 def create_sts_client(
     *,
@@ -158,6 +234,9 @@ def _safe_aws_error(exc: Exception, *, operation: str) -> AwsIntegrationCallErro
                 AwsCapability.CLOUDWATCH_ALARMS_READ.value: (AwsVerificationError.CLOUDWATCH_PERMISSION_MISSING, "cloudwatch:DescribeAlarms is not permitted"),
                 AwsCapability.CLOUDWATCH_METRICS_READ.value: (AwsVerificationError.METRICS_PERMISSION_MISSING, "cloudwatch:ListMetrics is not permitted"),
                 AwsCapability.CLOUDWATCH_LOGS_READ.value: (AwsVerificationError.LOGS_PERMISSION_MISSING, "logs:DescribeLogGroups is not permitted"),
+                "cloudwatch:DescribeAlarms": (AwsVerificationError.CLOUDWATCH_PERMISSION_MISSING, "cloudwatch:DescribeAlarms is not permitted"),
+                "cloudwatch:GetMetricData": (AwsVerificationError.METRICS_PERMISSION_MISSING, "cloudwatch:GetMetricData is not permitted"),
+                "logs:FilterLogEvents": (AwsVerificationError.LOGS_PERMISSION_MISSING, "logs:FilterLogEvents is not permitted"),
             }
             error, summary = mapping.get(operation, (AwsVerificationError.ACCESS_DENIED, "AWS denied the verification request"))
             return AwsIntegrationCallError(error, summary)
