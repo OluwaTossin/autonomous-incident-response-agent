@@ -550,17 +550,19 @@ Version 3 preserves human authority over consequential actions. Version 4 is the
 
 ## V3.19 - Action model
 
-**Goal:** Represent recommended and executable follow-up actions independently of LLM output.
+**Status:** Complete in `adca5be` (`feat: add controlled action proposals`).
+
+**Goal:** Represent recommended and future-executable follow-up actions independently of LLM output without approving or executing them.
 
 **Dependencies:** V3.2, V3.3, V3.12.
 
 **Checklist:**
 
-- [ ] Define action types, target, parameters, source recommendation, risk, status, idempotency, expiry, and actor fields.
-- [ ] Define deterministic risk policy and permitted automatic informational actions.
-- [ ] Validate connector-specific parameters before proposal creation.
-- [ ] Persist policy decisions and immutable action history.
-- [ ] Ensure LLM content cannot set authorization or bypass policy.
+- [x] Define allowlisted action types, bounded targets and parameters, source recommendation provenance, risk, lifecycle, idempotency, and actor fields.
+- [x] Define deterministic risk, reversibility, and review-eligibility policy without approval or execution semantics.
+- [x] Validate type-specific parameters and trusted target authority before proposal creation.
+- [x] Persist policy decisions and immutable action history.
+- [x] Ensure LLM content cannot set authorization, risk, approval, or bypass policy.
 
 **Files/modules:** Expected action domain/policy/services/repositories, migrations, schemas, tests.
 
