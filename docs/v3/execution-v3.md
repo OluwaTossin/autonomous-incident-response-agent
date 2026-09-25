@@ -501,17 +501,19 @@ Version 3 preserves human authority over consequential actions. Version 4 is the
 
 ## V3.17 - EventBridge / CloudWatch alarm delivery
 
+**Status:** Complete in `168de1d` (`feat: add CloudWatch alert ingestion`).
+
 **Goal:** Convert authenticated cross-account EventBridge deliveries originating from CloudWatch Alarms into deduplicated workspace incidents and triage jobs.
 
 **Dependencies:** V3.10-V3.12, V3.16.
 
 **Checklist:**
 
-- [ ] Authenticate inbound delivery and resolve integration/workspace without trusting body tenant IDs.
-- [ ] Define canonical alert envelope and provider payload retention/redaction.
-- [ ] Implement normalization, deduplication/idempotency, replay handling, and incident creation.
-- [ ] Queue enrichment/triage and expose delivery health.
-- [ ] Preserve manual incident submission as a separate source adapter.
+- [x] Authenticate inbound delivery and resolve integration/workspace without trusting body tenant IDs.
+- [x] Define canonical alert envelope and provider payload retention/redaction.
+- [x] Implement normalization, deduplication/idempotency, replay handling, and incident creation.
+- [x] Queue triage and expose delivery health; CloudWatch Logs/Metrics enrichment remains V3.18.
+- [x] Preserve manual incident submission as a separate source adapter.
 
 **Files/modules:** CloudWatch/EventBridge ingress adapter, canonical alert models, ingestion service/routes, deduplication persistence, tests.
 
