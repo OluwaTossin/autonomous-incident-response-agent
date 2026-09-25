@@ -380,14 +380,16 @@ Version 3 preserves human authority over consequential actions. Version 4 is the
 
 **Dependencies:** V3.5, V3.10, V3.11.
 
+**Status:** Complete in `41e217e` (`feat: add hosted incident and async triage APIs`).
+
 **Checklist:**
 
-- [ ] Add authorized incident create/list/detail endpoints.
-- [ ] Add idempotent triage-run creation returning `202` and stable IDs.
-- [ ] Add status/result/evidence endpoints and safe polling semantics.
-- [ ] Add cancellation and feedback linked to durable runs.
-- [ ] Define error schema, pagination, filtering, API versioning, and OpenAPI examples.
-- [ ] Preserve V2 synchronous `/triage` in the self-hosted composition.
+- [x] Add authorized incident create/list/detail endpoints.
+- [x] Add idempotent triage-run creation returning `202` and stable IDs.
+- [x] Add status/result/evidence endpoints and safe polling semantics.
+- [x] Add cancellation and feedback linked to durable runs.
+- [x] Define error schema, pagination, filtering, API versioning, and OpenAPI examples.
+- [x] Preserve V2 synchronous `/triage` in the self-hosted composition.
 
 **Files/modules:** Hosted FastAPI routers/schemas/services, API contract tests; adapt `app/api/main.py` and `triage_execution.py` through composition.
 
