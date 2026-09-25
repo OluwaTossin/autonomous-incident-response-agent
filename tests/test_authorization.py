@@ -134,6 +134,7 @@ def test_approved_role_permission_sets_are_exact() -> None:
         Permission.INTEGRATION_READ,
         Permission.ACTION_READ,
         Permission.APPROVAL_READ,
+        Permission.EXECUTION_INTENT_READ,
     }
     operator = viewer | {
         Permission.INCIDENT_CREATE,

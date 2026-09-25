@@ -11,14 +11,27 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.domain.actions import ActionProposal, Approval, ApprovalState
-from app.domain.identifiers import ActionId, ApprovalId, IncidentId, TriageRunId
+from app.domain.execution import ExecutionIntent
+from app.domain.identifiers import (
+    ActionId,
+    ApprovalId,
+    ExecutionIntentId,
+    IncidentId,
+    TriageRunId,
+)
 from app.persistence.postgres.mappers import (
     action_from_record,
     action_to_record,
     approval_from_record,
     approval_to_record,
+    execution_intent_from_record,
+    execution_intent_to_record,
 )
-from app.persistence.postgres.models import ActionProposalRecord, ApprovalRecord
+from app.persistence.postgres.models import (
+    ActionProposalRecord,
+    ApprovalRecord,
+    ExecutionIntentRecord,
+)
 
 
 class PostgresActionProposalRepository:
@@ -186,3 +199,86 @@ class PostgresApprovalRepository:
         )
         if result.rowcount != 1:
             raise RuntimeError("Approval state changed concurrently")
+
+
+class PostgresExecutionIntentRepository:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def create_or_get(self, intent: ExecutionIntent) -> tuple[ExecutionIntent, bool]:
+        record = execution_intent_to_record(intent)
+        values = {
+            column.name: getattr(record, column.name)
+            for column in ExecutionIntentRecord.__table__.columns
+        }
+        inserted = self._session.scalar(
+            insert(ExecutionIntentRecord)
+            .values(**values)
+            .on_conflict_do_nothing(constraint="uq_execution_intents_approval")
+            .returning(ExecutionIntentRecord.id)
+        )
+        if inserted is not None:
+            return intent, True
+        existing = self.get_for_approval(intent.approval_id)
+        if existing is None:
+            raise RuntimeError(
+                "Concurrent execution intent creation could not be resolved"
+            )
+        return existing, False
+
+    def get(
+        self, intent_id: ExecutionIntentId, *, for_update: bool = False
+    ) -> ExecutionIntent | None:
+        statement = select(ExecutionIntentRecord).where(
+            ExecutionIntentRecord.id == UUID(str(intent_id))
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        record = self._session.scalar(statement)
+        return execution_intent_from_record(record) if record is not None else None
+
+    def get_for_approval(
+        self, approval_id: ApprovalId, *, for_update: bool = False
+    ) -> ExecutionIntent | None:
+        statement = select(ExecutionIntentRecord).where(
+            ExecutionIntentRecord.approval_id == UUID(str(approval_id))
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        record = self._session.scalar(statement)
+        return execution_intent_from_record(record) if record is not None else None
+
+    def list_for_proposal(
+        self, proposal_id: ActionId, *, for_update: bool = False
+    ) -> Sequence[ExecutionIntent]:
+        statement = (
+            select(ExecutionIntentRecord)
+            .where(ExecutionIntentRecord.action_proposal_id == UUID(str(proposal_id)))
+            .order_by(
+                ExecutionIntentRecord.created_at.desc(),
+                ExecutionIntentRecord.id.desc(),
+            )
+            .limit(100)
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        records = self._session.scalars(statement).all()
+        return [execution_intent_from_record(record) for record in records]
+
+    def save_state(self, intent: ExecutionIntent, *, expected_version: int) -> None:
+        result = self._session.execute(
+            update(ExecutionIntentRecord)
+            .where(
+                ExecutionIntentRecord.id == UUID(str(intent.id)),
+                ExecutionIntentRecord.state_version == expected_version,
+            )
+            .values(
+                lifecycle_state=intent.lifecycle_state.value,
+                state_version=intent.state_version,
+                updated_at=intent.updated_at,
+                terminal_at=intent.terminal_at,
+                terminal_reason=intent.terminal_reason,
+            )
+        )
+        if result.rowcount != 1:
+            raise RuntimeError("Execution intent state changed concurrently")

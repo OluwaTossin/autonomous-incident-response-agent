@@ -132,4 +132,6 @@ operator UI. V3.15 history behavior is described in
 [`incident-history.md`](incident-history.md). V3.17 CloudWatch/EventBridge application intake
 is documented in [`alert-ingestion.md`](alert-ingestion.md); AssumeRole Logs/Metrics context
 collection and enrichment are documented for V3.18. V3.19 action proposals and V3.20
-approvals remain separate from V3.21 execution intent and connectors.
+approvals remain separate from V3.21 immutable execution-intent preparation and local
+connector validation. V3.21 adds no execution endpoint or provider mutation; see
+[`execution-intents.md`](execution-intents.md).

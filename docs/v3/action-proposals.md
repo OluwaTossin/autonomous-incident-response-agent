@@ -107,7 +107,9 @@ policy result as bounded dimensions.
 
 - V3.20 provides approval requests, human decisions, expiry, cancellation, exact proposal
   binding, and approval UI without execution.
-- V3.21 owns connector execution, immutable execution intent, retries, and outcomes.
+- V3.21 owns immutable execution intent preparation and deterministic connector validation;
+  provider execution and execution retries remain Version 4 work. See
+  [`execution-intents.md`](execution-intents.md).
 - Version 4 owns any separately designed autonomous-remediation capability.
 
 V3.19 calls no AWS mutation API, Kubernetes API, shell, Terraform, deployment API, GitHub

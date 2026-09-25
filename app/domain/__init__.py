@@ -1,6 +1,7 @@
 """Framework-independent hosted domain model for AIRA Version 3."""
 
 from app.domain.actions import ActionProposal, Approval
+from app.domain.execution import ExecutionIntent
 from app.domain.events import AuditEvent, UsageEvent
 from app.domain.incidents import Evidence, Feedback, Incident, TriageRun
 from app.domain.knowledge import (
@@ -16,6 +17,7 @@ from app.domain.tenancy import Organization, OrganizationMembership, User, Works
 __all__ = [
     "ActionProposal",
     "Approval",
+    "ExecutionIntent",
     "AuditEvent",
     "Document",
     "DocumentVersion",

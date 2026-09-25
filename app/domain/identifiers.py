@@ -119,6 +119,10 @@ class ApprovalId(DomainId):
     pass
 
 
+class ExecutionIntentId(DomainId):
+    pass
+
+
 class ServiceAccountId(DomainId):
     pass
 

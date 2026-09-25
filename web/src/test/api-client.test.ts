@@ -58,6 +58,10 @@ describe("hosted server API client", () => {
     await client.approveApproval("token", "org one", "workspace one", "approval one", "Reviewed");
     await client.rejectApproval("token", "org one", "workspace one", "approval one", "Changed");
     await client.cancelApproval("token", "org one", "workspace one", "approval one", null);
+    await client.listExecutionIntents("token", "org one", "workspace one", "proposal one");
+    await client.getExecutionIntent("token", "org one", "workspace one", "intent one");
+    await client.prepareExecutionIntent("token", "org one", "workspace one", "approval one");
+    await client.cancelExecutionIntent("token", "org one", "workspace one", "intent one", "Target changed");
 
     const calls = fetchMock.mock.calls.map(([url, init]) => [url, init.method || "GET"]);
     expect(calls).toEqual([
@@ -78,6 +82,10 @@ describe("hosted server API client", () => {
       ["http://api.internal/v3/organizations/org%20one/workspaces/workspace%20one/approvals/approval%20one/approve", "POST"],
       ["http://api.internal/v3/organizations/org%20one/workspaces/workspace%20one/approvals/approval%20one/reject", "POST"],
       ["http://api.internal/v3/organizations/org%20one/workspaces/workspace%20one/approvals/approval%20one/cancel", "POST"],
+      ["http://api.internal/v3/organizations/org%20one/workspaces/workspace%20one/action-proposals/proposal%20one/execution-intents", "GET"],
+      ["http://api.internal/v3/organizations/org%20one/workspaces/workspace%20one/execution-intents/intent%20one", "GET"],
+      ["http://api.internal/v3/organizations/org%20one/workspaces/workspace%20one/approvals/approval%20one/execution-intent", "POST"],
+      ["http://api.internal/v3/organizations/org%20one/workspaces/workspace%20one/execution-intents/intent%20one/cancel", "POST"],
     ]);
   });
 

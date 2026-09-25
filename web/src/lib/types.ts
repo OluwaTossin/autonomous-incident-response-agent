@@ -334,6 +334,42 @@ export interface Approval {
   updated_at: string;
 }
 
+export interface ExecutionIntent {
+  execution_intent_id: string;
+  action_proposal_id: string;
+  approval_id: string;
+  incident_id: string;
+  triage_run_id: string;
+  lifecycle_state: "prepared" | "invalidated" | "cancelled";
+  connector_kind: "internal";
+  operation_kind: "acknowledge_incident";
+  provider: "aira";
+  target: ActionProposal["target"];
+  parameters: Record<string, unknown>;
+  request_schema_version: number;
+  proposal_schema_version: number;
+  source_result_version: number;
+  source_result_hash: string;
+  normalized_action_hash: string;
+  approval_state_version: number;
+  approval_binding_hash: string;
+  intent_hash: string;
+  risk_level: ActionProposal["risk_level"];
+  reversibility: ActionProposal["reversibility"];
+  policy_version: number;
+  approved_by_type: "human";
+  approved_by_id: string;
+  approved_at: string;
+  created_by_type: "human" | "service_account" | "system";
+  created_at: string;
+  updated_at: string;
+  execute_before: string;
+  terminal_at: string | null;
+  terminal_reason: string | null;
+  validation_status: "passed";
+  execution_status: "not_executed";
+}
+
 export interface FeedbackCreate {
   diagnosis_correct: boolean | null;
   actions_useful: boolean | null;

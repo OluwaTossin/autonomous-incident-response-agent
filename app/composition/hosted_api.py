@@ -15,6 +15,7 @@ from app.application.aws_integrations import HostedAwsIntegrationService
 from app.application.incidents import HostedIncidentService
 from app.application.actions import HostedActionProposalService
 from app.application.approvals import HostedApprovalService
+from app.application.execution_intents import HostedExecutionIntentService
 from app.application.workspaces import HostedWorkspaceService
 
 
@@ -28,6 +29,7 @@ def build_hosted_api(
     machine_actor_dependency=None,
     action_proposals: HostedActionProposalService | None = None,
     approvals: HostedApprovalService | None = None,
+    execution_intents: HostedExecutionIntentService | None = None,
 ) -> FastAPI:
     application = FastAPI(
         title="AIRA Hosted API",
@@ -40,6 +42,7 @@ def build_hosted_api(
             actor_dependency,
             action_proposals=action_proposals,
             approvals=approvals,
+            execution_intents=execution_intents,
         )
     )
     if bootstrap is not None:

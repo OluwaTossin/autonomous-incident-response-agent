@@ -1,8 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Ban, CheckCircle2, Clock3, LoaderCircle, Send, ShieldCheck, XCircle } from "lucide-react";
-import type { ActionProposal, Approval, BrowserError, TriageRun } from "@/lib/types";
+import { Ban, CheckCircle2, Clock3, FileLock2, LoaderCircle, Send, ShieldCheck, XCircle } from "lucide-react";
+import type { ActionProposal, Approval, BrowserError, ExecutionIntent, TriageRun } from "@/lib/types";
 
 const TERMINAL = new Set(["succeeded", "failed", "cancelled"]);
 
@@ -10,28 +10,35 @@ export function RunInvestigation({
   initialRun,
   initialProposals,
   initialApprovals,
+  initialIntents,
   organizationId,
   workspaceId,
   csrfToken,
   canOperate,
   canRequestApproval,
   canDecideApproval,
+  canPrepareIntent,
+  canCancelIntent,
   userId,
 }: {
   initialRun: TriageRun;
   initialProposals: ActionProposal[];
   initialApprovals: Record<string, Approval[]>;
+  initialIntents: Record<string, ExecutionIntent[]>;
   organizationId: string;
   workspaceId: string;
   csrfToken: string;
   canOperate: boolean;
   canRequestApproval: boolean;
   canDecideApproval: boolean;
+  canPrepareIntent: boolean;
+  canCancelIntent: boolean;
   userId: string;
 }) {
   const [run, setRun] = useState(initialRun);
   const [proposals, setProposals] = useState(initialProposals);
   const [approvals, setApprovals] = useState(initialApprovals);
+  const [intents, setIntents] = useState(initialIntents);
   const [error, setError] = useState<string | null>(null);
   const [feedbackSent, setFeedbackSent] = useState(false);
   const stopped = useRef(false);
@@ -73,6 +80,16 @@ export function RunInvestigation({
               }),
             );
             setApprovals(Object.fromEntries(histories) as Record<string, Approval[]>);
+            const intentHistories = await Promise.all(
+              nextProposals.map(async (proposal) => {
+                const response = await fetch(
+                  `/api/action-proposals/${encodeURIComponent(proposal.action_proposal_id)}/execution-intents?${scope}`,
+                  { cache: "no-store" },
+                );
+                return [proposal.action_proposal_id, response.ok ? await response.json() : []] as const;
+              }),
+            );
+            setIntents(Object.fromEntries(intentHistories) as Record<string, ExecutionIntent[]>);
           }
         } else if (!TERMINAL.has(next.state)) {
           delay = Math.min(Math.round(delay * 1.5), 8_000);
@@ -150,6 +167,34 @@ export function RunInvestigation({
     });
   }
 
+  async function prepareIntent(approvalId: string) {
+    const intent = await mutate<ExecutionIntent>(
+      `/api/approvals/${encodeURIComponent(approvalId)}/execution-intent`,
+      { organization_id: organizationId, workspace_id: workspaceId },
+      csrfToken,
+    );
+    mergeIntent(intent);
+  }
+
+  async function cancelIntent(intentId: string, reason: string) {
+    const intent = await mutate<ExecutionIntent>(
+      `/api/execution-intents/${encodeURIComponent(intentId)}/cancel`,
+      { organization_id: organizationId, workspace_id: workspaceId, reason },
+      csrfToken,
+    );
+    mergeIntent(intent);
+  }
+
+  function mergeIntent(intent: ExecutionIntent) {
+    setIntents((current) => {
+      const history = current[intent.action_proposal_id] || [];
+      const next = history.some((item) => item.execution_intent_id === intent.execution_intent_id)
+        ? history.map((item) => item.execution_intent_id === intent.execution_intent_id ? intent : item)
+        : [intent, ...history];
+      return { ...current, [intent.action_proposal_id]: next };
+    });
+  }
+
   return (
     <div className="investigation-stack">
       <section className="run-summary">
@@ -169,7 +214,7 @@ export function RunInvestigation({
       </section>
       {run.operational_context ? <OperationalContext run={run} /> : null}
       {run.result ? <Result run={run} /> : <section className="quiet-empty"><LoaderCircle className="spin" aria-hidden="true" size={18} />Triage output is not available yet.</section>}
-      {run.state === "succeeded" ? <ActionProposals proposals={proposals} approvals={approvals} userId={userId} canRequest={canRequestApproval} canDecide={canDecideApproval} onRequest={requestApproval} onDecision={decideApproval} /> : null}
+      {run.state === "succeeded" ? <ActionProposals proposals={proposals} approvals={approvals} intents={intents} userId={userId} canRequest={canRequestApproval} canDecide={canDecideApproval} canPrepareIntent={canPrepareIntent} canCancelIntent={canCancelIntent} onRequest={requestApproval} onDecision={decideApproval} onPrepareIntent={prepareIntent} onCancelIntent={cancelIntent} /> : null}
       {run.state === "succeeded" && canOperate ? (
         <section className="feedback-panel">
           <div className="section-title"><div><h2>Operator feedback</h2><p>Record whether the diagnosis and actions helped this investigation.</p></div><Send aria-hidden="true" size={19} /></div>
@@ -188,7 +233,7 @@ export function RunInvestigation({
   );
 }
 
-function ActionProposals({ proposals, approvals, userId, canRequest, canDecide, onRequest, onDecision }: { proposals: ActionProposal[]; approvals: Record<string, Approval[]>; userId: string; canRequest: boolean; canDecide: boolean; onRequest: (proposalId: string) => Promise<void>; onDecision: (approvalId: string, decision: "approve" | "reject" | "cancel", reason: string | null) => Promise<void> }) {
+function ActionProposals({ proposals, approvals, intents, userId, canRequest, canDecide, canPrepareIntent, canCancelIntent, onRequest, onDecision, onPrepareIntent, onCancelIntent }: { proposals: ActionProposal[]; approvals: Record<string, Approval[]>; intents: Record<string, ExecutionIntent[]>; userId: string; canRequest: boolean; canDecide: boolean; canPrepareIntent: boolean; canCancelIntent: boolean; onRequest: (proposalId: string) => Promise<void>; onDecision: (approvalId: string, decision: "approve" | "reject" | "cancel", reason: string | null) => Promise<void>; onPrepareIntent: (approvalId: string) => Promise<void>; onCancelIntent: (intentId: string, reason: string) => Promise<void> }) {
   return <section className="action-proposals" aria-labelledby="action-proposals-title">
     <div className="section-title"><div><h2 id="action-proposals-title">Proposed actions</h2><p>Policy-evaluated recommendations for operator review. No action has been executed.</p></div></div>
     {proposals.length ? <div className="proposal-list">{proposals.map((proposal) => <article key={proposal.action_proposal_id}>
@@ -203,12 +248,12 @@ function ActionProposals({ proposals, approvals, userId, canRequest, canDecide, 
         <div><dt>Source</dt><dd>Triage result v{proposal.source_result_version}</dd></div>
       </dl>
       <div className="proposal-parameters"><strong>Parameters</strong><pre>{JSON.stringify(proposal.parameters, null, 2)}</pre></div>
-      <ApprovalPanel proposal={proposal} history={approvals[proposal.action_proposal_id] || []} userId={userId} canRequest={canRequest} canDecide={canDecide} onRequest={onRequest} onDecision={onDecision} />
+      <ApprovalPanel proposal={proposal} history={approvals[proposal.action_proposal_id] || []} intents={intents[proposal.action_proposal_id] || []} userId={userId} canRequest={canRequest} canDecide={canDecide} canPrepareIntent={canPrepareIntent} canCancelIntent={canCancelIntent} onRequest={onRequest} onDecision={onDecision} onPrepareIntent={onPrepareIntent} onCancelIntent={onCancelIntent} />
     </article>)}</div> : <div className="quiet-empty">No controlled action proposals are available for this run.</div>}
   </section>;
 }
 
-function ApprovalPanel({ proposal, history, userId, canRequest, canDecide, onRequest, onDecision }: { proposal: ActionProposal; history: Approval[]; userId: string; canRequest: boolean; canDecide: boolean; onRequest: (proposalId: string) => Promise<void>; onDecision: (approvalId: string, decision: "approve" | "reject" | "cancel", reason: string | null) => Promise<void> }) {
+function ApprovalPanel({ proposal, history, intents, userId, canRequest, canDecide, canPrepareIntent, canCancelIntent, onRequest, onDecision, onPrepareIntent, onCancelIntent }: { proposal: ActionProposal; history: Approval[]; intents: ExecutionIntent[]; userId: string; canRequest: boolean; canDecide: boolean; canPrepareIntent: boolean; canCancelIntent: boolean; onRequest: (proposalId: string) => Promise<void>; onDecision: (approvalId: string, decision: "approve" | "reject" | "cancel", reason: string | null) => Promise<void>; onPrepareIntent: (approvalId: string) => Promise<void>; onCancelIntent: (intentId: string, reason: string) => Promise<void> }) {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -217,6 +262,7 @@ function ApprovalPanel({ proposal, history, userId, canRequest, canDecide, onReq
   const pending = current?.state === "requested";
   const canAct = pending && canDecide && current.requested_by_id !== userId;
   const canCancel = pending && (canDecide || current.requested_by_id === userId);
+  const intent = intents[0];
 
   async function act(operation: () => Promise<void>) {
     setBusy(true);
@@ -246,9 +292,32 @@ function ApprovalPanel({ proposal, history, userId, canRequest, canDecide, onReq
       {canAct ? <button type="button" className="primary-command" disabled={busy} onClick={() => void act(() => onDecision(current.approval_id, "approve", reason.trim() || null))}><CheckCircle2 aria-hidden="true" size={16} />Approve for future execution</button> : null}
       {canAct ? <button type="button" className="secondary-command danger" disabled={busy || !reason.trim()} onClick={() => void act(() => onDecision(current.approval_id, "reject", reason.trim()))}><XCircle aria-hidden="true" size={16} />Reject</button> : null}
       {canCancel ? <button type="button" className="icon-command" disabled={busy} onClick={() => void act(() => onDecision(current.approval_id, "cancel", reason.trim() || null))}><Ban aria-hidden="true" size={16} />Cancel request</button> : null}
+      {current?.state === "approved" && !intent && canPrepareIntent ? <button type="button" className="primary-command" disabled={busy} onClick={() => void act(() => onPrepareIntent(current.approval_id))}><FileLock2 aria-hidden="true" size={16} />Prepare execution intent</button> : null}
     </div>
     {history.length > 1 ? <details><summary>Approval history ({history.length})</summary><ol>{history.map((item) => <li key={item.approval_id}>{approvalLabel(item.state)} · {formatTime(item.updated_at)}</li>)}</ol></details> : null}
+    {intent ? <ExecutionIntentPanel intent={intent} canCancel={canCancelIntent} busy={busy} reason={reason} onCancel={() => act(() => onCancelIntent(intent.execution_intent_id, reason.trim()))} /> : null}
     {error ? <p className="form-error" role="alert">{error}</p> : null}
+  </div>;
+}
+
+function ExecutionIntentPanel({ intent, canCancel, busy, reason, onCancel }: { intent: ExecutionIntent; canCancel: boolean; busy: boolean; reason: string; onCancel: () => Promise<void> }) {
+  return <div className="execution-intent">
+    <div className="approval-heading"><div><FileLock2 aria-hidden="true" size={18} /><strong>Execution intent prepared</strong></div><span className={`approval-state approval-${intent.lifecycle_state}`}>{humanize(intent.lifecycle_state)}</span></div>
+    <p>Approved action frozen for controlled execution. Connector validation passed. <strong>Not executed.</strong></p>
+    <dl className="provenance">
+      <div><dt>Connector</dt><dd>{humanize(intent.connector_kind)}</dd></div>
+      <div><dt>Operation</dt><dd>{humanize(intent.operation_kind)}</dd></div>
+      <div><dt>Target</dt><dd>{intent.target.identifier}</dd></div>
+      <div><dt>Risk</dt><dd>{humanize(intent.risk_level)}</dd></div>
+      <div><dt>Reversibility</dt><dd>{humanize(intent.reversibility)}</dd></div>
+      <div><dt>Approved</dt><dd>{formatTime(intent.approved_at)}</dd></div>
+      <div><dt>Approved by</dt><dd>{intent.approved_by_id}</dd></div>
+      <div><dt>Deadline</dt><dd>{formatTime(intent.execute_before)}</dd></div>
+    </dl>
+    <div className="proposal-parameters"><strong>Frozen parameters</strong><pre>{JSON.stringify(intent.parameters, null, 2)}</pre></div>
+    <p className="intent-hash"><strong>Intent hash</strong><code>{intent.intent_hash}</code></p>
+    {intent.terminal_reason ? <p className="approval-reason"><strong>Terminal reason</strong>{intent.terminal_reason}</p> : null}
+    {intent.lifecycle_state === "prepared" && canCancel ? <button type="button" className="icon-command danger" disabled={busy || !reason.trim()} onClick={() => void onCancel()}><Ban aria-hidden="true" size={16} />Cancel intent</button> : null}
   </div>;
 }
 

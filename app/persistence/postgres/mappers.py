@@ -39,6 +39,12 @@ from app.domain.common import (
     WorkspaceScope,
 )
 from app.domain.events import AuditEvent, UsageEvent
+from app.domain.execution import (
+    ConnectorKind,
+    ExecutionIntent,
+    ExecutionIntentState,
+    OperationKind,
+)
 from app.domain.identifiers import (
     ActionId,
     ApprovalId,
@@ -47,6 +53,7 @@ from app.domain.identifiers import (
     DocumentId,
     DocumentVersionId,
     EvidenceId,
+    ExecutionIntentId,
     FeedbackId,
     IncidentId,
     IntegrationId,
@@ -118,6 +125,7 @@ from app.persistence.postgres.models import (
     DocumentRecord,
     DocumentVersionRecord,
     EvidenceRecord,
+    ExecutionIntentRecord,
     FeedbackRecord,
     IncidentRecord,
     IntegrationRecord,
@@ -1193,6 +1201,116 @@ def approval_from_record(record: ApprovalRecord) -> Approval:
         decided_by=decided_by,
         decided_at=record.decided_at,
         reason=record.reason,
+    )
+
+
+def execution_intent_to_record(intent: ExecutionIntent) -> ExecutionIntentRecord:
+    approved_by = _actor_columns(intent.approved_by)
+    return ExecutionIntentRecord(
+        id=_uuid(intent.id),
+        organization_id=_uuid(intent.scope.organization_id),
+        workspace_id=_uuid(intent.scope.workspace_id),
+        incident_id=_uuid(intent.incident.id),
+        triage_run_id=_uuid(intent.triage_run.id),
+        action_proposal_id=_uuid(intent.action.id),
+        approval_id=_uuid(intent.approval_id),
+        proposal_schema_version=intent.proposal_schema_version,
+        source_result_version=intent.source_result_version,
+        source_result_hash=intent.source_result_hash,
+        normalized_action_hash=intent.normalized_action_hash,
+        approval_state_version=intent.approval_state_version,
+        approval_binding_hash=intent.approval_binding_hash,
+        approved_by_kind=approved_by["actor_kind"],
+        approved_by_id=approved_by["actor_id"],
+        approved_by_system_name=approved_by["actor_system_name"],
+        approved_at=intent.approved_at,
+        connector_kind=intent.connector_kind.value,
+        operation_kind=intent.operation_kind.value,
+        provider=intent.provider,
+        target_type=intent.target.type.value,
+        target_identifier=intent.target.identifier,
+        target_provider=intent.target.provider,
+        target_provenance=intent.target.provenance.value,
+        integration_id=(
+            _uuid(intent.target.integration_id)
+            if intent.target.integration_id is not None
+            else None
+        ),
+        target_account_id=intent.target.account_id,
+        target_region=intent.target.region,
+        parameters=action_parameters_to_dict(intent.parameters),
+        request_schema_version=intent.request_schema_version,
+        risk_level=intent.risk_level.value,
+        reversibility=intent.reversibility.value,
+        policy_version=intent.policy_version,
+        lifecycle_state=intent.lifecycle_state.value,
+        intent_hash=intent.intent_hash,
+        execute_before=intent.execute_before,
+        state_version=intent.state_version,
+        created_at=intent.created_at,
+        updated_at=intent.updated_at,
+        terminal_at=intent.terminal_at,
+        terminal_reason=intent.terminal_reason,
+        **_actor_columns(intent.created_by),
+    )
+
+
+def execution_intent_from_record(record: ExecutionIntentRecord) -> ExecutionIntent:
+    scope = _scope(record.organization_id, record.workspace_id)
+    target = ActionTarget(
+        ActionTargetType(record.target_type),
+        record.target_identifier,
+        record.target_provider,
+        ActionTargetProvenance(record.target_provenance),
+        (
+            _identifier(IntegrationId, record.integration_id)
+            if record.integration_id is not None
+            else None
+        ),
+        record.target_account_id,
+        record.target_region,
+    )
+    return ExecutionIntent(
+        id=_identifier(ExecutionIntentId, record.id),
+        scope=scope,
+        incident=IncidentReference(_identifier(IncidentId, record.incident_id), scope),
+        triage_run=TriageRunReference(
+            _identifier(TriageRunId, record.triage_run_id), scope
+        ),
+        action=ActionReference(_identifier(ActionId, record.action_proposal_id), scope),
+        approval_id=_identifier(ApprovalId, record.approval_id),
+        proposal_schema_version=record.proposal_schema_version,
+        source_result_version=record.source_result_version,
+        source_result_hash=record.source_result_hash,
+        normalized_action_hash=record.normalized_action_hash,
+        approval_state_version=record.approval_state_version,
+        approval_binding_hash=record.approval_binding_hash,
+        approved_by=_actor(
+            record.approved_by_kind,
+            record.approved_by_id,
+            record.approved_by_system_name,
+        ),
+        approved_at=record.approved_at,
+        connector_kind=ConnectorKind(record.connector_kind),
+        operation_kind=OperationKind(record.operation_kind),
+        provider=record.provider,
+        target=target,
+        parameters=action_parameters_from_dict(
+            ActionProposalType(record.operation_kind), dict(record.parameters)
+        ),
+        request_schema_version=record.request_schema_version,
+        risk_level=ActionRiskLevel(record.risk_level),
+        reversibility=ActionReversibility(record.reversibility),
+        policy_version=record.policy_version,
+        lifecycle_state=ExecutionIntentState(record.lifecycle_state),
+        intent_hash=record.intent_hash,
+        created_by=_actor(record.actor_kind, record.actor_id, record.actor_system_name),
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+        execute_before=record.execute_before,
+        state_version=record.state_version,
+        terminal_at=record.terminal_at,
+        terminal_reason=record.terminal_reason,
     )
 
 

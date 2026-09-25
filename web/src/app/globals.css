@@ -260,6 +260,10 @@ textarea { resize: vertical; line-height: 1.45; }
 .approval-reason-input { display: grid; gap: 6px; color: #34403b; font-size: 12px; font-weight: 700; }
 .approval-controls { flex-wrap: wrap; }
 .approval-panel details { color: var(--muted); font-size: 12px; }
+.execution-intent { display: grid; gap: 11px; margin-top: 4px; padding: 14px; border: 1px solid var(--line-strong); background: var(--surface); }
+.execution-intent > p { margin: 0; }
+.intent-hash { display: grid; gap: 5px; min-width: 0; }
+.intent-hash code { overflow-wrap: anywhere; color: var(--muted); font-size: 11px; }
 .operational-context { padding: 18px 20px; }
 .operational-context h2, .operational-context h3 { margin: 0; font-size: 17px; }
 .context-status { padding: 4px 8px; border: 1px solid var(--line); border-radius: 5px; font-size: 12px; text-transform: capitalize; }

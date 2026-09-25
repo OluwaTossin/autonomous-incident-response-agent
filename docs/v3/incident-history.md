@@ -36,6 +36,10 @@ V3.20 lets authorized humans request, approve, reject, or cancel a proposal-boun
 and inspect durable approval history. It never displays an Execute control or implies that
 a proposed or approved action occurred. See [`action-proposals.md`](action-proposals.md) and
 [`approvals.md`](approvals.md).
+V3.21 adds inspection and authorized preparation/cancellation of an immutable execution
+intent. The panel shows its exact target, parameters, approval attribution, connector,
+operation, deadline, and hash, and explicitly says it has not executed. See
+[`execution-intents.md`](execution-intents.md).
 
 Evidence preserves ordered source/reason text and displays origin, document ID, document
 version ID, knowledge-index version ID, chunk index, and score where available. These are

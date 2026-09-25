@@ -107,7 +107,8 @@ claims that a fix was applied.
 
 V3.21 may consume a still-valid approval to create a separate immutable execution intent,
 after revalidating proposal binding, policy, target authority, actor authorization, and
-expiry. Provider connectors, execution retries/outcomes, rollback, and all infrastructure
-mutation remain V3.21 or later. Autonomous approval and autonomous remediation remain a
-separate Version 4 boundary. Version 2 synchronous triage, CLI, Gradio, recommended actions,
-and self-hosted behavior are unchanged.
+bounded approval age. It validates a deterministic connector mapping but does not execute
+it. Provider mutation, execution jobs, retries/outcomes, and rollback remain Version 4
+work. See [`execution-intents.md`](execution-intents.md). Autonomous approval and
+autonomous remediation remain separate boundaries. Version 2 synchronous triage, CLI,
+Gradio, recommended actions, and self-hosted behavior are unchanged.

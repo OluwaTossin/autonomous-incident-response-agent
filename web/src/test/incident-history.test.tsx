@@ -2,7 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { RunInvestigation } from "@/components/run-investigation";
-import type { ActionProposal, Approval, TriageRun } from "@/lib/types";
+import type { ActionProposal, Approval, ExecutionIntent, TriageRun } from "@/lib/types";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 
@@ -130,10 +130,56 @@ const pendingApproval: Approval = {
   updated_at: "2026-09-25T12:01:00Z",
 };
 
+const approvedApproval: Approval = {
+  ...pendingApproval,
+  state: "approved",
+  state_version: 2,
+  decided_by_type: "human",
+  decided_by_id: "admin-1",
+  decided_at: "2026-09-25T12:02:00Z",
+  updated_at: "2026-09-25T12:02:00Z",
+};
+
+const intent: ExecutionIntent = {
+  execution_intent_id: "intent-1",
+  action_proposal_id: "proposal-1",
+  approval_id: "approval-1",
+  incident_id: "incident-1",
+  triage_run_id: "run-1",
+  lifecycle_state: "prepared",
+  connector_kind: "internal",
+  operation_kind: "acknowledge_incident",
+  provider: "aira",
+  target: eligibleProposal.target,
+  parameters: { schema_version: 1 },
+  request_schema_version: 1,
+  proposal_schema_version: 1,
+  source_result_version: 1,
+  source_result_hash: "a".repeat(64),
+  normalized_action_hash: "b".repeat(64),
+  approval_state_version: 2,
+  approval_binding_hash: "c".repeat(64),
+  intent_hash: "d".repeat(64),
+  risk_level: "low",
+  reversibility: "reversible",
+  policy_version: 1,
+  approved_by_type: "human",
+  approved_by_id: "admin-1",
+  approved_at: "2026-09-25T12:02:00Z",
+  created_by_type: "human",
+  created_at: "2026-09-25T12:03:00Z",
+  updated_at: "2026-09-25T12:03:00Z",
+  execute_before: "2026-09-25T12:33:00Z",
+  terminal_at: null,
+  terminal_reason: null,
+  validation_status: "passed",
+  execution_status: "not_executed",
+};
+
 describe("incident investigation", () => {
   it("renders result, attempt history, provenance, and feedback controls", () => {
     const html = renderToStaticMarkup(
-      <RunInvestigation initialRun={run} initialProposals={proposals} initialApprovals={{}} organizationId="org-1" workspaceId="workspace-1" csrfToken="csrf" canOperate canRequestApproval canDecideApproval userId="admin-1" />,
+      <RunInvestigation initialRun={run} initialProposals={proposals} initialApprovals={{}} initialIntents={{}} organizationId="org-1" workspaceId="workspace-1" csrfToken="csrf" canOperate canRequestApproval canDecideApproval canPrepareIntent canCancelIntent userId="admin-1" />,
     );
     expect(html).toContain("2 / 3");
     expect(html).toContain("Dependency timeout");
@@ -153,7 +199,7 @@ describe("incident investigation", () => {
 
   it("does not expose mutation controls to read-only viewers", () => {
     const html = renderToStaticMarkup(
-      <RunInvestigation initialRun={run} initialProposals={proposals} initialApprovals={{}} organizationId="org-1" workspaceId="workspace-1" csrfToken="csrf" canOperate={false} canRequestApproval={false} canDecideApproval={false} userId="viewer-1" />,
+      <RunInvestigation initialRun={run} initialProposals={proposals} initialApprovals={{}} initialIntents={{}} organizationId="org-1" workspaceId="workspace-1" csrfToken="csrf" canOperate={false} canRequestApproval={false} canDecideApproval={false} canPrepareIntent={false} canCancelIntent={false} userId="viewer-1" />,
     );
     expect(html).not.toContain("Operator feedback");
     expect(html).not.toContain("Cancel run");
@@ -161,7 +207,7 @@ describe("incident investigation", () => {
 
   it("shows an exact pending approval decision without execution controls", () => {
     const html = renderToStaticMarkup(
-      <RunInvestigation initialRun={run} initialProposals={[eligibleProposal]} initialApprovals={{ "proposal-1": [pendingApproval] }} organizationId="org-1" workspaceId="workspace-1" csrfToken="csrf" canOperate canRequestApproval canDecideApproval userId="admin-1" />,
+      <RunInvestigation initialRun={run} initialProposals={[eligibleProposal]} initialApprovals={{ "proposal-1": [pendingApproval] }} initialIntents={{}} organizationId="org-1" workspaceId="workspace-1" csrfToken="csrf" canOperate canRequestApproval canDecideApproval canPrepareIntent canCancelIntent userId="admin-1" />,
     );
     expect(html).toContain("Approval requested");
     expect(html).toContain("Approve for future execution");
@@ -180,9 +226,25 @@ describe("incident investigation", () => {
       decision_reason: state === "rejected" ? "Target changed" : null,
     };
     const html = renderToStaticMarkup(
-      <RunInvestigation initialRun={run} initialProposals={[eligibleProposal]} initialApprovals={{ "proposal-1": [approval] }} organizationId="org-1" workspaceId="workspace-1" csrfToken="csrf" canOperate canRequestApproval canDecideApproval userId="admin-1" />,
+      <RunInvestigation initialRun={run} initialProposals={[eligibleProposal]} initialApprovals={{ "proposal-1": [approval] }} initialIntents={{}} organizationId="org-1" workspaceId="workspace-1" csrfToken="csrf" canOperate canRequestApproval canDecideApproval canPrepareIntent canCancelIntent userId="admin-1" />,
     );
     expect(html).toContain({ approved: "Approved for future execution", rejected: "Rejected", expired: "Expired", cancelled: "Cancelled" }[state]);
     expect(html).not.toContain(">Execute<");
+  });
+
+  it("shows the exact frozen intent and never offers execution", () => {
+    const html = renderToStaticMarkup(
+      <RunInvestigation initialRun={run} initialProposals={[eligibleProposal]} initialApprovals={{ "proposal-1": [approvedApproval] }} initialIntents={{ "proposal-1": [intent] }} organizationId="org-1" workspaceId="workspace-1" csrfToken="csrf" canOperate canRequestApproval canDecideApproval canPrepareIntent canCancelIntent userId="admin-1" />,
+    );
+    expect(html).toContain("Execution intent prepared");
+    expect(html).toContain("Approved action frozen for controlled execution");
+    expect(html).toContain("Connector validation passed");
+    expect(html).toContain("Not executed");
+    expect(html).toContain("d".repeat(64));
+    expect(html).toContain("Cancel intent");
+    expect(html).not.toMatch(/>Execute</);
+    expect(html).not.toMatch(/>Run</);
+    expect(html).not.toMatch(/>Apply</);
+    expect(html).not.toMatch(/>Remediate</);
   });
 });

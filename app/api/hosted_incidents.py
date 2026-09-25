@@ -7,7 +7,7 @@ import json
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.application.incidents import (
@@ -33,11 +33,18 @@ from app.application.approvals import (
     ApprovalNotFound,
     HostedApprovalService,
 )
+from app.application.execution_intents import (
+    ExecutionIntentConflict,
+    ExecutionIntentNotFound,
+    ExecutionIntentValidationError,
+    HostedExecutionIntentService,
+)
 from app.auth.context import ActorContext
 from app.authorization.service import AuthorizationDenied
 from app.domain.identifiers import (
     ActionId,
     ApprovalId,
+    ExecutionIntentId,
     IncidentId,
     OrganizationId,
     TriageRunId,
@@ -45,6 +52,7 @@ from app.domain.identifiers import (
 )
 from app.domain.incidents import Incident, IncidentState, TriageRun, TriageRunState
 from app.domain.actions import ActionProposal, Approval, action_parameters_to_dict
+from app.domain.execution import ExecutionIntent
 from app.models.triage import TriageOutput
 
 
@@ -294,11 +302,58 @@ class ApprovalResponse(BaseModel):
     updated_at: datetime
 
 
+class ExecutionIntentCancelRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class ExecutionIntentPrepareRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class ExecutionIntentResponse(BaseModel):
+    execution_intent_id: str
+    action_proposal_id: str
+    approval_id: str
+    incident_id: str
+    triage_run_id: str
+    lifecycle_state: str
+    connector_kind: str
+    operation_kind: str
+    provider: str
+    target: ActionTargetResponse
+    parameters: dict[str, Any]
+    request_schema_version: int
+    proposal_schema_version: int
+    source_result_version: int
+    source_result_hash: str
+    normalized_action_hash: str
+    approval_state_version: int
+    approval_binding_hash: str
+    intent_hash: str
+    risk_level: str
+    reversibility: str
+    policy_version: int
+    approved_by_type: str
+    approved_by_id: str
+    approved_at: datetime
+    created_by_type: str
+    created_at: datetime
+    updated_at: datetime
+    execute_before: datetime
+    terminal_at: datetime | None
+    terminal_reason: str | None
+    validation_status: Literal["passed"] = "passed"
+    execution_status: Literal["not_executed"] = "not_executed"
+
+
 def build_hosted_incident_router(
     service: HostedIncidentService,
     actor_dependency,
     action_proposals: HostedActionProposalService | None = None,
     approvals: HostedApprovalService | None = None,
+    execution_intents: HostedExecutionIntentService | None = None,
 ) -> APIRouter:
     router = APIRouter(
         prefix="/v3/organizations/{organization_id}/workspaces/{workspace_id}",
@@ -767,6 +822,97 @@ def build_hosted_incident_router(
             except Exception as exc:
                 raise _http_error(exc) from exc
 
+    if execution_intents is not None:
+
+        @router.post(
+            "/approvals/{approval_id}/execution-intent",
+            response_model=ExecutionIntentResponse,
+        )
+        def prepare_execution_intent(
+            organization_id: str,
+            workspace_id: str,
+            approval_id: str,
+            body: ExecutionIntentPrepareRequest = Body(
+                default_factory=ExecutionIntentPrepareRequest
+            ),
+            actor: ActorContext = Depends(actor_dependency),
+        ) -> ExecutionIntentResponse:
+            try:
+                intent = execution_intents.prepare(
+                    actor,
+                    OrganizationId(organization_id),
+                    WorkspaceId(workspace_id),
+                    ApprovalId(approval_id),
+                )
+                return _execution_intent_response(intent)
+            except Exception as exc:
+                raise _http_error(exc) from exc
+
+        @router.get(
+            "/execution-intents/{intent_id}",
+            response_model=ExecutionIntentResponse,
+        )
+        def get_execution_intent(
+            organization_id: str,
+            workspace_id: str,
+            intent_id: str,
+            actor: ActorContext = Depends(actor_dependency),
+        ) -> ExecutionIntentResponse:
+            try:
+                intent = execution_intents.get(
+                    actor,
+                    OrganizationId(organization_id),
+                    WorkspaceId(workspace_id),
+                    ExecutionIntentId(intent_id),
+                )
+                return _execution_intent_response(intent)
+            except Exception as exc:
+                raise _http_error(exc) from exc
+
+        @router.get(
+            "/action-proposals/{proposal_id}/execution-intents",
+            response_model=list[ExecutionIntentResponse],
+        )
+        def list_execution_intents(
+            organization_id: str,
+            workspace_id: str,
+            proposal_id: str,
+            actor: ActorContext = Depends(actor_dependency),
+        ) -> list[ExecutionIntentResponse]:
+            try:
+                intents = execution_intents.list_for_proposal(
+                    actor,
+                    OrganizationId(organization_id),
+                    WorkspaceId(workspace_id),
+                    ActionId(proposal_id),
+                )
+                return [_execution_intent_response(intent) for intent in intents]
+            except Exception as exc:
+                raise _http_error(exc) from exc
+
+        @router.post(
+            "/execution-intents/{intent_id}/cancel",
+            response_model=ExecutionIntentResponse,
+        )
+        def cancel_execution_intent(
+            organization_id: str,
+            workspace_id: str,
+            intent_id: str,
+            body: ExecutionIntentCancelRequest,
+            actor: ActorContext = Depends(actor_dependency),
+        ) -> ExecutionIntentResponse:
+            try:
+                intent = execution_intents.cancel(
+                    actor,
+                    OrganizationId(organization_id),
+                    WorkspaceId(workspace_id),
+                    ExecutionIntentId(intent_id),
+                    reason=body.reason,
+                )
+                return _execution_intent_response(intent)
+            except Exception as exc:
+                raise _http_error(exc) from exc
+
     return router
 
 
@@ -974,6 +1120,54 @@ def _approval_response(approval: Approval) -> ApprovalResponse:
     )
 
 
+def _execution_intent_response(intent: ExecutionIntent) -> ExecutionIntentResponse:
+    return ExecutionIntentResponse(
+        execution_intent_id=str(intent.id),
+        action_proposal_id=str(intent.action.id),
+        approval_id=str(intent.approval_id),
+        incident_id=str(intent.incident.id),
+        triage_run_id=str(intent.triage_run.id),
+        lifecycle_state=intent.lifecycle_state.value,
+        connector_kind=intent.connector_kind.value,
+        operation_kind=intent.operation_kind.value,
+        provider=intent.provider,
+        target=ActionTargetResponse(
+            type=intent.target.type.value,
+            identifier=intent.target.identifier,
+            provider=intent.target.provider,
+            provenance=intent.target.provenance.value,
+            integration_id=(
+                str(intent.target.integration_id)
+                if intent.target.integration_id is not None
+                else None
+            ),
+            account_id=intent.target.account_id,
+            region=intent.target.region,
+        ),
+        parameters=action_parameters_to_dict(intent.parameters),
+        request_schema_version=intent.request_schema_version,
+        proposal_schema_version=intent.proposal_schema_version,
+        source_result_version=intent.source_result_version,
+        source_result_hash=intent.source_result_hash,
+        normalized_action_hash=intent.normalized_action_hash,
+        approval_state_version=intent.approval_state_version,
+        approval_binding_hash=intent.approval_binding_hash,
+        intent_hash=intent.intent_hash,
+        risk_level=intent.risk_level.value,
+        reversibility=intent.reversibility.value,
+        policy_version=intent.policy_version,
+        approved_by_type=intent.approved_by.kind.value,
+        approved_by_id=str(intent.approved_by.actor_id),
+        approved_at=intent.approved_at,
+        created_by_type=intent.created_by.kind.value,
+        created_at=intent.created_at,
+        updated_at=intent.updated_at,
+        execute_before=intent.execute_before,
+        terminal_at=intent.terminal_at,
+        terminal_reason=intent.terminal_reason,
+    )
+
+
 def _triage_list_item(item: TriageHistoryItem) -> TriageRunListItem:
     run = item.run
     result = run.result
@@ -1042,14 +1236,30 @@ def _http_error(exc: Exception) -> HTTPException:
             HostedTriageNotFound,
             ActionProposalNotFound,
             ApprovalNotFound,
+            ExecutionIntentNotFound,
         ),
     ):
         return HTTPException(404, detail={"code": "not_found", "message": str(exc)})
     if isinstance(
-        exc, (HostedIncidentConflict, HostedTriageConflict, ApprovalConflict)
+        exc,
+        (
+            HostedIncidentConflict,
+            HostedTriageConflict,
+            ApprovalConflict,
+            ExecutionIntentConflict,
+        ),
     ):
         return HTTPException(409, detail={"code": "conflict", "message": str(exc)})
-    if isinstance(exc, (ValueError, TypeError, ApprovalEligibilityError)):
+    if isinstance(exc, ExecutionIntentValidationError):
+        return HTTPException(422, detail={"code": exc.code.value, "message": str(exc)})
+    if isinstance(
+        exc,
+        (
+            ValueError,
+            TypeError,
+            ApprovalEligibilityError,
+        ),
+    ):
         return HTTPException(
             422, detail={"code": "invalid_request", "message": str(exc)}
         )

@@ -1707,6 +1707,9 @@ class ApprovalRecord(Base, WorkspaceTenantColumns):
             name="fk_approvals_workspace_scope",
             ondelete="RESTRICT",
         ),
+        UniqueConstraint(
+            "organization_id", "workspace_id", "id", name="uq_approvals_scope_id"
+        ),
         ForeignKeyConstraint(
             ["organization_id", "workspace_id", "action_id"],
             [
@@ -1823,6 +1826,196 @@ class ApprovalRecord(Base, WorkspaceTenantColumns):
         DateTime(timezone=True), nullable=True
     )
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ExecutionIntentRecord(
+    Base, WorkspaceTenantColumns, TimestampColumns, ActorColumns
+):
+    __tablename__ = "execution_intents"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "workspace_id"],
+            ["workspaces.organization_id", "workspaces.id"],
+            name="fk_execution_intents_workspace_scope",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "workspace_id", "incident_id"],
+            ["incidents.organization_id", "incidents.workspace_id", "incidents.id"],
+            name="fk_execution_intents_incident_scope",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "workspace_id", "triage_run_id"],
+            [
+                "triage_runs.organization_id",
+                "triage_runs.workspace_id",
+                "triage_runs.id",
+            ],
+            name="fk_execution_intents_triage_scope",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "workspace_id", "action_proposal_id"],
+            [
+                "action_proposals.organization_id",
+                "action_proposals.workspace_id",
+                "action_proposals.id",
+            ],
+            name="fk_execution_intents_action_scope",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "workspace_id", "approval_id"],
+            ["approvals.organization_id", "approvals.workspace_id", "approvals.id"],
+            name="fk_execution_intents_approval_scope",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "workspace_id", "integration_id"],
+            [
+                "aws_integrations.organization_id",
+                "aws_integrations.workspace_id",
+                "aws_integrations.id",
+            ],
+            name="fk_execution_intents_integration_scope",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "workspace_id",
+            "approval_id",
+            name="uq_execution_intents_approval",
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "workspace_id",
+            "intent_hash",
+            name="uq_execution_intents_hash",
+        ),
+        CheckConstraint(
+            "connector_kind = 'internal' AND operation_kind = 'acknowledge_incident' "
+            "AND provider = 'aira'",
+            name="ck_execution_intents_allowlist",
+        ),
+        CheckConstraint(
+            "target_type = 'incident' AND target_provider = 'aira' "
+            "AND target_provenance = 'incident' AND integration_id IS NULL "
+            "AND target_account_id IS NULL AND target_region IS NULL "
+            "AND target_identifier = incident_id::text",
+            name="ck_execution_intents_target_authority",
+        ),
+        CheckConstraint(
+            "parameters = '{\"schema_version\": 1}'::jsonb",
+            name="ck_execution_intents_parameters",
+        ),
+        CheckConstraint(
+            "proposal_schema_version = 1 AND source_result_version > 0 "
+            "AND approval_state_version >= 2 AND request_schema_version = 1 "
+            "AND policy_version = 1 AND state_version > 0",
+            name="ck_execution_intents_versions",
+        ),
+        CheckConstraint(
+            "source_result_hash ~ '^[0-9a-f]{64}$' "
+            "AND normalized_action_hash ~ '^[0-9a-f]{64}$' "
+            "AND approval_binding_hash ~ '^[0-9a-f]{64}$' "
+            "AND intent_hash ~ '^[0-9a-f]{64}$'",
+            name="ck_execution_intents_hashes",
+        ),
+        CheckConstraint(
+            "approved_by_kind = 'human' AND approved_by_id IS NOT NULL "
+            "AND approved_by_system_name IS NULL",
+            name="ck_execution_intents_human_approver",
+        ),
+        CheckConstraint(_ACTOR_CHECK, name="ck_execution_intents_actor_kind"),
+        CheckConstraint(
+            "risk_level IN ('low', 'medium', 'high', 'critical')",
+            name="ck_execution_intents_risk",
+        ),
+        CheckConstraint(
+            "reversibility IN ('reversible', 'partially_reversible', 'unknown')",
+            name="ck_execution_intents_reversibility",
+        ),
+        CheckConstraint(
+            "lifecycle_state IN ('prepared', 'invalidated', 'cancelled')",
+            name="ck_execution_intents_state",
+        ),
+        CheckConstraint(
+            "(lifecycle_state = 'prepared' AND terminal_at IS NULL AND terminal_reason IS NULL) "
+            "OR (lifecycle_state IN ('invalidated', 'cancelled') "
+            "AND terminal_at IS NOT NULL AND length(btrim(terminal_reason)) BETWEEN 1 AND 500)",
+            name="ck_execution_intents_terminal_shape",
+        ),
+        CheckConstraint(
+            "approved_at <= created_at AND created_at <= updated_at "
+            "AND execute_before > created_at",
+            name="ck_execution_intents_times",
+        ),
+        Index(
+            "ix_execution_intents_action_created",
+            "organization_id",
+            "workspace_id",
+            "action_proposal_id",
+            "created_at",
+        ),
+        Index(
+            "ix_execution_intents_scope_state",
+            "organization_id",
+            "workspace_id",
+            "lifecycle_state",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    incident_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    triage_run_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    action_proposal_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), nullable=False
+    )
+    approval_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    proposal_schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_result_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_result_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    normalized_action_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    approval_state_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    approval_binding_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    approved_by_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    approved_by_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True
+    )
+    approved_by_system_name: Mapped[str | None] = mapped_column(
+        String(120), nullable=True
+    )
+    approved_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    connector_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    operation_kind: Mapped[str] = mapped_column(String(80), nullable=False)
+    provider: Mapped[str] = mapped_column(String(80), nullable=False)
+    target_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    target_identifier: Mapped[str] = mapped_column(Text, nullable=False)
+    target_provider: Mapped[str] = mapped_column(String(80), nullable=False)
+    target_provenance: Mapped[str] = mapped_column(String(40), nullable=False)
+    integration_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True
+    )
+    target_account_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    target_region: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    parameters: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    request_schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    risk_level: Mapped[str] = mapped_column(String(32), nullable=False)
+    reversibility: Mapped[str] = mapped_column(String(32), nullable=False)
+    policy_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    lifecycle_state: Mapped[str] = mapped_column(String(32), nullable=False)
+    intent_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    execute_before: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    state_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    terminal_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    terminal_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
 class UsageEventRecord(Base, WorkspaceTenantColumns, CorrelationColumns):

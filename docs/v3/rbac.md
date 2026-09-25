@@ -40,6 +40,9 @@ becomes the first active, unrestricted Owner. It is not inherited from an existi
 | `approval.read` | Yes | Yes | Yes | Yes |
 | `approval.request` | Yes | Yes | Yes | No |
 | `approval.decide` | Yes | Yes | No | No |
+| `execution_intent.read` | Yes | Yes | Yes | Yes |
+| `execution_intent.prepare` | Yes | Yes | No | No |
+| `execution_intent.cancel` | Yes | Yes | No | No |
 | `usage.read` | Yes | Yes | No | No |
 | `audit.read` | Yes | Yes | Yes | No |
 | `service_account.read` | Yes | Yes | No | No |
@@ -56,6 +59,9 @@ service-account grant cannot use this vocabulary entry to forge executable inten
 Operator review requests and `approval.decide` for Owner/Admin decisions. Both operations
 require a human `ActorContext`, and the requester cannot approve or reject their own request.
 See [`approvals.md`](approvals.md). This does not change the no-arbitrary-payload rule.
+V3.21 gives every incident reader intent inspection, while only Owner/Admin may prepare or
+cancel an intent. Service accounts receive none of these permissions by default. See
+[`execution-intents.md`](execution-intents.md).
 
 ## Membership Lifecycle
 

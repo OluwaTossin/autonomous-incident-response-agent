@@ -3,6 +3,7 @@ import "server-only";
 import type {
   ActionProposal,
   Approval,
+  ExecutionIntent,
   AwsIntegration,
   AwsIntegrationCreate,
   AwsIntegrationPage,
@@ -151,6 +152,10 @@ export interface HostedApi {
   approveApproval(accessToken: string, organizationId: string, workspaceId: string, approvalId: string, reason: string | null): Promise<Approval>;
   rejectApproval(accessToken: string, organizationId: string, workspaceId: string, approvalId: string, reason: string): Promise<Approval>;
   cancelApproval(accessToken: string, organizationId: string, workspaceId: string, approvalId: string, reason: string | null): Promise<Approval>;
+  listExecutionIntents(accessToken: string, organizationId: string, workspaceId: string, proposalId: string): Promise<ExecutionIntent[]>;
+  getExecutionIntent(accessToken: string, organizationId: string, workspaceId: string, intentId: string): Promise<ExecutionIntent>;
+  prepareExecutionIntent(accessToken: string, organizationId: string, workspaceId: string, approvalId: string): Promise<ExecutionIntent>;
+  cancelExecutionIntent(accessToken: string, organizationId: string, workspaceId: string, intentId: string, reason: string): Promise<ExecutionIntent>;
   cancelTriage(
     accessToken: string,
     organizationId: string,
@@ -452,6 +457,22 @@ export class HostedApiClient implements HostedApi {
 
   cancelApproval(accessToken: string, organizationId: string, workspaceId: string, approvalId: string, reason: string | null): Promise<Approval> {
     return this.request(this.scope(organizationId, workspaceId, `/approvals/${encodeURIComponent(approvalId)}/cancel`), accessToken, { method: "POST", body: JSON.stringify({ reason }) });
+  }
+
+  listExecutionIntents(accessToken: string, organizationId: string, workspaceId: string, proposalId: string): Promise<ExecutionIntent[]> {
+    return this.request(this.scope(organizationId, workspaceId, `/action-proposals/${encodeURIComponent(proposalId)}/execution-intents`), accessToken);
+  }
+
+  getExecutionIntent(accessToken: string, organizationId: string, workspaceId: string, intentId: string): Promise<ExecutionIntent> {
+    return this.request(this.scope(organizationId, workspaceId, `/execution-intents/${encodeURIComponent(intentId)}`), accessToken);
+  }
+
+  prepareExecutionIntent(accessToken: string, organizationId: string, workspaceId: string, approvalId: string): Promise<ExecutionIntent> {
+    return this.request(this.scope(organizationId, workspaceId, `/approvals/${encodeURIComponent(approvalId)}/execution-intent`), accessToken, { method: "POST", body: "{}" });
+  }
+
+  cancelExecutionIntent(accessToken: string, organizationId: string, workspaceId: string, intentId: string, reason: string): Promise<ExecutionIntent> {
+    return this.request(this.scope(organizationId, workspaceId, `/execution-intents/${encodeURIComponent(intentId)}/cancel`), accessToken, { method: "POST", body: JSON.stringify({ reason }) });
   }
 
   cancelTriage(

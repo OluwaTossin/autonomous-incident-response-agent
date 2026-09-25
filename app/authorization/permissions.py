@@ -38,6 +38,9 @@ class Permission(StrEnum):
     APPROVAL_READ = "approval.read"
     APPROVAL_REQUEST = "approval.request"
     APPROVAL_DECIDE = "approval.decide"
+    EXECUTION_INTENT_READ = "execution_intent.read"
+    EXECUTION_INTENT_PREPARE = "execution_intent.prepare"
+    EXECUTION_INTENT_CANCEL = "execution_intent.cancel"
     USAGE_READ = "usage.read"
     AUDIT_READ = "audit.read"
     SERVICE_ACCOUNT_READ = "service_account.read"
@@ -54,6 +57,7 @@ _VIEWER = frozenset(
         Permission.INTEGRATION_READ,
         Permission.ACTION_READ,
         Permission.APPROVAL_READ,
+        Permission.EXECUTION_INTENT_READ,
     }
 )
 _OPERATOR = _VIEWER | {
@@ -108,6 +112,9 @@ WORKSPACE_SCOPED_PERMISSIONS = frozenset(
         Permission.APPROVAL_READ,
         Permission.APPROVAL_REQUEST,
         Permission.APPROVAL_DECIDE,
+        Permission.EXECUTION_INTENT_READ,
+        Permission.EXECUTION_INTENT_PREPARE,
+        Permission.EXECUTION_INTENT_CANCEL,
     }
 )
 
