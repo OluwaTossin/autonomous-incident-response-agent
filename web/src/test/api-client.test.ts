@@ -68,4 +68,26 @@ describe("hosted server API client", () => {
       ["http://api.internal/v3/organizations/org%20one/workspaces/workspace%20one/triage-runs/run%20one/feedback", "POST"],
     ]);
   });
+
+  it("uses tenant-scoped AWS integration routes", async () => {
+    const fetchMock = vi.fn(async (url: string, init: RequestInit) => Response.json({ url, method: init.method || "GET" }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new HostedApiClient("http://api.internal", 1_000);
+    await client.listAwsIntegrations("token", "org", "workspace");
+    await client.getAwsIntegration("token", "org", "workspace", "integration");
+    await client.createAwsIntegration("token", "org", "workspace", { display_name: "Production", aws_account_id: "123456789012", enabled_regions: ["eu-west-2"] });
+    await client.updateAwsIntegration("token", "org", "workspace", "integration", { expected_version: 1, role_arn: "arn:aws:iam::123456789012:role/aira" });
+    await client.getAwsTrustInstructions("token", "org", "workspace", "integration");
+    await client.verifyAwsIntegration("token", "org", "workspace", "integration", 2);
+    await client.disableAwsIntegration("token", "org", "workspace", "integration", 3);
+    expect(fetchMock.mock.calls.map(([url, init]) => [url, init.method || "GET"])).toEqual([
+      ["http://api.internal/v3/organizations/org/workspaces/workspace/integrations/aws?limit=100", "GET"],
+      ["http://api.internal/v3/organizations/org/workspaces/workspace/integrations/aws/integration", "GET"],
+      ["http://api.internal/v3/organizations/org/workspaces/workspace/integrations/aws", "POST"],
+      ["http://api.internal/v3/organizations/org/workspaces/workspace/integrations/aws/integration", "PATCH"],
+      ["http://api.internal/v3/organizations/org/workspaces/workspace/integrations/aws/integration/trust-instructions", "GET"],
+      ["http://api.internal/v3/organizations/org/workspaces/workspace/integrations/aws/integration/verify", "POST"],
+      ["http://api.internal/v3/organizations/org/workspaces/workspace/integrations/aws/integration/disable", "POST"],
+    ]);
+  });
 });

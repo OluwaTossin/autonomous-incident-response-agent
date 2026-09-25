@@ -155,6 +155,11 @@ This record translates the Version 3 product boundary into implementation constr
 
 **Decision:** CloudWatch is the first automated source integration. The preferred first intake is `CloudWatch Alarm -> EventBridge -> authenticated cross-account AIRA EventBridge ingestion boundary`. Alert delivery remains separate from context collection. Context collection uses STS `AssumeRole` into a customer-managed, least-privilege AIRA read role. Long-lived customer AWS access keys are prohibited.
 
+V3.16 implements the onboarding and verification half of this decision using a
+workspace-scoped AWS integration, AIRA-generated ExternalId, deployment-configured trusted
+principal, short-lived STS session, caller-identity check, and bounded regional capability
+probes. EventBridge delivery and operational context queries remain V3.17/V3.18.
+
 **Context:** Current CloudWatch code observes AIRA's own ECS/ALB behavior. It does not onboard customer accounts, ingest alarms, or collect customer telemetry.
 
 **Chosen approach:** Authenticate the cross-account EventBridge delivery, map it to an integration/workspace, normalize and deduplicate the alarm, then enqueue context collection and triage. Store customer role ARN, external ID, allowed regions, log groups, and metric scope as integration metadata. Use STS `AssumeRole` only for bounded context reads; do not perform unrestricted account discovery.
@@ -167,7 +172,7 @@ This record translates the Version 3 product boundary into implementation constr
 
 **Consequences for the current repository:** Add integration domain records, onboarding APIs/UI, provider adapters, inbound verification, normalized alert schema, collectors, and integration health. Existing Terraform monitoring remains AIRA platform observability, not customer integration infrastructure.
 
-**Follow-up work:** V3.16 validates exact multi-region EventBridge mechanics and publishes customer-side EventBridge/IAM templates, minimum AssumeRole permissions, external-ID rotation, supported alarm types, context query limits, redaction, and integration diagnostics. Multi-region mechanics are a deferred implementation decision, not an architecture blocker.
+**Follow-up work:** V3.17 validates exact multi-region EventBridge mechanics, supported alarm types, and customer-side delivery templates. V3.18 owns context query limits and redaction. V3.22 provisions the deployed AIRA workload principal. External-ID rotation and deeper integration diagnostics remain deferred onboarding enhancements; these are implementation decisions, not architecture blockers.
 
 ## J. Human approval
 

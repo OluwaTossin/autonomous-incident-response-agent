@@ -1041,6 +1041,47 @@ class IntegrationRecord(Base, WorkspaceTenantColumns, TimestampColumns, ActorCol
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class AwsIntegrationRecord(Base, WorkspaceTenantColumns, TimestampColumns, ActorColumns):
+    __tablename__ = "aws_integrations"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "workspace_id"],
+            ["workspaces.organization_id", "workspaces.id"],
+            name="fk_aws_integrations_workspace_scope",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "state IN ('draft', 'pending_verification', 'ready', 'error', 'disabled')",
+            name="ck_aws_integrations_state",
+        ),
+        CheckConstraint("version > 0", name="ck_aws_integrations_version"),
+        CheckConstraint(_ACTOR_CHECK, name="ck_aws_integrations_actor_kind"),
+        Index(
+            "ix_aws_integrations_scope_created",
+            "organization_id",
+            "workspace_id",
+            "created_at",
+            "id",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    aws_account_id: Mapped[str] = mapped_column(String(12), nullable=False)
+    role_arn: Mapped[str | None] = mapped_column(String(600), nullable=True)
+    external_id: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
+    enabled_regions: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    verification: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    disabled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
 class JobRecord(
     Base, WorkspaceTenantColumns, TimestampColumns, ActorColumns, CorrelationColumns
 ):

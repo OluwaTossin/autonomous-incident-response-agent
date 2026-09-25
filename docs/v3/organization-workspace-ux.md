@@ -32,6 +32,8 @@ The hosted application uses stable routes:
 /app/orgs/{organization_id}/workspaces/{workspace_id}/incidents
 /app/orgs/{organization_id}/workspaces/{workspace_id}/incidents/{incident_id}
 /app/orgs/{organization_id}/workspaces/{workspace_id}/incidents/{incident_id}/triage/{triage_run_id}
+/app/orgs/{organization_id}/workspaces/{workspace_id}/integrations
+/app/orgs/{organization_id}/workspaces/{workspace_id}/integrations/aws/{integration_id}
 ```
 
 Server Components load memberships, workspace lists, and workspace detail without browser
@@ -77,6 +79,9 @@ The Version 2 static frontend, filesystem workspaces, API keys, CLI, Gradio, loc
 synchronous triage remain unchanged. V3.15 incident and triage history/detail behavior is
 documented in [`incident-history.md`](incident-history.md).
 CloudWatch onboarding and integration setup remain V3.16 and later.
+AWS AssumeRole onboarding is implemented in V3.16 as documented in
+[`aws-integrations.md`](aws-integrations.md); alert delivery and context collection remain
+V3.17/V3.18.
 
 The V3.13 Cognito compatibility constraint also remains: first-sign-in identity mapping
 currently needs email/display attributes at mapping time, while standard Cognito access

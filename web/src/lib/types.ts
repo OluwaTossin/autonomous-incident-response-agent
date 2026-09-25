@@ -68,6 +68,64 @@ export interface WorkspaceConfigurationUpdate {
   llm_temperature?: number;
 }
 
+export interface AwsCapabilityCheck {
+  capability: string;
+  region: string;
+  passed: boolean;
+  error_code: string | null;
+  summary: string | null;
+}
+
+export interface AwsVerification {
+  assume_role_passed: boolean;
+  account_identity_passed: boolean;
+  succeeded: boolean;
+  verified_at: string;
+  error_code: string | null;
+  summary: string | null;
+  checks: AwsCapabilityCheck[];
+}
+
+export interface AwsIntegration {
+  integration_id: string;
+  provider: "aws";
+  display_name: string;
+  aws_account_id: string;
+  role_arn: string | null;
+  enabled_regions: string[];
+  state: "draft" | "pending_verification" | "ready" | "error" | "disabled";
+  version: number;
+  verification: AwsVerification | null;
+  created_at: string;
+  updated_at: string;
+  disabled_at: string | null;
+}
+
+export interface AwsIntegrationPage { items: AwsIntegration[]; }
+
+export interface AwsIntegrationCreate {
+  display_name: string;
+  aws_account_id: string;
+  enabled_regions: string[];
+}
+
+export interface AwsIntegrationUpdate {
+  expected_version: number;
+  display_name?: string;
+  aws_account_id?: string;
+  role_arn?: string;
+  enabled_regions?: string[];
+}
+
+export interface AwsTrustInstructions {
+  trusted_principal_arn: string;
+  external_id: string;
+  required_sts_action: "sts:AssumeRole";
+  expected_role_arn_format: string;
+  trust_policy: Record<string, unknown>;
+  permission_policy: Record<string, unknown>;
+}
+
 export interface IncidentCreate {
   title: string;
   description: string;

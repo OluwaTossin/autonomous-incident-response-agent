@@ -106,6 +106,28 @@ class Settings(BaseModel):
     # Hosted queue/worker deployment settings. Credentials use the AWS provider chain.
     aira_sqs_queue_url: str = Field(default="", validation_alias="AIRA_SQS_QUEUE_URL")
     aira_aws_region: str = Field(default="us-east-1", validation_alias="AIRA_AWS_REGION")
+    aira_aws_trusted_principal_arn: str = Field(
+        default="", validation_alias="AIRA_AWS_TRUSTED_PRINCIPAL_ARN"
+    )
+    aira_sts_endpoint_url: str = Field(
+        default="", validation_alias="AIRA_STS_ENDPOINT_URL"
+    )
+    aira_aws_verification_connect_timeout_seconds: float = Field(
+        default=3.0,
+        gt=0,
+        validation_alias="AIRA_AWS_VERIFICATION_CONNECT_TIMEOUT_SECONDS",
+    )
+    aira_aws_verification_read_timeout_seconds: float = Field(
+        default=8.0,
+        gt=0,
+        validation_alias="AIRA_AWS_VERIFICATION_READ_TIMEOUT_SECONDS",
+    )
+    aira_aws_verification_max_attempts: int = Field(
+        default=3,
+        ge=1,
+        le=5,
+        validation_alias="AIRA_AWS_VERIFICATION_MAX_ATTEMPTS",
+    )
     aira_sqs_endpoint_url: str = Field(
         default="", validation_alias="AIRA_SQS_ENDPOINT_URL"
     )

@@ -220,10 +220,22 @@ def test_service_account_requires_explicit_revocable_grant() -> None:
         service.authorize(
             _service_account(), ORG, Permission.TRIAGE_RUN, workspace_id=WORKSPACE
         )
+    with pytest.raises(AuthorizationDenied):
+        service.authorize(
+            _service_account(), ORG, Permission.INTEGRATION_READ, workspace_id=WORKSPACE
+        )
+    facts.service_permissions = frozenset({Permission.INTEGRATION_READ})
+    service.authorize(
+        _service_account(), ORG, Permission.INTEGRATION_READ, workspace_id=WORKSPACE
+    )
+    with pytest.raises(AuthorizationDenied):
+        service.authorize(
+            _service_account(), ORG, Permission.INTEGRATION_MANAGE, workspace_id=WORKSPACE
+        )
     facts.active = False
     with pytest.raises(AuthorizationDenied):
         service.authorize(
-            _service_account(), ORG, Permission.INCIDENT_READ, workspace_id=WORKSPACE
+            _service_account(), ORG, Permission.INTEGRATION_READ, workspace_id=WORKSPACE
         )
 
 

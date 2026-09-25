@@ -1,0 +1,1 @@
+"""Hosted external integration adapters."""

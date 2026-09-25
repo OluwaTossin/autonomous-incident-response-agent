@@ -1,6 +1,11 @@
 import "server-only";
 
 import type {
+  AwsIntegration,
+  AwsIntegrationCreate,
+  AwsIntegrationPage,
+  AwsIntegrationUpdate,
+  AwsTrustInstructions,
   HostedBootstrap,
   Incident,
   IncidentCreate,
@@ -64,6 +69,13 @@ export interface HostedApi {
     workspaceId: string,
     expectedVersion: number,
   ): Promise<WorkspaceSummary>;
+  listAwsIntegrations(accessToken: string, organizationId: string, workspaceId: string): Promise<AwsIntegrationPage>;
+  getAwsIntegration(accessToken: string, organizationId: string, workspaceId: string, integrationId: string): Promise<AwsIntegration>;
+  createAwsIntegration(accessToken: string, organizationId: string, workspaceId: string, input: AwsIntegrationCreate): Promise<AwsIntegration>;
+  updateAwsIntegration(accessToken: string, organizationId: string, workspaceId: string, integrationId: string, input: AwsIntegrationUpdate): Promise<AwsIntegration>;
+  getAwsTrustInstructions(accessToken: string, organizationId: string, workspaceId: string, integrationId: string): Promise<AwsTrustInstructions>;
+  verifyAwsIntegration(accessToken: string, organizationId: string, workspaceId: string, integrationId: string, expectedVersion: number): Promise<AwsIntegration>;
+  disableAwsIntegration(accessToken: string, organizationId: string, workspaceId: string, integrationId: string, expectedVersion: number): Promise<AwsIntegration>;
   createIncident(
     accessToken: string,
     organizationId: string,
@@ -213,6 +225,34 @@ export class HostedApiClient implements HostedApi {
       accessToken,
       { method: "POST", body: JSON.stringify({ expected_version: expectedVersion }) },
     );
+  }
+
+  listAwsIntegrations(accessToken: string, organizationId: string, workspaceId: string): Promise<AwsIntegrationPage> {
+    return this.request(`${this.scope(organizationId, workspaceId, "/integrations/aws")}?limit=100`, accessToken);
+  }
+
+  getAwsIntegration(accessToken: string, organizationId: string, workspaceId: string, integrationId: string): Promise<AwsIntegration> {
+    return this.request(this.scope(organizationId, workspaceId, `/integrations/aws/${encodeURIComponent(integrationId)}`), accessToken);
+  }
+
+  createAwsIntegration(accessToken: string, organizationId: string, workspaceId: string, input: AwsIntegrationCreate): Promise<AwsIntegration> {
+    return this.request(this.scope(organizationId, workspaceId, "/integrations/aws"), accessToken, { method: "POST", body: JSON.stringify(input) });
+  }
+
+  updateAwsIntegration(accessToken: string, organizationId: string, workspaceId: string, integrationId: string, input: AwsIntegrationUpdate): Promise<AwsIntegration> {
+    return this.request(this.scope(organizationId, workspaceId, `/integrations/aws/${encodeURIComponent(integrationId)}`), accessToken, { method: "PATCH", body: JSON.stringify(input) });
+  }
+
+  getAwsTrustInstructions(accessToken: string, organizationId: string, workspaceId: string, integrationId: string): Promise<AwsTrustInstructions> {
+    return this.request(this.scope(organizationId, workspaceId, `/integrations/aws/${encodeURIComponent(integrationId)}/trust-instructions`), accessToken);
+  }
+
+  verifyAwsIntegration(accessToken: string, organizationId: string, workspaceId: string, integrationId: string, expectedVersion: number): Promise<AwsIntegration> {
+    return this.request(this.scope(organizationId, workspaceId, `/integrations/aws/${encodeURIComponent(integrationId)}/verify`), accessToken, { method: "POST", body: JSON.stringify({ expected_version: expectedVersion }) });
+  }
+
+  disableAwsIntegration(accessToken: string, organizationId: string, workspaceId: string, integrationId: string, expectedVersion: number): Promise<AwsIntegration> {
+    return this.request(this.scope(organizationId, workspaceId, `/integrations/aws/${encodeURIComponent(integrationId)}/disable`), accessToken, { method: "POST", body: JSON.stringify({ expected_version: expectedVersion }) });
   }
 
   createIncident(

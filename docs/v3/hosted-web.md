@@ -92,4 +92,5 @@ container exposes `/healthz`; ECS service, target group, HTTPS ALB rules, deploy
 and production Cognito resources remain V3.22 work. Organization/workspace administration
 is described in [`organization-workspace-ux.md`](organization-workspace-ux.md). Incident
 history and investigation behavior is described in
-[`incident-history.md`](incident-history.md).
+[`incident-history.md`](incident-history.md). Workspace AWS onboarding and its BFF boundary
+are described in [`aws-integrations.md`](aws-integrations.md).
