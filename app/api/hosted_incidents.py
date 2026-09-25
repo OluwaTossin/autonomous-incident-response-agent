@@ -27,12 +27,24 @@ from app.application.actions import (
     ActionProposalNotFound,
     HostedActionProposalService,
 )
+from app.application.approvals import (
+    ApprovalConflict,
+    ApprovalEligibilityError,
+    ApprovalNotFound,
+    HostedApprovalService,
+)
 from app.auth.context import ActorContext
 from app.authorization.service import AuthorizationDenied
-from app.domain.identifiers import IncidentId, OrganizationId, TriageRunId, WorkspaceId
+from app.domain.identifiers import (
+    ActionId,
+    ApprovalId,
+    IncidentId,
+    OrganizationId,
+    TriageRunId,
+    WorkspaceId,
+)
 from app.domain.incidents import Incident, IncidentState, TriageRun, TriageRunState
-from app.domain.actions import ActionProposal, action_parameters_to_dict
-from app.domain.identifiers import ActionId
+from app.domain.actions import ActionProposal, Approval, action_parameters_to_dict
 from app.models.triage import TriageOutput
 
 
@@ -249,10 +261,44 @@ class ActionProposalResponse(BaseModel):
     created_at: datetime
 
 
+class ApprovalDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str | None = Field(default=None, max_length=1000)
+
+
+class ApprovalRejectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=1, max_length=1000)
+
+
+class ApprovalResponse(BaseModel):
+    approval_id: str
+    action_proposal_id: str
+    state: str
+    state_version: int
+    proposal_schema_version: int
+    source_result_version: int
+    source_result_hash: str
+    normalized_action_hash: str
+    requested_by_type: str
+    requested_by_id: str | None
+    requested_at: datetime
+    expires_at: datetime
+    decided_by_type: str | None
+    decided_by_id: str | None
+    decided_at: datetime | None
+    decision_reason: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
 def build_hosted_incident_router(
     service: HostedIncidentService,
     actor_dependency,
     action_proposals: HostedActionProposalService | None = None,
+    approvals: HostedApprovalService | None = None,
 ) -> APIRouter:
     router = APIRouter(
         prefix="/v3/organizations/{organization_id}/workspaces/{workspace_id}",
@@ -597,6 +643,130 @@ def build_hosted_incident_router(
             except Exception as exc:
                 raise _http_error(exc) from exc
 
+    if approvals is not None:
+
+        @router.post(
+            "/action-proposals/{proposal_id}/approval",
+            response_model=ApprovalResponse,
+        )
+        def request_action_approval(
+            organization_id: str,
+            workspace_id: str,
+            proposal_id: str,
+            actor: ActorContext = Depends(actor_dependency),
+        ) -> ApprovalResponse:
+            try:
+                approval = approvals.request_approval(
+                    actor,
+                    OrganizationId(organization_id),
+                    WorkspaceId(workspace_id),
+                    ActionId(proposal_id),
+                )
+                return _approval_response(approval)
+            except Exception as exc:
+                raise _http_error(exc) from exc
+
+        @router.get(
+            "/action-proposals/{proposal_id}/approvals",
+            response_model=list[ApprovalResponse],
+        )
+        def list_action_approvals(
+            organization_id: str,
+            workspace_id: str,
+            proposal_id: str,
+            actor: ActorContext = Depends(actor_dependency),
+        ) -> list[ApprovalResponse]:
+            try:
+                items = approvals.list_for_proposal(
+                    actor,
+                    OrganizationId(organization_id),
+                    WorkspaceId(workspace_id),
+                    ActionId(proposal_id),
+                )
+                return [_approval_response(item) for item in items]
+            except Exception as exc:
+                raise _http_error(exc) from exc
+
+        @router.get("/approvals/{approval_id}", response_model=ApprovalResponse)
+        def get_approval(
+            organization_id: str,
+            workspace_id: str,
+            approval_id: str,
+            actor: ActorContext = Depends(actor_dependency),
+        ) -> ApprovalResponse:
+            try:
+                approval = approvals.get_approval(
+                    actor,
+                    OrganizationId(organization_id),
+                    WorkspaceId(workspace_id),
+                    ApprovalId(approval_id),
+                )
+                return _approval_response(approval)
+            except Exception as exc:
+                raise _http_error(exc) from exc
+
+        @router.post(
+            "/approvals/{approval_id}/approve", response_model=ApprovalResponse
+        )
+        def approve_action(
+            organization_id: str,
+            workspace_id: str,
+            approval_id: str,
+            body: ApprovalDecisionRequest,
+            actor: ActorContext = Depends(actor_dependency),
+        ) -> ApprovalResponse:
+            try:
+                approval = approvals.approve(
+                    actor,
+                    OrganizationId(organization_id),
+                    WorkspaceId(workspace_id),
+                    ApprovalId(approval_id),
+                    reason=body.reason,
+                )
+                return _approval_response(approval)
+            except Exception as exc:
+                raise _http_error(exc) from exc
+
+        @router.post("/approvals/{approval_id}/reject", response_model=ApprovalResponse)
+        def reject_action(
+            organization_id: str,
+            workspace_id: str,
+            approval_id: str,
+            body: ApprovalRejectionRequest,
+            actor: ActorContext = Depends(actor_dependency),
+        ) -> ApprovalResponse:
+            try:
+                approval = approvals.reject(
+                    actor,
+                    OrganizationId(organization_id),
+                    WorkspaceId(workspace_id),
+                    ApprovalId(approval_id),
+                    reason=body.reason,
+                )
+                return _approval_response(approval)
+            except Exception as exc:
+                raise _http_error(exc) from exc
+
+        @router.post("/approvals/{approval_id}/cancel", response_model=ApprovalResponse)
+        def cancel_approval(
+            organization_id: str,
+            workspace_id: str,
+            approval_id: str,
+            body: ApprovalDecisionRequest,
+            actor: ActorContext = Depends(actor_dependency),
+        ) -> ApprovalResponse:
+            try:
+                approval = approvals.cancel(
+                    actor,
+                    OrganizationId(organization_id),
+                    WorkspaceId(workspace_id),
+                    ApprovalId(approval_id),
+                    reason=body.reason,
+                )
+                return _approval_response(approval)
+            except Exception as exc:
+                raise _http_error(exc) from exc
+
     return router
 
 
@@ -770,6 +940,40 @@ def _action_proposal_response(proposal: ActionProposal) -> ActionProposalRespons
     )
 
 
+def _approval_response(approval: Approval) -> ApprovalResponse:
+    return ApprovalResponse(
+        approval_id=str(approval.id),
+        action_proposal_id=str(approval.action.id),
+        state=approval.state.value,
+        state_version=approval.state_version,
+        proposal_schema_version=approval.proposal_schema_version,
+        source_result_version=approval.source_result_version,
+        source_result_hash=approval.source_result_hash,
+        normalized_action_hash=approval.normalized_action_hash,
+        requested_by_type=approval.requested_by.kind.value,
+        requested_by_id=(
+            str(approval.requested_by.actor_id)
+            if approval.requested_by.actor_id is not None
+            else None
+        ),
+        requested_at=approval.requested_at,
+        expires_at=approval.expires_at,
+        decided_by_type=(
+            approval.decided_by.kind.value if approval.decided_by is not None else None
+        ),
+        decided_by_id=(
+            str(approval.decided_by.actor_id)
+            if approval.decided_by is not None
+            and approval.decided_by.actor_id is not None
+            else None
+        ),
+        decided_at=approval.decided_at,
+        decision_reason=approval.reason,
+        created_at=approval.created_at,
+        updated_at=approval.updated_at,
+    )
+
+
 def _triage_list_item(item: TriageHistoryItem) -> TriageRunListItem:
     run = item.run
     result = run.result
@@ -833,12 +1037,19 @@ def _http_error(exc: Exception) -> HTTPException:
         )
     if isinstance(
         exc,
-        (HostedIncidentNotFound, HostedTriageNotFound, ActionProposalNotFound),
+        (
+            HostedIncidentNotFound,
+            HostedTriageNotFound,
+            ActionProposalNotFound,
+            ApprovalNotFound,
+        ),
     ):
         return HTTPException(404, detail={"code": "not_found", "message": str(exc)})
-    if isinstance(exc, (HostedIncidentConflict, HostedTriageConflict)):
+    if isinstance(
+        exc, (HostedIncidentConflict, HostedTriageConflict, ApprovalConflict)
+    ):
         return HTTPException(409, detail={"code": "conflict", "message": str(exc)})
-    if isinstance(exc, (ValueError, TypeError)):
+    if isinstance(exc, (ValueError, TypeError, ApprovalEligibilityError)):
         return HTTPException(
             422, detail={"code": "invalid_request", "message": str(exc)}
         )

@@ -1722,19 +1722,77 @@ class ApprovalRecord(Base, WorkspaceTenantColumns):
             name="ck_approvals_state",
         ),
         CheckConstraint(
-            "requested_by_kind IN ('human', 'service_account', 'system')",
-            name="ck_approvals_requested_actor_kind",
+            "requested_by_kind = 'human' AND requested_by_id IS NOT NULL "
+            "AND requested_by_system_name IS NULL",
+            name="ck_approvals_human_requester",
         ),
         CheckConstraint(
-            "decided_by_kind IS NULL OR decided_by_kind IN ('human', 'service_account', 'system')",
-            name="ck_approvals_decided_actor_kind",
+            "(decided_by_kind IS NULL AND decided_by_id IS NULL "
+            "AND decided_by_system_name IS NULL) OR "
+            "(decided_by_kind = 'human' AND decided_by_id IS NOT NULL "
+            "AND decided_by_system_name IS NULL)",
+            name="ck_approvals_human_decider",
         ),
-        Index("ix_approvals_action_state", "action_id", "state"),
+        CheckConstraint(
+            "expires_at > requested_at AND requested_at = created_at",
+            name="ck_approvals_expiry",
+        ),
+        CheckConstraint(
+            "state_version > 0 AND proposal_schema_version = 1 "
+            "AND source_result_version > 0",
+            name="ck_approvals_versions",
+        ),
+        CheckConstraint(
+            "(state = 'requested' AND decided_by_kind IS NULL "
+            "AND decided_at IS NULL AND reason IS NULL) OR "
+            "(state IN ('approved', 'cancelled') AND decided_by_kind = 'human' "
+            "AND decided_at IS NOT NULL) OR "
+            "(state = 'rejected' AND decided_by_kind = 'human' "
+            "AND decided_at IS NOT NULL AND reason IS NOT NULL "
+            "AND length(btrim(reason)) BETWEEN 1 AND 1000) OR "
+            "(state = 'expired' AND decided_by_kind IS NULL "
+            "AND decided_at IS NOT NULL)",
+            name="ck_approvals_decision_fields",
+        ),
+        CheckConstraint(
+            "reason IS NULL OR length(btrim(reason)) BETWEEN 1 AND 1000",
+            name="ck_approvals_reason_length",
+        ),
+        CheckConstraint(
+            "state NOT IN ('approved', 'rejected') OR requested_by_id <> decided_by_id",
+            name="ck_approvals_distinct_decider",
+        ),
+        CheckConstraint(
+            "(state NOT IN ('approved', 'rejected') OR decided_at < expires_at) "
+            "AND (state <> 'expired' OR decided_at >= expires_at)",
+            name="ck_approvals_decision_expiry",
+        ),
+        Index("ix_approvals_action_created", "action_id", "created_at"),
+        Index(
+            "uq_approvals_one_requested",
+            "organization_id",
+            "workspace_id",
+            "action_id",
+            unique=True,
+            postgresql_where=text("state = 'requested'"),
+        ),
+        Index(
+            "ix_approvals_scope_requested_expiry",
+            "organization_id",
+            "workspace_id",
+            "expires_at",
+            postgresql_where=text("state = 'requested'"),
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
     action_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    proposal_schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_result_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_result_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    normalized_action_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     state: Mapped[str] = mapped_column(String(32), nullable=False)
+    state_version: Mapped[int] = mapped_column(Integer, nullable=False)
     requested_by_kind: Mapped[str] = mapped_column(String(32), nullable=False)
     requested_by_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True), nullable=True
@@ -1743,6 +1801,9 @@ class ApprovalRecord(Base, WorkspaceTenantColumns):
         String(120), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    requested_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(

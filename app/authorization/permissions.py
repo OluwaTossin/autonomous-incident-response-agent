@@ -36,6 +36,7 @@ class Permission(StrEnum):
     ACTION_READ = "action.read"
     ACTION_PROPOSE = "action.propose"
     APPROVAL_READ = "approval.read"
+    APPROVAL_REQUEST = "approval.request"
     APPROVAL_DECIDE = "approval.decide"
     USAGE_READ = "usage.read"
     AUDIT_READ = "audit.read"
@@ -63,6 +64,7 @@ _OPERATOR = _VIEWER | {
     Permission.JOB_RETRY,
     Permission.KNOWLEDGE_MANAGE,
     Permission.ACTION_PROPOSE,
+    Permission.APPROVAL_REQUEST,
     Permission.AUDIT_READ,
 }
 _ADMIN = frozenset(Permission) - {
@@ -104,6 +106,7 @@ WORKSPACE_SCOPED_PERMISSIONS = frozenset(
         Permission.ACTION_READ,
         Permission.ACTION_PROPOSE,
         Permission.APPROVAL_READ,
+        Permission.APPROVAL_REQUEST,
         Permission.APPROVAL_DECIDE,
     }
 )

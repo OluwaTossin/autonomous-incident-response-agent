@@ -94,7 +94,8 @@ GET /v3/organizations/{organization}/workspaces/{workspace}/action-proposals/{pr
 
 Responses omit raw command-like recommendations. The investigation UI says "Proposed
 action", "Requires review", "Manual only", or "Blocked by policy" and explicitly states
-that no action has executed. It has no Approve or Execute control.
+that no action has executed. V3.20 adds human approval controls only for eligible proposals;
+it still has no Execute control. See [`approvals.md`](approvals.md).
 
 Creation, blocked, and manual-only outcomes write attributable PostgreSQL audit events with
 safe IDs, type, risk, policy, target type, and a target-identifier hash. They exclude
@@ -104,7 +105,8 @@ policy result as bounded dimensions.
 
 ## Phase boundaries
 
-- V3.20 owns approval requests, decisions, expiry, approver policy, and approval UI.
+- V3.20 provides approval requests, human decisions, expiry, cancellation, exact proposal
+  binding, and approval UI without execution.
 - V3.21 owns connector execution, immutable execution intent, retries, and outcomes.
 - Version 4 owns any separately designed autonomous-remediation capability.
 

@@ -313,6 +313,27 @@ export interface ActionProposal {
   created_at: string;
 }
 
+export interface Approval {
+  approval_id: string;
+  action_proposal_id: string;
+  state: "requested" | "approved" | "rejected" | "expired" | "cancelled";
+  state_version: number;
+  proposal_schema_version: number;
+  source_result_version: number;
+  source_result_hash: string;
+  normalized_action_hash: string;
+  requested_by_type: "human";
+  requested_by_id: string;
+  requested_at: string;
+  expires_at: string;
+  decided_by_type: "human" | null;
+  decided_by_id: string | null;
+  decided_at: string | null;
+  decision_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface FeedbackCreate {
   diagnosis_correct: boolean | null;
   actions_useful: boolean | null;

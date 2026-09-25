@@ -14,6 +14,7 @@ from app.application.alert_ingestion import HostedAlertIngestionService
 from app.application.aws_integrations import HostedAwsIntegrationService
 from app.application.incidents import HostedIncidentService
 from app.application.actions import HostedActionProposalService
+from app.application.approvals import HostedApprovalService
 from app.application.workspaces import HostedWorkspaceService
 
 
@@ -26,6 +27,7 @@ def build_hosted_api(
     alert_ingestion: HostedAlertIngestionService | None = None,
     machine_actor_dependency=None,
     action_proposals: HostedActionProposalService | None = None,
+    approvals: HostedApprovalService | None = None,
 ) -> FastAPI:
     application = FastAPI(
         title="AIRA Hosted API",
@@ -34,7 +36,10 @@ def build_hosted_api(
     )
     application.include_router(
         build_hosted_incident_router(
-            incidents, actor_dependency, action_proposals=action_proposals
+            incidents,
+            actor_dependency,
+            action_proposals=action_proposals,
+            approvals=approvals,
         )
     )
     if bootstrap is not None:

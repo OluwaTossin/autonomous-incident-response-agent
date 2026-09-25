@@ -15,6 +15,7 @@ from app.persistence.postgres.incident_repositories import (
 )
 from app.persistence.postgres.action_repositories import (
     PostgresActionProposalRepository,
+    PostgresApprovalRepository,
 )
 from app.persistence.postgres.alert_ingestion import PostgresAlertReceiptRepository
 from app.persistence.postgres.aws_integrations import PostgresAwsIntegrationRepository
@@ -50,6 +51,7 @@ class PostgresHostedIncidentUnitOfWork:
         self.triage_runs = PostgresTriageRunRepository(self.session)
         self.evidence = PostgresEvidenceRepository(self.session)
         self.action_proposals = PostgresActionProposalRepository(self.session)
+        self.approvals = PostgresApprovalRepository(self.session)
         self.context_snapshots = PostgresIncidentContextRepository(self.session)
         self.alert_receipts = PostgresAlertReceiptRepository(self.session)
         self.aws_integrations = PostgresAwsIntegrationRepository(self.session)

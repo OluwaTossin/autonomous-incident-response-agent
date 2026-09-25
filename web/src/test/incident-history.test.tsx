@@ -2,7 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { RunInvestigation } from "@/components/run-investigation";
-import type { ActionProposal, TriageRun } from "@/lib/types";
+import type { ActionProposal, Approval, TriageRun } from "@/lib/types";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 
@@ -98,10 +98,42 @@ const proposals: ActionProposal[] = [{
   created_at: "2026-09-25T12:00:05Z",
 }];
 
+const eligibleProposal: ActionProposal = {
+  ...proposals[0],
+  proposal_type: "acknowledge_incident",
+  summary: "Acknowledge the incident",
+  parameters: { schema_version: 1 },
+  reversibility: "reversible",
+  policy_status: "allowed_for_review",
+  policy_reason: "ready_for_review",
+  lifecycle_state: "ready_for_review",
+};
+
+const pendingApproval: Approval = {
+  approval_id: "approval-1",
+  action_proposal_id: "proposal-1",
+  state: "requested",
+  state_version: 1,
+  proposal_schema_version: 1,
+  source_result_version: 1,
+  source_result_hash: "a".repeat(64),
+  normalized_action_hash: "b".repeat(64),
+  requested_by_type: "human",
+  requested_by_id: "requester-1",
+  requested_at: "2026-09-25T12:01:00Z",
+  expires_at: "2026-09-25T12:31:00Z",
+  decided_by_type: null,
+  decided_by_id: null,
+  decided_at: null,
+  decision_reason: null,
+  created_at: "2026-09-25T12:01:00Z",
+  updated_at: "2026-09-25T12:01:00Z",
+};
+
 describe("incident investigation", () => {
   it("renders result, attempt history, provenance, and feedback controls", () => {
     const html = renderToStaticMarkup(
-      <RunInvestigation initialRun={run} initialProposals={proposals} organizationId="org-1" workspaceId="workspace-1" csrfToken="csrf" canOperate />,
+      <RunInvestigation initialRun={run} initialProposals={proposals} initialApprovals={{}} organizationId="org-1" workspaceId="workspace-1" csrfToken="csrf" canOperate canRequestApproval canDecideApproval userId="admin-1" />,
     );
     expect(html).toContain("2 / 3");
     expect(html).toContain("Dependency timeout");
@@ -121,9 +153,36 @@ describe("incident investigation", () => {
 
   it("does not expose mutation controls to read-only viewers", () => {
     const html = renderToStaticMarkup(
-      <RunInvestigation initialRun={run} initialProposals={proposals} organizationId="org-1" workspaceId="workspace-1" csrfToken="csrf" canOperate={false} />,
+      <RunInvestigation initialRun={run} initialProposals={proposals} initialApprovals={{}} organizationId="org-1" workspaceId="workspace-1" csrfToken="csrf" canOperate={false} canRequestApproval={false} canDecideApproval={false} userId="viewer-1" />,
     );
     expect(html).not.toContain("Operator feedback");
     expect(html).not.toContain("Cancel run");
+  });
+
+  it("shows an exact pending approval decision without execution controls", () => {
+    const html = renderToStaticMarkup(
+      <RunInvestigation initialRun={run} initialProposals={[eligibleProposal]} initialApprovals={{ "proposal-1": [pendingApproval] }} organizationId="org-1" workspaceId="workspace-1" csrfToken="csrf" canOperate canRequestApproval canDecideApproval userId="admin-1" />,
+    );
+    expect(html).toContain("Approval requested");
+    expect(html).toContain("Approve for future execution");
+    expect(html).toContain("Reject");
+    expect(html).toContain("Parameters");
+    expect(html).not.toContain(">Execute<");
+  });
+
+  it.each(["approved", "rejected", "expired", "cancelled"] as const)("renders %s approval history as a durable decision", (state) => {
+    const approval = {
+      ...pendingApproval,
+      state,
+      decided_by_type: state === "expired" ? null : "human" as const,
+      decided_by_id: state === "expired" ? null : "admin-1",
+      decided_at: "2026-09-25T12:02:00Z",
+      decision_reason: state === "rejected" ? "Target changed" : null,
+    };
+    const html = renderToStaticMarkup(
+      <RunInvestigation initialRun={run} initialProposals={[eligibleProposal]} initialApprovals={{ "proposal-1": [approval] }} organizationId="org-1" workspaceId="workspace-1" csrfToken="csrf" canOperate canRequestApproval canDecideApproval userId="admin-1" />,
+    );
+    expect(html).toContain({ approved: "Approved for future execution", rejected: "Rejected", expired: "Expired", cancelled: "Cancelled" }[state]);
+    expect(html).not.toContain(">Execute<");
   });
 });

@@ -317,16 +317,22 @@ APPROVAL_TERMINAL_STATES = frozenset(
 
 @dataclass(frozen=True, slots=True)
 class Approval:
-    """Reserved domain skeleton; V3.20 owns approval application behavior."""
+    """A human decision bound to one immutable action proposal version."""
 
     id: ApprovalId
     scope: WorkspaceScope
     action: ActionReference
+    proposal_schema_version: int
+    source_result_version: int
+    source_result_hash: str
+    normalized_action_hash: str
     state: ApprovalState
     requested_by: ActorReference
+    requested_at: datetime
     created_at: datetime
     updated_at: datetime
     expires_at: datetime
+    state_version: int = 1
     decided_by: ActorReference | None = None
     decided_at: datetime | None = None
     reason: str | None = None
@@ -336,10 +342,25 @@ class Approval:
             raise DomainInvariantError(
                 "Approval and Action must have the same workspace scope"
             )
+        if self.requested_by.kind is not ActorKind.HUMAN:
+            raise DomainInvariantError("Approval requests require a human actor")
+        if self.proposal_schema_version != 1 or self.source_result_version < 1:
+            raise DomainInvariantError("Approval proposal binding version is invalid")
+        for name, value in (
+            ("source_result_hash", self.source_result_hash),
+            ("normalized_action_hash", self.normalized_action_hash),
+        ):
+            if len(value) != 64 or any(c not in "0123456789abcdef" for c in value):
+                raise DomainInvariantError(f"Approval {name} is invalid")
+        if self.state_version < 1:
+            raise DomainInvariantError("Approval state_version must be positive")
         validate_timestamps(self.created_at, self.updated_at)
+        require_aware(self.requested_at, "requested_at")
         require_aware(self.expires_at, "expires_at")
-        if self.expires_at <= self.created_at:
-            raise DomainInvariantError("Approval expires_at must follow created_at")
+        if self.requested_at != self.created_at:
+            raise DomainInvariantError("Approval requested_at must equal created_at")
+        if self.expires_at <= self.requested_at:
+            raise DomainInvariantError("Approval expires_at must follow requested_at")
         if self.decided_at is not None:
             require_aware(self.decided_at, "decided_at")
             if self.decided_at < self.created_at:
@@ -349,20 +370,20 @@ class Approval:
         terminal = self.state in APPROVAL_TERMINAL_STATES
         if terminal and self.decided_at is None:
             raise DomainInvariantError("Terminal approvals require decided_at")
-        if (
-            self.state in {ApprovalState.APPROVED, ApprovalState.REJECTED}
-            and self.decided_by is None
+        actor_decisions = {
+            ApprovalState.APPROVED,
+            ApprovalState.REJECTED,
+            ApprovalState.CANCELLED,
+        }
+        if self.state in actor_decisions and self.decided_by is None:
+            raise DomainInvariantError("Approval decision requires decided_by")
+        if self.decided_by is not None and self.decided_by.kind is not ActorKind.HUMAN:
+            raise DomainInvariantError("Approval decisions require a human actor")
+        if self.state in {ApprovalState.APPROVED, ApprovalState.REJECTED} and (
+            self.decided_by == self.requested_by
         ):
             raise DomainInvariantError(
-                "Approved or rejected approvals require decided_by"
-            )
-        if (
-            self.state is ApprovalState.APPROVED
-            and self.decided_by is not None
-            and self.decided_by.kind is not ActorKind.HUMAN
-        ):
-            raise DomainInvariantError(
-                "Consequential action approval requires a human actor"
+                "Approval requester cannot decide their own request"
             )
         if self.state is ApprovalState.REJECTED and not self.reason:
             raise DomainInvariantError("Rejected approvals require a reason")
@@ -374,13 +395,59 @@ class Approval:
             self.decided_at is not None and self.decided_at < self.expires_at
         ):
             raise DomainInvariantError("Approval cannot expire before expires_at")
+        if self.reason is not None:
+            reason = self.reason.strip()
+            if not reason or len(reason) > 1000:
+                raise DomainInvariantError("Approval decision reason is invalid")
+            object.__setattr__(self, "reason", reason)
         if not terminal and any((self.decided_by, self.decided_at, self.reason)):
             raise DomainInvariantError(
                 "Requested approvals cannot carry decision fields"
             )
 
-    def approve(self, actor: ActorReference, *, at: datetime | None = None) -> Approval:
-        return self._decide(ApprovalState.APPROVED, actor=actor, at=at)
+    @classmethod
+    def request(
+        cls,
+        *,
+        id: ApprovalId,
+        proposal: ActionProposal,
+        requested_by: ActorReference,
+        requested_at: datetime,
+        expires_at: datetime,
+    ) -> Approval:
+        return cls(
+            id=id,
+            scope=proposal.scope,
+            action=proposal.reference,
+            proposal_schema_version=proposal.proposal_schema_version,
+            source_result_version=proposal.source_result_version,
+            source_result_hash=proposal.source_result_hash,
+            normalized_action_hash=proposal.normalized_action_hash,
+            state=ApprovalState.REQUESTED,
+            requested_by=requested_by,
+            requested_at=requested_at,
+            created_at=requested_at,
+            updated_at=requested_at,
+            expires_at=expires_at,
+        )
+
+    def binds(self, proposal: ActionProposal) -> bool:
+        return (
+            self.action == proposal.reference
+            and self.proposal_schema_version == proposal.proposal_schema_version
+            and self.source_result_version == proposal.source_result_version
+            and self.source_result_hash == proposal.source_result_hash
+            and self.normalized_action_hash == proposal.normalized_action_hash
+        )
+
+    def approve(
+        self,
+        actor: ActorReference,
+        *,
+        at: datetime | None = None,
+        reason: str | None = None,
+    ) -> Approval:
+        return self._decide(ApprovalState.APPROVED, actor=actor, at=at, reason=reason)
 
     def reject(
         self,
@@ -394,8 +461,14 @@ class Approval:
     def expire(self, *, at: datetime | None = None) -> Approval:
         return self._decide(ApprovalState.EXPIRED, at=at)
 
-    def cancel(self, *, at: datetime | None = None) -> Approval:
-        return self._decide(ApprovalState.CANCELLED, at=at)
+    def cancel(
+        self,
+        actor: ActorReference,
+        *,
+        at: datetime | None = None,
+        reason: str | None = None,
+    ) -> Approval:
+        return self._decide(ApprovalState.CANCELLED, actor=actor, at=at, reason=reason)
 
     def _decide(
         self,
@@ -424,6 +497,7 @@ class Approval:
             decided_at=when,
             reason=normalized_reason,
             updated_at=when,
+            state_version=self.state_version + 1,
         )
 
 

@@ -77,6 +77,10 @@ def _actor() -> ActorReference:
     return ActorReference(ActorKind.HUMAN, actor_id=_id(UserId, 3))
 
 
+def _other_actor() -> ActorReference:
+    return ActorReference(ActorKind.HUMAN, actor_id=_id(UserId, 30))
+
+
 def _document() -> Document:
     return Document(
         id=_id(DocumentId, 4),
@@ -252,32 +256,40 @@ def test_job_lifecycle_is_queue_implementation_independent_and_terminal() -> Non
 
 
 def test_future_approval_decision_is_terminal() -> None:
-    action = _action_reference()
     approval = Approval(
         id=_id(ApprovalId, 11),
-        scope=action.scope,
-        action=action,
+        scope=_scope(),
+        action=_action_reference(),
+        proposal_schema_version=1,
+        source_result_version=1,
+        source_result_hash="a" * 64,
+        normalized_action_hash="b" * 64,
         state=ApprovalState.REQUESTED,
         requested_by=_actor(),
+        requested_at=NOW,
         created_at=NOW,
         updated_at=NOW,
         expires_at=NOW + timedelta(hours=1),
     )
 
-    approved = approval.approve(_actor(), at=LATER)
+    approved = approval.approve(_other_actor(), at=LATER)
     assert approved.state is ApprovalState.APPROVED
     with pytest.raises(InvalidStateTransition):
-        approved.reject(_actor(), "changed mind", at=DONE)
+        approved.reject(_other_actor(), "changed mind", at=DONE)
 
 
 def test_service_account_cannot_approve_consequential_action() -> None:
-    action = _action_reference()
     approval = Approval(
         id=_id(ApprovalId, 11),
-        scope=action.scope,
-        action=action,
+        scope=_scope(),
+        action=_action_reference(),
+        proposal_schema_version=1,
+        source_result_version=1,
+        source_result_hash="a" * 64,
+        normalized_action_hash="b" * 64,
         state=ApprovalState.REQUESTED,
         requested_by=_actor(),
+        requested_at=NOW,
         created_at=NOW,
         updated_at=NOW,
         expires_at=NOW + timedelta(hours=1),
@@ -292,13 +304,17 @@ def test_service_account_cannot_approve_consequential_action() -> None:
 
 
 def test_approval_expiry_is_time_bounded() -> None:
-    action = _action_reference()
     approval = Approval(
         id=_id(ApprovalId, 11),
-        scope=action.scope,
-        action=action,
+        scope=_scope(),
+        action=_action_reference(),
+        proposal_schema_version=1,
+        source_result_version=1,
+        source_result_hash="a" * 64,
+        normalized_action_hash="b" * 64,
         state=ApprovalState.REQUESTED,
         requested_by=_actor(),
+        requested_at=NOW,
         created_at=NOW,
         updated_at=NOW,
         expires_at=LATER,

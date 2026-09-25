@@ -242,6 +242,24 @@ textarea { resize: vertical; line-height: 1.45; }
 .proposal-allowed_for_review { background: #e4f4ec; color: #155c3d; }
 .proposal-manual_only { background: #f4eee0; color: #70510f; }
 .proposal-blocked { background: #f8e5e5; color: #8b2424; }
+.proposal-parameters { margin-top: 14px; }
+.proposal-parameters > strong { font-size: 12px; }
+.proposal-parameters pre { max-height: 220px; overflow: auto; margin: 7px 0 0; padding: 11px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-alt); font-size: 11px; }
+.approval-panel { display: grid; gap: 12px; margin-top: 16px; padding: 14px; border-left: 3px solid var(--blue); background: #f6f9fb; }
+.approval-heading, .approval-heading > div, .approval-controls { display: flex; align-items: center; gap: 8px; }
+.approval-heading { justify-content: space-between; }
+.approval-state { padding: 4px 7px; border-radius: 4px; background: #e8ecef; font-size: 11px; font-weight: 800; }
+.approval-requested { color: #72510b; background: #fff0ca; }
+.approval-approved { color: #155c3d; background: #dff1e9; }
+.approval-rejected, .approval-cancelled { color: #8b2424; background: #f8e5e5; }
+.approval-expired { color: #4e5b56; background: #e8ecef; }
+.approval-metadata { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.approval-metadata dt { color: var(--muted); font-size: 10px; text-transform: uppercase; }
+.approval-metadata dd { margin: 3px 0 0; overflow-wrap: anywhere; font-size: 11px; }
+.approval-reason { display: grid; gap: 4px; margin: 0; }
+.approval-reason-input { display: grid; gap: 6px; color: #34403b; font-size: 12px; font-weight: 700; }
+.approval-controls { flex-wrap: wrap; }
+.approval-panel details { color: var(--muted); font-size: 12px; }
 .operational-context { padding: 18px 20px; }
 .operational-context h2, .operational-context h3 { margin: 0; font-size: 17px; }
 .context-status { padding: 4px 8px; border: 1px solid var(--line); border-radius: 5px; font-size: 12px; text-transform: capitalize; }
@@ -303,6 +321,7 @@ textarea { resize: vertical; line-height: 1.45; }
   .incident-table > a { grid-template-columns: minmax(0, 1fr) auto 18px; }
   .incident-table > a > div:nth-child(2), .incident-table > a > time { display: none; }
   .provenance { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .approval-metadata { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .page-intro { display: block; }
   .page-intro p { margin-top: 8px; text-align: left; }
 }
@@ -326,5 +345,6 @@ textarea { resize: vertical; line-height: 1.45; }
   .run-list > a { grid-template-columns: minmax(0, 1fr) 18px; }
   .run-list > a > div:nth-child(2), .run-list > a > div:nth-child(3) { display: none; }
   .provenance { grid-template-columns: 1fr; }
+  .approval-metadata { grid-template-columns: 1fr; }
   .onboarding-steps, .trust-facts, .verification-grid { grid-template-columns: 1fr; }
 }

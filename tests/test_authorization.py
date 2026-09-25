@@ -96,7 +96,9 @@ class Resources:
     active = True
 
     def is_active(self, organization_id, workspace_id):
-        return self.active and organization_id == ORG and workspace_id != OTHER_WORKSPACE
+        return (
+            self.active and organization_id == ORG and workspace_id != OTHER_WORKSPACE
+        )
 
 
 @pytest.mark.parametrize("role", list(MembershipRole))
@@ -107,8 +109,14 @@ def test_role_matrix_is_the_single_permission_source(role, permission) -> None:
 
 def test_role_semantics_match_approved_matrix() -> None:
     assert Permission.ORGANIZATION_UPDATE in ROLE_PERMISSIONS[MembershipRole.OWNER]
-    assert Permission.ORGANIZATION_TRANSFER_OWNERSHIP in ROLE_PERMISSIONS[MembershipRole.OWNER]
-    assert Permission.ORGANIZATION_TRANSFER_OWNERSHIP not in ROLE_PERMISSIONS[MembershipRole.ADMIN]
+    assert (
+        Permission.ORGANIZATION_TRANSFER_OWNERSHIP
+        in ROLE_PERMISSIONS[MembershipRole.OWNER]
+    )
+    assert (
+        Permission.ORGANIZATION_TRANSFER_OWNERSHIP
+        not in ROLE_PERMISSIONS[MembershipRole.ADMIN]
+    )
     assert Permission.MEMBERSHIP_INVITE in ROLE_PERMISSIONS[MembershipRole.ADMIN]
     assert Permission.TRIAGE_RUN in ROLE_PERMISSIONS[MembershipRole.OPERATOR]
     assert Permission.MEMBERSHIP_INVITE not in ROLE_PERMISSIONS[MembershipRole.OPERATOR]
@@ -135,6 +143,7 @@ def test_approved_role_permission_sets_are_exact() -> None:
         Permission.JOB_RETRY,
         Permission.KNOWLEDGE_MANAGE,
         Permission.ACTION_PROPOSE,
+        Permission.APPROVAL_REQUEST,
         Permission.AUDIT_READ,
     }
     admin = set(Permission) - {
@@ -168,9 +177,7 @@ def test_human_authorization_uses_fresh_durable_facts() -> None:
 
     facts.role = MembershipRole.VIEWER
     with pytest.raises(AuthorizationDenied, match="Access denied"):
-        service.authorize(
-            _human(), ORG, Permission.TRIAGE_RUN, workspace_id=WORKSPACE
-        )
+        service.authorize(_human(), ORG, Permission.TRIAGE_RUN, workspace_id=WORKSPACE)
 
 
 def test_suspended_or_wrong_tenant_fails_closed_without_context() -> None:
@@ -230,7 +237,10 @@ def test_service_account_requires_explicit_revocable_grant() -> None:
     )
     with pytest.raises(AuthorizationDenied):
         service.authorize(
-            _service_account(), ORG, Permission.INTEGRATION_MANAGE, workspace_id=WORKSPACE
+            _service_account(),
+            ORG,
+            Permission.INTEGRATION_MANAGE,
+            workspace_id=WORKSPACE,
         )
     facts.active = False
     with pytest.raises(AuthorizationDenied):
@@ -265,9 +275,7 @@ def test_system_actor_has_no_implicit_bypass() -> None:
             ),
         ),
     )
-    configured.authorize(
-        actor, ORG, Permission.INCIDENT_READ, workspace_id=WORKSPACE
-    )
+    configured.authorize(actor, ORG, Permission.INCIDENT_READ, workspace_id=WORKSPACE)
 
 
 def test_context_is_sealed_and_archived_resources_are_denied() -> None:

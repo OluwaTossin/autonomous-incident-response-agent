@@ -38,6 +38,7 @@ becomes the first active, unrestricted Owner. It is not inherited from an existi
 | `action.read` | Yes | Yes | Yes | Yes |
 | `action.propose` | Yes | Yes | Yes | No |
 | `approval.read` | Yes | Yes | Yes | Yes |
+| `approval.request` | Yes | Yes | Yes | No |
 | `approval.decide` | Yes | Yes | No | No |
 | `usage.read` | Yes | Yes | No | No |
 | `audit.read` | Yes | Yes | Yes | No |
@@ -51,8 +52,10 @@ Permission checks use the centralized matrix, not scattered role-name conditions
 V3.19 uses `action.propose` only at the trusted application/worker generation boundary.
 There is no browser endpoint that accepts an `ActionProposal` payload, so a human role or
 service-account grant cannot use this vocabulary entry to forge executable intent.
-`action.read` protects the read-only proposal routes. V3.20 may refine how authenticated
-humans request regeneration or review without changing this no-arbitrary-payload rule.
+`action.read` protects proposal routes. V3.20 uses `approval.request` for Owner, Admin, and
+Operator review requests and `approval.decide` for Owner/Admin decisions. Both operations
+require a human `ActorContext`, and the requester cannot approve or reject their own request.
+See [`approvals.md`](approvals.md). This does not change the no-arbitrary-payload rule.
 
 ## Membership Lifecycle
 
@@ -83,7 +86,7 @@ or workspaces fail authorization even when a membership or grant still exists.
 Service-account credentials prove identity only. A separate durable organization grant
 contains an allowlisted subset of the same permission vocabulary and an optional workspace
 restriction. Service accounts cannot receive organization administration, membership,
-approval-decision, usage, audit, or Owner capabilities. Grants are independently revocable
+approval request/decision, usage, audit, or Owner capabilities. Grants are independently revocable
 and changes are audited.
 
 System actors have no automatic bypass. They require an exact composition-owned policy

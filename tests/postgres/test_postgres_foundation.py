@@ -153,7 +153,7 @@ def test_fresh_migration_contains_expected_schema(
             ).scalars()
         )
 
-    assert revision == "4d8f2a1c9b73"
+    assert revision == "7f3a9c2d1e84"
     assert {
         "users",
         "organizations",

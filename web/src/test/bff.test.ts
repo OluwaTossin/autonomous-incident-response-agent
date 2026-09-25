@@ -69,6 +69,7 @@ describe("BFF authentication and error mapping", () => {
 
   it.each([
     [403, "forbidden"],
+    [409, "conflict"],
     [422, "validation"],
     [500, "unavailable"],
   ] as const)("keeps backend %s as safe %s response", async (status, kind) => {

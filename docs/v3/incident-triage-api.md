@@ -93,9 +93,10 @@ redispatch and repairs terminal failed/cancelled drift after a crash.
 
 After the success transaction commits, V3.19 deterministically derives action proposals in
 a separate short transaction. Proposal-generation failure cannot invalidate the completed
-TriageRun. Generation is idempotent for the run and result hash, and the hosted API exposes
-only read routes; approval and execution remain later phases. See
-[`action-proposals.md`](action-proposals.md).
+TriageRun. Generation is idempotent for the run and result hash. V3.20 adds separate
+proposal-bound approval routes and durable human decisions; it adds no execution route and
+does not mutate the proposal lifecycle. See [`action-proposals.md`](action-proposals.md) and
+[`approvals.md`](approvals.md).
 
 ## Evidence, Failure, And Cancellation
 
@@ -130,4 +131,5 @@ V3.13 owns the hosted Next.js session, Cognito PKCE callback, cookies, CSRF, ref
 operator UI. V3.15 history behavior is described in
 [`incident-history.md`](incident-history.md). V3.17 CloudWatch/EventBridge application intake
 is documented in [`alert-ingestion.md`](alert-ingestion.md); AssumeRole Logs/Metrics context
-collection and enrichment remain V3.18. Action proposals and approvals remain V3.19-V3.21.
+collection and enrichment are documented for V3.18. V3.19 action proposals and V3.20
+approvals remain separate from V3.21 execution intent and connectors.
