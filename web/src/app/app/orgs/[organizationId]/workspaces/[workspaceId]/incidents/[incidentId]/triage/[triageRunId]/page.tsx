@@ -1,0 +1,25 @@
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
+import { AppShell } from "@/components/app-shell";
+import { RunInvestigation } from "@/components/run-investigation";
+import { loadHostedPage, loadWorkspace, requireOrganization } from "@/lib/page-context";
+import { runtime } from "@/lib/runtime";
+
+export const dynamic = "force-dynamic";
+
+export default async function TriageRunPage({ params }: { params: Promise<{ organizationId: string; workspaceId: string; incidentId: string; triageRunId: string }> }) {
+  const { organizationId, workspaceId, incidentId, triageRunId } = await params;
+  const { session, bootstrap } = await loadHostedPage();
+  const organization = requireOrganization(bootstrap.organizations, organizationId);
+  const [workspace, incident, run] = await Promise.all([
+    loadWorkspace(session.accessToken, organizationId, workspaceId),
+    runtime().api.getIncident(session.accessToken, organizationId, workspaceId, incidentId),
+    runtime().api.getTriageRun(session.accessToken, organizationId, workspaceId, triageRunId),
+  ]);
+  const incidentHref = `/app/orgs/${organizationId}/workspaces/${workspaceId}/incidents/${incidentId}`;
+  return <AppShell organizations={bootstrap.organizations} organization={organization} workspace={workspace.workspace} user={session} csrfToken={session.csrfToken}>
+    <Link className="back-link" href={incidentHref}><ArrowLeft aria-hidden="true" size={16} />{incident.title}</Link>
+    <div className="page-intro"><div><span className="eyebrow">Triage investigation</span><h1>Run {run.triage_id.slice(0, 8)}</h1></div><p>Durable result, evidence provenance, and operator controls for this run.</p></div>
+    <RunInvestigation initialRun={run} organizationId={organizationId} workspaceId={workspaceId} csrfToken={session.csrfToken} canOperate={organization.permissions.includes("incident.create")} />
+  </AppShell>;
+}

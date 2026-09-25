@@ -89,9 +89,28 @@ export interface Incident {
   environment: string;
   source_provider: string;
   source_type: string;
+  external_event_id: string | null;
+  source_url: string | null;
+  description: string;
+  metric_summary: string;
+  severity_hint: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null;
   observed_at: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface IncidentSummary extends Incident {
+  latest_triage_run_id: string | null;
+  latest_triage_state: string | null;
+  latest_severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null;
+  latest_confidence: number | null;
+  latest_escalate: boolean | null;
+  triage_run_count: number;
+}
+
+export interface IncidentPage {
+  items: IncidentSummary[];
+  next_cursor: string | null;
 }
 
 export interface TriageAccepted {
@@ -110,6 +129,10 @@ export interface TriageEvidence {
   source: string;
   reason: string;
   origin: string | null;
+  document_id?: string | null;
+  document_version_id?: string | null;
+  knowledge_index_version_id?: string | null;
+  chunk_index?: number | null;
   score: number | null;
 }
 
@@ -122,6 +145,7 @@ export interface TriageResult {
   escalate: boolean;
   confidence: number;
   evidence: Array<{ type: string; source: string; reason: string }>;
+  conflicting_signals_summary?: string | null;
   timeline: string[];
   triage_id: string;
 }
@@ -134,6 +158,9 @@ export interface TriageRun {
   state: string;
   job_state: string;
   cancellation_requested: boolean;
+  attempt_count?: number;
+  max_attempts?: number;
+  next_attempt_at?: string | null;
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
@@ -142,6 +169,36 @@ export interface TriageRun {
   failure_summary: string | null;
   result: TriageResult | null;
   evidence: TriageEvidence[];
+}
+
+export interface TriageRunSummary {
+  triage_run_id: string;
+  triage_id: string;
+  incident_id: string;
+  state: string;
+  job_state: string;
+  attempt_count: number;
+  max_attempts: number;
+  next_attempt_at: string | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  failure_category: string | null;
+  failure_summary: string | null;
+  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null;
+  confidence: number | null;
+  escalate: boolean | null;
+}
+
+export interface TriageRunPage {
+  items: TriageRunSummary[];
+  next_cursor: string | null;
+}
+
+export interface FeedbackCreate {
+  diagnosis_correct: boolean | null;
+  actions_useful: boolean | null;
+  notes: string | null;
 }
 
 export type BrowserErrorCode =

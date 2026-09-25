@@ -90,5 +90,6 @@ Automated tests inject the OIDC provider and session store and do not contact Co
 `npm test`, `npm run typecheck`, `npm run lint`, and `npm run build` in `web/`. The standalone
 container exposes `/healthz`; ECS service, target group, HTTPS ALB rules, deployment secrets,
 and production Cognito resources remain V3.22 work. Organization/workspace administration
-is described in [`organization-workspace-ux.md`](organization-workspace-ux.md). Full incident
-history remains V3.15.
+is described in [`organization-workspace-ux.md`](organization-workspace-ux.md). Incident
+history and investigation behavior is described in
+[`incident-history.md`](incident-history.md).

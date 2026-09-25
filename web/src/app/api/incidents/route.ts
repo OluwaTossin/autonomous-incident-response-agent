@@ -5,6 +5,25 @@ import type { IncidentCreate } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
+export async function GET(request: NextRequest) {
+  const organizationId = request.nextUrl.searchParams.get("organization_id");
+  const workspaceId = request.nextUrl.searchParams.get("workspace_id");
+  if (!organizationId || !workspaceId) {
+    return errorResponse(422, "validation", "Incident scope is incomplete");
+  }
+  const query = new URLSearchParams(request.nextUrl.searchParams);
+  query.delete("organization_id");
+  query.delete("workspace_id");
+  return withBffSession(request, false, (session) =>
+    runtime().api.listIncidents(
+      session.accessToken,
+      organizationId,
+      workspaceId,
+      query.toString(),
+    ),
+  );
+}
+
 export async function POST(request: NextRequest) {
   let body: Record<string, unknown>;
   try {

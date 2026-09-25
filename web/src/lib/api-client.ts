@@ -4,10 +4,13 @@ import type {
   HostedBootstrap,
   Incident,
   IncidentCreate,
+  IncidentPage,
   TriageAccepted,
   TriageEvidence,
   TriageResult,
   TriageRun,
+  TriageRunPage,
+  FeedbackCreate,
   WorkspaceConfigurationUpdate,
   WorkspaceCreate,
   WorkspaceDetail,
@@ -67,6 +70,31 @@ export interface HostedApi {
     workspaceId: string,
     input: IncidentCreate,
   ): Promise<Incident>;
+  listIncidents(
+    accessToken: string,
+    organizationId: string,
+    workspaceId: string,
+    query?: string,
+  ): Promise<IncidentPage>;
+  getIncident(
+    accessToken: string,
+    organizationId: string,
+    workspaceId: string,
+    incidentId: string,
+  ): Promise<Incident>;
+  transitionIncident(
+    accessToken: string,
+    organizationId: string,
+    workspaceId: string,
+    incidentId: string,
+    state: "investigating" | "resolved" | "closed",
+  ): Promise<Incident>;
+  listTriageRuns(
+    accessToken: string,
+    organizationId: string,
+    workspaceId: string,
+    query?: string,
+  ): Promise<TriageRunPage>;
   requestTriage(
     accessToken: string,
     organizationId: string,
@@ -98,6 +126,13 @@ export interface HostedApi {
     workspaceId: string,
     triageRunId: string,
   ): Promise<TriageRun>;
+  submitFeedback(
+    accessToken: string,
+    organizationId: string,
+    workspaceId: string,
+    triageRunId: string,
+    input: FeedbackCreate,
+  ): Promise<{ feedback_id: string; triage_run_id: string; created_at: string }>;
 }
 
 export class HostedApiClient implements HostedApi {
@@ -192,6 +227,56 @@ export class HostedApiClient implements HostedApi {
     });
   }
 
+  listIncidents(
+    accessToken: string,
+    organizationId: string,
+    workspaceId: string,
+    query = "",
+  ): Promise<IncidentPage> {
+    return this.request(
+      `${this.scope(organizationId, workspaceId, "/incidents")}${query ? `?${query}` : ""}`,
+      accessToken,
+    );
+  }
+
+  getIncident(
+    accessToken: string,
+    organizationId: string,
+    workspaceId: string,
+    incidentId: string,
+  ): Promise<Incident> {
+    return this.request(
+      this.scope(organizationId, workspaceId, `/incidents/${encodeURIComponent(incidentId)}`),
+      accessToken,
+    );
+  }
+
+  transitionIncident(
+    accessToken: string,
+    organizationId: string,
+    workspaceId: string,
+    incidentId: string,
+    state: "investigating" | "resolved" | "closed",
+  ): Promise<Incident> {
+    return this.request(
+      this.scope(organizationId, workspaceId, `/incidents/${encodeURIComponent(incidentId)}/state`),
+      accessToken,
+      { method: "PATCH", body: JSON.stringify({ state }) },
+    );
+  }
+
+  listTriageRuns(
+    accessToken: string,
+    organizationId: string,
+    workspaceId: string,
+    query = "",
+  ): Promise<TriageRunPage> {
+    return this.request(
+      `${this.scope(organizationId, workspaceId, "/triage-runs")}${query ? `?${query}` : ""}`,
+      accessToken,
+    );
+  }
+
   requestTriage(
     accessToken: string,
     organizationId: string,
@@ -272,6 +357,24 @@ export class HostedApiClient implements HostedApi {
       ),
       accessToken,
       { method: "POST" },
+    );
+  }
+
+  submitFeedback(
+    accessToken: string,
+    organizationId: string,
+    workspaceId: string,
+    triageRunId: string,
+    input: FeedbackCreate,
+  ): Promise<{ feedback_id: string; triage_run_id: string; created_at: string }> {
+    return this.request(
+      this.scope(
+        organizationId,
+        workspaceId,
+        `/triage-runs/${encodeURIComponent(triageRunId)}/feedback`,
+      ),
+      accessToken,
+      { method: "POST", body: JSON.stringify(input) },
     );
   }
 

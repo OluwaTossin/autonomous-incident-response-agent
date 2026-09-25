@@ -1,4 +1,4 @@
-import { Activity, Building2, CircleUserRound, Settings } from "lucide-react";
+import { Activity, Building2, CircleUserRound, ListTree, Settings } from "lucide-react";
 import Link from "next/link";
 import { LogoutButton } from "./logout-button";
 import type { BootstrapOrganization, BootstrapWorkspace } from "@/lib/types";
@@ -30,7 +30,8 @@ export function AppShell({
         </Link>
         <nav aria-label="Primary navigation">
           <Link href="/app"><Building2 aria-hidden="true" size={17} />Organizations</Link>
-          {workspaceBase ? <Link href={`${workspaceBase}/incidents/new`}><Activity aria-hidden="true" size={17} />Triage</Link> : null}
+          {workspaceBase ? <Link href={`${workspaceBase}/incidents`}><ListTree aria-hidden="true" size={17} />Incidents</Link> : null}
+          {workspaceBase && organization?.permissions.includes("incident.create") ? <Link href={`${workspaceBase}/incidents/new`}><Activity aria-hidden="true" size={17} />New triage</Link> : null}
           {workspaceBase && organization?.permissions.includes("workspace.update") ? (
             <Link href={`${workspaceBase}/settings`}><Settings aria-hidden="true" size={17} />Settings</Link>
           ) : null}

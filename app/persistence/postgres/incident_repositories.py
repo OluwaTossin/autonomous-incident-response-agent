@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import String, and_, delete, or_, select, update
+from sqlalchemy import String, and_, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from app.application.incidents import IncidentListCursor, TriageRunListCursor
+from app.application.incidents import (
+    IncidentHistoryItem,
+    IncidentListCursor,
+    TriageHistoryItem,
+    TriageRunListCursor,
+)
 from app.domain.identifiers import IncidentId, TriageRunId
 from app.domain.incidents import Evidence, Feedback, Incident, IncidentState, TriageRun, TriageRunState
 from app.domain.operations import Job, JobState
@@ -101,6 +107,62 @@ class PostgresHostedIncidentRepository:
         ).all()
         return [incident_from_record(record) for record in records]
 
+    def list_history(
+        self,
+        *,
+        limit: int,
+        before: IncidentListCursor | None,
+        state: IncidentState | None = None,
+        created_from: datetime | None = None,
+        created_to: datetime | None = None,
+    ) -> Sequence[IncidentHistoryItem]:
+        latest_run_id = (
+            select(TriageRunRecord.id)
+            .where(TriageRunRecord.incident_id == IncidentRecord.id)
+            .order_by(TriageRunRecord.created_at.desc(), TriageRunRecord.id.desc())
+            .limit(1)
+            .correlate(IncidentRecord)
+            .scalar_subquery()
+        )
+        run_count = (
+            select(func.count(TriageRunRecord.id))
+            .where(TriageRunRecord.incident_id == IncidentRecord.id)
+            .correlate(IncidentRecord)
+            .scalar_subquery()
+        )
+        statement = select(
+            IncidentRecord, TriageRunRecord, run_count.label("triage_run_count")
+        ).outerjoin(TriageRunRecord, TriageRunRecord.id == latest_run_id)
+        if state is not None:
+            statement = statement.where(IncidentRecord.state == state.value)
+        if created_from is not None:
+            statement = statement.where(IncidentRecord.created_at >= created_from)
+        if created_to is not None:
+            statement = statement.where(IncidentRecord.created_at <= created_to)
+        if before is not None:
+            statement = statement.where(
+                or_(
+                    IncidentRecord.created_at < before.created_at,
+                    and_(
+                        IncidentRecord.created_at == before.created_at,
+                        IncidentRecord.id < UUID(str(before.incident_id)),
+                    ),
+                )
+            )
+        rows = self._session.execute(
+            statement.order_by(
+                IncidentRecord.created_at.desc(), IncidentRecord.id.desc()
+            ).limit(limit)
+        ).all()
+        return [
+            IncidentHistoryItem(
+                incident_from_record(incident),
+                triage_run_from_record(run) if run is not None else None,
+                int(count),
+            )
+            for incident, run, count in rows
+        ]
+
     def save(self, incident: Incident) -> None:
         record = incident_to_record(incident)
         result = self._session.execute(
@@ -162,6 +224,50 @@ class PostgresTriageRunRepository:
             ).limit(limit)
         ).all()
         return [triage_run_from_record(record) for record in records]
+
+    def list_history(
+        self,
+        *,
+        limit: int,
+        before: TriageRunListCursor | None,
+        incident_id: IncidentId | None = None,
+        state: TriageRunState | None = None,
+    ) -> Sequence[TriageHistoryItem]:
+        statement = (
+            select(TriageRunRecord, JobRecord)
+            .join(
+                JobRecord,
+                and_(
+                    JobRecord.subject_type == "triage_run",
+                    JobRecord.subject_id == TriageRunRecord.id.cast(String),
+                ),
+            )
+        )
+        if incident_id is not None:
+            statement = statement.where(
+                TriageRunRecord.incident_id == UUID(str(incident_id))
+            )
+        if state is not None:
+            statement = statement.where(TriageRunRecord.state == state.value)
+        if before is not None:
+            statement = statement.where(
+                or_(
+                    TriageRunRecord.created_at < before.created_at,
+                    and_(
+                        TriageRunRecord.created_at == before.created_at,
+                        TriageRunRecord.id < UUID(str(before.triage_run_id)),
+                    ),
+                )
+            )
+        rows = self._session.execute(
+            statement.order_by(
+                TriageRunRecord.created_at.desc(), TriageRunRecord.id.desc()
+            ).limit(limit)
+        ).all()
+        return [
+            TriageHistoryItem(triage_run_from_record(run), job_from_record(job))
+            for run, job in rows
+        ]
 
     def save(self, run: TriageRun, *, expected_version: int) -> None:
         record = triage_run_to_record(run)

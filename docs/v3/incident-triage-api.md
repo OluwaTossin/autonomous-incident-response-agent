@@ -40,9 +40,17 @@ JSON are not accepted. State changes use the existing domain state machine and c
 reopen an incident.
 
 Lists use opaque cursors over `(created_at DESC, id DESC)`, accept at most 100 records,
-and expose only state and incident filters. Responses exclude database ownership fields,
+and expose incident-state, triage-state, incident, and bounded incident-created-time filters.
+The incident history projection includes the latest run and run count in one query; the
+triage history projection joins its durable job in one query. Responses exclude database ownership fields,
 queue receipts, dispatch metadata, leases, claim tokens, object keys, cache paths, prompts,
 and provider errors.
+
+V3.15 adds operator-safe history fields. Incident rows expose source classification,
+severity hint, latest run state/result summary, and run count. Triage rows expose job state,
+attempt count, maximum attempts, next retry time when applicable, safe failure category and
+summary, and persisted severity/confidence/escalation. Retries keep the same run ID; a new
+operator re-triage request uses a new idempotency key and creates a distinct run.
 
 ## Asynchronous Request
 
@@ -110,5 +118,6 @@ filesystem workspaces and FAISS, JSONL audit, and existing metrics. It is not ro
 through PostgreSQL or SQS.
 
 V3.13 owns the hosted Next.js session, Cognito PKCE callback, cookies, CSRF, refresh, and
-operator UI. CloudWatch/EventBridge intake, AssumeRole context collection, and enrichment
+operator UI. V3.15 history behavior is described in
+[`incident-history.md`](incident-history.md). CloudWatch/EventBridge intake, AssumeRole context collection, and enrichment
 remain V3.16-V3.18. Action proposals and approvals remain V3.19-V3.21.

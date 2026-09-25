@@ -29,6 +29,9 @@ The hosted application uses stable routes:
 /app/orgs/{organization_id}/workspaces/{workspace_id}
 /app/orgs/{organization_id}/workspaces/{workspace_id}/settings
 /app/orgs/{organization_id}/workspaces/{workspace_id}/incidents/new
+/app/orgs/{organization_id}/workspaces/{workspace_id}/incidents
+/app/orgs/{organization_id}/workspaces/{workspace_id}/incidents/{incident_id}
+/app/orgs/{organization_id}/workspaces/{workspace_id}/incidents/{incident_id}/triage/{triage_run_id}
 ```
 
 Server Components load memberships, workspace lists, and workspace detail without browser
@@ -71,7 +74,8 @@ blocks new reads and mutations through the active-workspace path. Restore remain
 ## Compatibility and deferred work
 
 The Version 2 static frontend, filesystem workspaces, API keys, CLI, Gradio, local FAISS, and
-synchronous triage remain unchanged. V3.15 owns incident and triage history/detail UX.
+synchronous triage remain unchanged. V3.15 incident and triage history/detail behavior is
+documented in [`incident-history.md`](incident-history.md).
 CloudWatch onboarding and integration setup remain V3.16 and later.
 
 The V3.13 Cognito compatibility constraint also remains: first-sign-in identity mapping

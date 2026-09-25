@@ -151,6 +151,19 @@ class TriageView:
     evidence: tuple[Evidence, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class IncidentHistoryItem:
+    incident: Incident
+    latest_run: TriageRun | None
+    triage_run_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class TriageHistoryItem:
+    run: TriageRun
+    job: Job
+
+
 class IncidentRepository(Protocol):
     def create_or_get(self, incident: Incident) -> tuple[Incident, bool]: ...
     def get(self, incident_id: IncidentId, *, for_update: bool = False) -> Incident | None: ...
@@ -161,6 +174,15 @@ class IncidentRepository(Protocol):
         before: IncidentListCursor | None,
         state: IncidentState | None = None,
     ) -> Sequence[Incident]: ...
+    def list_history(
+        self,
+        *,
+        limit: int,
+        before: IncidentListCursor | None,
+        state: IncidentState | None = None,
+        created_from: datetime | None = None,
+        created_to: datetime | None = None,
+    ) -> Sequence[IncidentHistoryItem]: ...
     def save(self, incident: Incident) -> None: ...
 
 
@@ -175,6 +197,14 @@ class TriageRunRepository(Protocol):
         incident_id: IncidentId | None = None,
         state: TriageRunState | None = None,
     ) -> Sequence[TriageRun]: ...
+    def list_history(
+        self,
+        *,
+        limit: int,
+        before: TriageRunListCursor | None,
+        incident_id: IncidentId | None = None,
+        state: TriageRunState | None = None,
+    ) -> Sequence[TriageHistoryItem]: ...
     def save(self, run: TriageRun, *, expected_version: int) -> None: ...
     def list_inconsistent_jobs(self, *, limit: int): ...
 
@@ -311,6 +341,39 @@ class HostedIncidentService:
         with self._uow_factory(context) as uow:
             return tuple(uow.incidents.list(limit=limit, before=before, state=state))
 
+    def list_incident_history(
+        self,
+        actor: ActorContext,
+        organization_id: OrganizationId,
+        workspace_id: WorkspaceId,
+        *,
+        limit: int = 50,
+        before: IncidentListCursor | None = None,
+        state: IncidentState | None = None,
+        created_from: datetime | None = None,
+        created_to: datetime | None = None,
+    ) -> tuple[IncidentHistoryItem, ...]:
+        if not 1 <= limit <= 101:
+            raise ValueError("Incident history limit must be between 1 and 101")
+        if created_from and created_to and created_from > created_to:
+            raise ValueError("created_from cannot be after created_to")
+        for name, value in (("created_from", created_from), ("created_to", created_to)):
+            if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+                raise ValueError(f"{name} must include a timezone")
+        context = self._authorize(
+            actor, organization_id, workspace_id, Permission.INCIDENT_READ
+        )
+        with self._uow_factory(context) as uow:
+            return tuple(
+                uow.incidents.list_history(
+                    limit=limit,
+                    before=before,
+                    state=state,
+                    created_from=created_from,
+                    created_to=created_to,
+                )
+            )
+
     def transition_incident(
         self,
         actor: ActorContext,
@@ -344,7 +407,7 @@ class HostedIncidentService:
         actor: ActorContext,
         organization_id: OrganizationId,
         workspace_id: WorkspaceId,
-        incident_id: IncidentId,
+        incident_id: IncidentId | None = None,
         *,
         idempotency_key: str,
         max_attempts: int = 3,
@@ -466,6 +529,34 @@ class HostedIncidentService:
         with self._uow_factory(context) as uow:
             return tuple(
                 uow.triage_runs.list(
+                    limit=limit,
+                    before=before,
+                    incident_id=incident_id,
+                    state=state,
+                )
+            )
+
+    def list_triage_history(
+        self,
+        actor: ActorContext,
+        organization_id: OrganizationId,
+        workspace_id: WorkspaceId,
+        incident_id: IncidentId,
+        *,
+        limit: int = 50,
+        before: TriageRunListCursor | None = None,
+        state: TriageRunState | None = None,
+    ) -> tuple[TriageHistoryItem, ...]:
+        if not 1 <= limit <= 101:
+            raise ValueError("Triage history limit must be between 1 and 101")
+        context = self._authorize(
+            actor, organization_id, workspace_id, Permission.INCIDENT_READ
+        )
+        with self._uow_factory(context) as uow:
+            if incident_id is not None and uow.incidents.get(incident_id) is None:
+                raise HostedIncidentNotFound("Incident not found")
+            return tuple(
+                uow.triage_runs.list_history(
                     limit=limit,
                     before=before,
                     incident_id=incident_id,

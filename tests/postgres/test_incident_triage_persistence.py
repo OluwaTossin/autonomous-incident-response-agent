@@ -154,6 +154,18 @@ def test_request_completion_evidence_and_stale_claim_are_atomic(
     assert view.run.state is TriageRunState.SUCCEEDED
     assert view.run.legacy_triage_id == str(first.run.id)
     assert view.evidence[0].document_version_id == "version-190"
+    incident_history = service.list_incident_history(
+        actor, organization_id, workspace.id
+    )
+    triage_history = service.list_triage_history(
+        actor, organization_id, workspace.id, incident.id
+    )
+    assert incident_history[0].incident.id == incident.id
+    assert incident_history[0].latest_run is not None
+    assert incident_history[0].latest_run.id == first.run.id
+    assert incident_history[0].triage_run_count == 1
+    assert triage_history[0].run.id == first.run.id
+    assert triage_history[0].job.state is JobState.SUCCEEDED
 
     with pytest.raises(Exception, match="stale"):
         lifecycle.complete(_worker(), claimed, outcome)

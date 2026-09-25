@@ -17,8 +17,10 @@ from app.application.incidents import (
     HostedIncidentService,
     HostedTriageConflict,
     HostedTriageNotFound,
+    IncidentHistoryItem,
     IncidentListCursor,
     TriageRunListCursor,
+    TriageHistoryItem,
     TriageView,
 )
 from app.auth.context import ActorContext
@@ -63,13 +65,26 @@ class IncidentResponse(BaseModel):
     source_provider: str
     source_type: str
     external_event_id: str | None
+    source_url: str | None
+    description: str
+    metric_summary: str
+    severity_hint: str | None
     observed_at: datetime
     created_at: datetime
     updated_at: datetime
 
 
+class IncidentListItem(IncidentResponse):
+    latest_triage_run_id: str | None
+    latest_triage_state: str | None
+    latest_severity: str | None
+    latest_confidence: float | None
+    latest_escalate: bool | None
+    triage_run_count: int
+
+
 class IncidentPageResponse(BaseModel):
-    items: list[IncidentResponse]
+    items: list[IncidentListItem]
     next_cursor: str | None = None
 
 
@@ -114,6 +129,9 @@ class TriageRunResponse(BaseModel):
     state: str
     job_state: str
     cancellation_requested: bool
+    attempt_count: int
+    max_attempts: int
+    next_attempt_at: datetime | None
     created_at: datetime
     started_at: datetime | None
     completed_at: datetime | None
@@ -129,8 +147,18 @@ class TriageRunListItem(BaseModel):
     triage_id: str
     incident_id: str
     state: str
+    job_state: str
+    attempt_count: int
+    max_attempts: int
+    next_attempt_at: datetime | None
     created_at: datetime
+    started_at: datetime | None
     completed_at: datetime | None
+    failure_category: str | None
+    failure_summary: str | None
+    severity: str | None
+    confidence: float | None
+    escalate: bool | None
 
 
 class TriageRunPageResponse(BaseModel):
@@ -197,25 +225,29 @@ def build_hosted_incident_router(
         limit: int = Query(50, ge=1, le=100),
         cursor: str | None = None,
         incident_state: IncidentState | None = Query(None, alias="state"),
+        created_from: datetime | None = None,
+        created_to: datetime | None = None,
     ) -> IncidentPageResponse:
         try:
             before = _decode_incident_cursor(cursor) if cursor else None
-            items = service.list_incidents(
+            items = service.list_incident_history(
                 actor,
                 OrganizationId(organization_id),
                 WorkspaceId(workspace_id),
                 limit=limit + 1,
                 before=before,
                 state=incident_state,
+                created_from=created_from,
+                created_to=created_to,
             )
             page = items[:limit]
             next_cursor = (
-                _encode_cursor(page[-1].created_at, page[-1].id)
+                _encode_cursor(page[-1].incident.created_at, page[-1].incident.id)
                 if len(items) > limit
                 else None
             )
             return IncidentPageResponse(
-                items=[_incident_response(item) for item in page],
+                items=[_incident_list_item(item) for item in page],
                 next_cursor=next_cursor,
             )
         except Exception as exc:
@@ -295,7 +327,7 @@ def build_hosted_incident_router(
     ) -> TriageRunPageResponse:
         try:
             before = _decode_triage_cursor(cursor) if cursor else None
-            runs = service.list_triage_runs(
+            runs = service.list_triage_history(
                 actor,
                 OrganizationId(organization_id),
                 WorkspaceId(workspace_id),
@@ -306,7 +338,7 @@ def build_hosted_incident_router(
             )
             page = runs[:limit]
             next_cursor = (
-                _encode_cursor(page[-1].created_at, page[-1].id)
+                _encode_cursor(page[-1].run.created_at, page[-1].run.id)
                 if len(runs) > limit
                 else None
             )
@@ -445,9 +477,27 @@ def _incident_response(incident: Incident) -> IncidentResponse:
         source_provider=incident.source.provider,
         source_type=incident.source.source_type,
         external_event_id=incident.source.external_id,
+        source_url=incident.source.source_url,
+        description=payload.logs,
+        metric_summary=payload.metric_summary,
+        severity_hint=getattr(payload, "severity_hint", None),
         observed_at=datetime.fromisoformat(payload.time_of_occurrence.replace("Z", "+00:00")),
         created_at=incident.created_at,
         updated_at=incident.updated_at,
+    )
+
+
+def _incident_list_item(item: IncidentHistoryItem) -> IncidentListItem:
+    run = item.latest_run
+    result = run.result if run is not None else None
+    return IncidentListItem(
+        **_incident_response(item.incident).model_dump(),
+        latest_triage_run_id=str(run.id) if run is not None else None,
+        latest_triage_state=run.state.value if run is not None else None,
+        latest_severity=result.severity if result is not None else None,
+        latest_confidence=result.confidence if result is not None else None,
+        latest_escalate=result.escalate if result is not None else None,
+        triage_run_count=item.triage_run_count,
     )
 
 
@@ -480,6 +530,9 @@ def _triage_response(view: TriageView) -> TriageRunResponse:
         state=run.state.value,
         job_state=view.job.state.value,
         cancellation_requested=view.job.cancellation_requested_at is not None,
+        attempt_count=view.job.attempt_count,
+        max_attempts=view.job.max_attempts,
+        next_attempt_at=_next_attempt_at(view.job),
         created_at=run.created_at,
         started_at=run.started_at,
         completed_at=run.completed_at,
@@ -505,15 +558,33 @@ def _triage_response(view: TriageView) -> TriageRunResponse:
     )
 
 
-def _triage_list_item(run: TriageRun) -> TriageRunListItem:
+def _triage_list_item(item: TriageHistoryItem) -> TriageRunListItem:
+    run = item.run
+    result = run.result
     return TriageRunListItem(
         triage_run_id=str(run.id),
         triage_id=run.legacy_triage_id,
         incident_id=str(run.incident.id),
         state=run.state.value,
+        job_state=item.job.state.value,
+        attempt_count=item.job.attempt_count,
+        max_attempts=item.job.max_attempts,
+        next_attempt_at=_next_attempt_at(item.job),
         created_at=run.created_at,
+        started_at=run.started_at,
         completed_at=run.completed_at,
+        failure_category=run.error_category,
+        failure_summary=run.error_message,
+        severity=result.severity if result is not None else None,
+        confidence=result.confidence if result is not None else None,
+        escalate=result.escalate if result is not None else None,
     )
+
+
+def _next_attempt_at(job) -> datetime | None:
+    if job.state.value == "pending" and job.attempt_count > 0:
+        return job.available_at
+    return None
 
 
 def _encode_cursor(created_at: datetime, identifier) -> str:

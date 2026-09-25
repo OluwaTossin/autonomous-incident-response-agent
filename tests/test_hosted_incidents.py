@@ -10,7 +10,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from app.api.hosted_incidents import build_hosted_incident_router
-from app.application.incidents import HostedIncidentInput, HostedIncidentService
+from app.application.incidents import (
+    HostedIncidentInput,
+    HostedIncidentService,
+    IncidentHistoryItem,
+    TriageHistoryItem,
+)
 from app.auth.context import ActorContext, AuthenticationMethod
 from app.authorization.service import (
     AuthorizationDenied,
@@ -111,6 +116,31 @@ class Incidents:
             ]
         return values[:limit]
 
+    def list_history(
+        self,
+        *,
+        limit,
+        before,
+        state=None,
+        created_from=None,
+        created_to=None,
+    ):
+        incidents = self.list(limit=1000, before=before, state=state)
+        if created_from is not None:
+            incidents = [item for item in incidents if item.created_at >= created_from]
+        if created_to is not None:
+            incidents = [item for item in incidents if item.created_at <= created_to]
+        history = []
+        for incident in incidents[:limit]:
+            runs = [
+                run
+                for run in self.store.runs.values()
+                if run.incident.id == incident.id
+            ]
+            runs.sort(key=lambda item: (item.created_at, str(item.id)), reverse=True)
+            history.append(IncidentHistoryItem(incident, runs[0] if runs else None, len(runs)))
+        return history
+
 
 class Runs:
     def __init__(self, store):
@@ -129,7 +159,32 @@ class Runs:
         if state is not None:
             values = [item for item in values if item.state is state]
         values.sort(key=lambda item: (item.created_at, str(item.id)), reverse=True)
+        if before is not None:
+            values = [
+                item
+                for item in values
+                if (item.created_at, str(item.id))
+                < (before.created_at, str(before.triage_run_id))
+            ]
         return values[:limit]
+
+    def list_history(self, *, limit, before, incident_id=None, state=None):
+        return [
+            TriageHistoryItem(
+                run,
+                next(
+                    job
+                    for job in self.store.jobs.values()
+                    if job.subject_id == str(run.id)
+                ),
+            )
+            for run in self.list(
+                limit=limit,
+                before=before,
+                incident_id=incident_id,
+                state=state,
+            )
+        ]
 
     def save(self, run, *, expected_version):
         assert self.store.runs[run.id].state_version == expected_version
@@ -290,6 +345,30 @@ def test_triage_request_is_atomic_shape_and_idempotent() -> None:
     ]
 
 
+def test_history_projects_latest_run_count_and_stable_retry_identity() -> None:
+    service, store = _service()
+    incident = service.create_incident(_actor(), ORG, WORKSPACE, _input())
+    first = service.request_triage(
+        _actor(), ORG, WORKSPACE, incident.id, idempotency_key="history-1"
+    )
+    repeated = service.request_triage(
+        _actor(), ORG, WORKSPACE, incident.id, idempotency_key="history-1"
+    )
+    second = service.request_triage(
+        _actor(), ORG, WORKSPACE, incident.id, idempotency_key="history-2"
+    )
+
+    history = service.list_incident_history(_actor(), ORG, WORKSPACE)
+    runs = service.list_triage_history(_actor(), ORG, WORKSPACE, incident.id)
+
+    assert repeated.run.id == first.run.id
+    assert second.run.id != first.run.id
+    assert history[0].triage_run_count == 2
+    assert history[0].latest_run == runs[0].run
+    assert {item.run.id for item in runs} == {first.run.id, second.run.id}
+    assert len(store.jobs) == 2
+
+
 def test_pending_triage_cancellation_updates_job_and_run_together() -> None:
     service, _ = _service()
     incident = service.create_incident(_actor(), ORG, WORKSPACE, _input())
@@ -367,11 +446,28 @@ def test_hosted_api_returns_202_and_stable_polling_contract() -> None:
     polled = client.get(f"{prefix}/triage-runs/{body['triage_run_id']}")
     assert polled.status_code == 200
     assert polled.json()["result"] is None
+    assert polled.json()["attempt_count"] == 0
+    assert polled.json()["max_attempts"] == 3
     assert "claim_token" not in polled.text
 
     page = client.get(f"{prefix}/incidents", params={"limit": 1})
     assert page.status_code == 200
     assert len(page.json()["items"]) == 1
+    assert page.json()["items"][0]["latest_triage_run_id"] == body["triage_run_id"]
+    assert page.json()["items"][0]["triage_run_count"] == 1
+    assert page.json()["items"][0]["description"] == "Requests exceed the latency objective"
+
+    runs = client.get(
+        f"{prefix}/triage-runs", params={"incident_id": incident_id}
+    )
+    assert runs.status_code == 200
+    assert runs.json()["items"][0]["job_state"] == "pending"
+    assert runs.json()["items"][0]["attempt_count"] == 0
+
+    naive_filter = client.get(
+        f"{prefix}/incidents", params={"created_from": "2026-09-25T00:00:00"}
+    )
+    assert naive_filter.status_code == 422
 
     schema = application.openapi()
     triage_path = (
@@ -399,3 +495,41 @@ def test_hosted_api_authentication_failure_stays_at_dependency_boundary() -> Non
         f"/v3/organizations/{ORG}/workspaces/{WORKSPACE}/incidents"
     )
     assert response.status_code == 401
+
+
+def test_incident_api_cursor_pagination_and_state_filter_are_deterministic() -> None:
+    service, _ = _service()
+    application = FastAPI()
+    application.include_router(build_hosted_incident_router(service, lambda: _actor()))
+    client = TestClient(application)
+    prefix = f"/v3/organizations/{ORG}/workspaces/{WORKSPACE}"
+    for index in range(2):
+        response = client.post(
+            f"{prefix}/incidents",
+            json={
+                "title": f"Incident {index}",
+                "description": "Bounded history test",
+                "service_name": "api",
+                "environment": "production",
+                "source_provider": "manual",
+                "source_type": "operator",
+                "observed_at": NOW.isoformat(),
+                "external_event_id": f"history-event-{index}",
+            },
+        )
+        assert response.status_code == 201
+
+    first = client.get(f"{prefix}/incidents", params={"limit": 1})
+    assert first.status_code == 200
+    cursor = first.json()["next_cursor"]
+    assert cursor
+    second = client.get(
+        f"{prefix}/incidents", params={"limit": 1, "cursor": cursor}
+    )
+    assert second.status_code == 200
+    assert first.json()["items"][0]["incident_id"] != second.json()["items"][0]["incident_id"]
+
+    open_items = client.get(f"{prefix}/incidents", params={"state": "open"})
+    assert open_items.status_code == 200
+    assert len(open_items.json()["items"]) == 2
+    assert client.get(f"{prefix}/incidents", params={"cursor": "invalid"}).status_code == 422
