@@ -525,18 +525,20 @@ Version 3 preserves human authority over consequential actions. Version 4 is the
 
 ## V3.18 - CloudWatch Logs / Metrics enrichment
 
+**Status:** Complete in `0ad424e` (`feat: add CloudWatch context enrichment`).
+
 **Goal:** Collect bounded, relevant CloudWatch context before triage using the authorized integration role.
 
 **Dependencies:** V3.9, V3.11, V3.16, V3.17.
 
 **Checklist:**
 
-- [ ] Define enrichment plan from alert metadata and workspace connector configuration.
-- [ ] Query only allowlisted log groups, metric namespaces, time windows, and limits.
-- [ ] Persist provenance, query parameters, truncation, collection status, and costs.
-- [ ] Redact configured sensitive patterns before LLM use and logs.
-- [ ] Handle partial collection failure without losing the incident.
-- [ ] Feed collected context through the existing incident/triage evidence contract.
+- [x] Define enrichment plan from alert metadata and workspace connector configuration.
+- [x] Query only allowlisted log groups, metric namespaces, time windows, and limits.
+- [x] Persist provenance, safe query metadata, truncation, collection status, and bounded collection diagnostics.
+- [x] Redact configured sensitive patterns before persistence, LLM use, and logs.
+- [x] Handle partial collection failure without losing the incident.
+- [x] Feed collected context through the existing incident/triage evidence contract.
 
 **Files/modules:** CloudWatch Logs/Metrics collectors, enrichment jobs/services, evidence persistence, redaction and quota modules, tests.
 
