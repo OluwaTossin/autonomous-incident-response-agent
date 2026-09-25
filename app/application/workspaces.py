@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol, Self, cast
 
@@ -46,10 +47,25 @@ class WorkspaceNotFound(Exception):
     """The authorized workspace record does not exist."""
 
 
+@dataclass(frozen=True, slots=True)
+class WorkspaceListCursor:
+    created_at: datetime
+    workspace_id: WorkspaceId
+
+
+@dataclass(frozen=True, slots=True)
+class WorkspacePage:
+    items: tuple[Workspace, ...]
+    next_cursor: WorkspaceListCursor | None
+
+
 class WorkspaceRepository(Protocol):
     def add(self, workspace: Workspace) -> None: ...
     def get(self, workspace_id: WorkspaceId) -> Workspace | None: ...
     def list(self) -> Sequence[Workspace]: ...
+    def list_page(
+        self, *, limit: int, before: WorkspaceListCursor | None
+    ) -> Sequence[Workspace]: ...
     def save(self, workspace: Workspace, *, expected_version: int) -> None: ...
 
 
@@ -179,6 +195,42 @@ class HostedWorkspaceService:
                 continue
             visible.append(workspace)
         return tuple(visible)
+
+    def list_visible_page(
+        self,
+        actor: ActorContext,
+        organization_id: OrganizationId,
+        *,
+        limit: int,
+        before: WorkspaceListCursor | None = None,
+    ) -> WorkspacePage:
+        if not 1 <= limit <= 100:
+            raise WorkspaceConflict("Workspace page limit must be between 1 and 100")
+        organization_context = self._authorization.authorize(
+            actor, organization_id, Permission.ORGANIZATION_READ
+        )
+        with self._uow_factory(organization_context) as uow:
+            candidates = tuple(
+                uow.workspaces.list_page(limit=limit + 1, before=before)
+            )
+        page_candidates = candidates[:limit]
+        visible: list[Workspace] = []
+        for workspace in page_candidates:
+            try:
+                self._authorization.authorize(
+                    actor,
+                    organization_id,
+                    Permission.WORKSPACE_READ,
+                    workspace_id=workspace.id,
+                )
+            except AuthorizationDenied:
+                continue
+            visible.append(workspace)
+        next_cursor = None
+        if len(candidates) > limit and page_candidates:
+            last = page_candidates[-1]
+            next_cursor = WorkspaceListCursor(last.created_at, last.id)
+        return WorkspacePage(tuple(visible), next_cursor)
 
     def update_metadata(
         self,

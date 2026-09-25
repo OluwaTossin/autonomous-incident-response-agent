@@ -8,7 +8,11 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.application.workspaces import WorkspaceConflict, WorkspaceVersionConflict
+from app.application.workspaces import (
+    WorkspaceConflict,
+    WorkspaceListCursor,
+    WorkspaceVersionConflict,
+)
 from app.domain.identifiers import WorkspaceId
 from app.domain.tenancy import Workspace, WorkspaceConfiguration
 from app.persistence.postgres.mappers import (
@@ -43,6 +47,28 @@ class PostgresHostedWorkspaceRepository:
             select(WorkspaceRecord).order_by(
                 WorkspaceRecord.created_at, WorkspaceRecord.id
             )
+        ).all()
+        return [workspace_from_record(record) for record in records]
+
+    def list_page(
+        self,
+        *,
+        limit: int,
+        before: WorkspaceListCursor | None,
+    ) -> list[Workspace]:
+        statement = select(WorkspaceRecord)
+        if before is not None:
+            statement = statement.where(
+                (WorkspaceRecord.created_at < before.created_at)
+                | (
+                    (WorkspaceRecord.created_at == before.created_at)
+                    & (WorkspaceRecord.id < UUID(str(before.workspace_id)))
+                )
+            )
+        records = self._session.scalars(
+            statement.order_by(
+                WorkspaceRecord.created_at.desc(), WorkspaceRecord.id.desc()
+            ).limit(limit)
         ).all()
         return [workspace_from_record(record) for record in records]
 

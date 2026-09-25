@@ -8,6 +8,12 @@ import type {
   TriageEvidence,
   TriageResult,
   TriageRun,
+  WorkspaceConfigurationUpdate,
+  WorkspaceCreate,
+  WorkspaceDetail,
+  WorkspaceMetadataUpdate,
+  WorkspacePage,
+  WorkspaceSummary,
 } from "./types";
 
 export class HostedApiError extends Error {
@@ -22,6 +28,39 @@ export class HostedApiError extends Error {
 
 export interface HostedApi {
   bootstrap(accessToken: string): Promise<HostedBootstrap>;
+  listWorkspaces(
+    accessToken: string,
+    organizationId: string,
+    cursor?: string,
+  ): Promise<WorkspacePage>;
+  getWorkspace(
+    accessToken: string,
+    organizationId: string,
+    workspaceId: string,
+  ): Promise<WorkspaceDetail>;
+  createWorkspace(
+    accessToken: string,
+    organizationId: string,
+    input: WorkspaceCreate,
+  ): Promise<WorkspaceDetail>;
+  updateWorkspace(
+    accessToken: string,
+    organizationId: string,
+    workspaceId: string,
+    input: WorkspaceMetadataUpdate,
+  ): Promise<WorkspaceDetail>;
+  updateWorkspaceConfiguration(
+    accessToken: string,
+    organizationId: string,
+    workspaceId: string,
+    input: WorkspaceConfigurationUpdate,
+  ): Promise<WorkspaceDetail>;
+  archiveWorkspace(
+    accessToken: string,
+    organizationId: string,
+    workspaceId: string,
+    expectedVersion: number,
+  ): Promise<WorkspaceSummary>;
   createIncident(
     accessToken: string,
     organizationId: string,
@@ -69,6 +108,76 @@ export class HostedApiClient implements HostedApi {
 
   bootstrap(accessToken: string): Promise<HostedBootstrap> {
     return this.request("/v3/me", accessToken);
+  }
+
+  listWorkspaces(
+    accessToken: string,
+    organizationId: string,
+    cursor?: string,
+  ): Promise<WorkspacePage> {
+    const query = new URLSearchParams({ limit: "50" });
+    if (cursor) query.set("cursor", cursor);
+    return this.request(
+      `${this.organizationScope(organizationId, "/workspaces")}?${query}`,
+      accessToken,
+    );
+  }
+
+  getWorkspace(
+    accessToken: string,
+    organizationId: string,
+    workspaceId: string,
+  ): Promise<WorkspaceDetail> {
+    return this.request(this.workspaceScope(organizationId, workspaceId), accessToken);
+  }
+
+  createWorkspace(
+    accessToken: string,
+    organizationId: string,
+    input: WorkspaceCreate,
+  ): Promise<WorkspaceDetail> {
+    return this.request(this.organizationScope(organizationId, "/workspaces"), accessToken, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  updateWorkspace(
+    accessToken: string,
+    organizationId: string,
+    workspaceId: string,
+    input: WorkspaceMetadataUpdate,
+  ): Promise<WorkspaceDetail> {
+    return this.request(this.workspaceScope(organizationId, workspaceId), accessToken, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  }
+
+  updateWorkspaceConfiguration(
+    accessToken: string,
+    organizationId: string,
+    workspaceId: string,
+    input: WorkspaceConfigurationUpdate,
+  ): Promise<WorkspaceDetail> {
+    return this.request(
+      `${this.workspaceScope(organizationId, workspaceId)}/configuration`,
+      accessToken,
+      { method: "PATCH", body: JSON.stringify(input) },
+    );
+  }
+
+  archiveWorkspace(
+    accessToken: string,
+    organizationId: string,
+    workspaceId: string,
+    expectedVersion: number,
+  ): Promise<WorkspaceSummary> {
+    return this.request(
+      `${this.workspaceScope(organizationId, workspaceId)}/archive`,
+      accessToken,
+      { method: "POST", body: JSON.stringify({ expected_version: expectedVersion }) },
+    );
   }
 
   createIncident(
@@ -170,6 +279,17 @@ export class HostedApiClient implements HostedApi {
     return `/v3/organizations/${encodeURIComponent(
       organizationId,
     )}/workspaces/${encodeURIComponent(workspaceId)}${suffix}`;
+  }
+
+  private organizationScope(organizationId: string, suffix: string): string {
+    return `/v3/organizations/${encodeURIComponent(organizationId)}${suffix}`;
+  }
+
+  private workspaceScope(organizationId: string, workspaceId: string): string {
+    return this.organizationScope(
+      organizationId,
+      `/workspaces/${encodeURIComponent(workspaceId)}`,
+    );
   }
 
   private async request<T>(

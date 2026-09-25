@@ -7,9 +7,10 @@ from dataclasses import dataclass
 from app.application.governance import OrganizationGovernanceService
 from app.application.workspaces import HostedWorkspaceService
 from app.auth.context import ActorContext
-from app.authorization.permissions import ROLE_PERMISSIONS
+from app.authorization.permissions import ROLE_PERMISSIONS, Permission
 from app.authorization.service import AuthorizationService
 from app.domain.common import ActorKind
+from app.domain.tenancy import WorkspaceAccessMode
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +26,7 @@ class BootstrapOrganization:
     name: str
     slug: str
     role: str
+    membership_state: str
     permissions: tuple[str, ...]
     workspaces: tuple[BootstrapWorkspace, ...]
 
@@ -57,15 +59,21 @@ class HostedBootstrapService:
             facts = self._authorization.human_membership_facts(actor, organization.id)
             if facts is None:
                 continue
-            visible_workspaces = self._workspaces.list_visible(actor, organization.id)
+            visible_workspaces = self._workspaces.list_visible_page(
+                actor, organization.id, limit=100
+            ).items
+            permissions = set(ROLE_PERMISSIONS[facts.role])
+            if facts.workspace_access is WorkspaceAccessMode.RESTRICTED:
+                permissions.discard(Permission.WORKSPACE_CREATE)
             organizations.append(
                 BootstrapOrganization(
                     id=str(organization.id),
                     name=organization.name,
                     slug=organization.slug,
                     role=facts.role.value,
+                    membership_state="active",
                     permissions=tuple(
-                        sorted(permission.value for permission in ROLE_PERMISSIONS[facts.role])
+                        sorted(permission.value for permission in permissions)
                     ),
                     workspaces=tuple(
                         BootstrapWorkspace(str(item.id), item.name, item.slug)

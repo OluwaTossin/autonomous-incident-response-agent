@@ -1,9 +1,8 @@
 "use client";
 
-import React, { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Ban, CircleAlert, LoaderCircle, Play, Send } from "lucide-react";
+import React, { FormEvent, useEffect, useRef, useState } from "react";
+import { Ban, LoaderCircle, Play, Send } from "lucide-react";
 import type {
-  BootstrapOrganization,
   BrowserError,
   Incident,
   IncidentCreate,
@@ -30,23 +29,14 @@ export function validateIncidentDraft(draft: IncidentDraft): string | null {
 }
 
 export function IncidentWorkflow({
-  organizations,
+  organizationId,
+  workspaceId,
   csrfToken,
 }: {
-  organizations: BootstrapOrganization[];
+  organizationId: string;
+  workspaceId: string;
   csrfToken: string;
 }) {
-  const firstOrganization = organizations[0];
-  const [organizationId, setOrganizationId] = useState(
-    firstOrganization?.organization_id || "",
-  );
-  const organization = useMemo(
-    () => organizations.find((item) => item.organization_id === organizationId),
-    [organizationId, organizations],
-  );
-  const [workspaceId, setWorkspaceId] = useState(
-    firstOrganization?.workspaces[0]?.workspace_id || "",
-  );
   const [draft, setDraft] = useState<IncidentDraft>({
     title: "",
     description: "",
@@ -60,13 +50,6 @@ export function IncidentWorkflow({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const stopped = useRef(false);
-
-  useEffect(() => {
-    const next = organization?.workspaces[0]?.workspace_id || "";
-    if (!organization?.workspaces.some((item) => item.workspace_id === workspaceId)) {
-      setWorkspaceId(next);
-    }
-  }, [organization, workspaceId]);
 
   useEffect(() => {
     if (!accepted || (run && TERMINAL.has(run.state))) return;
@@ -163,18 +146,6 @@ export function IncidentWorkflow({
     }
   }
 
-  if (!organizations.length) {
-    return (
-      <section className="empty-state" aria-labelledby="no-access-title">
-        <CircleAlert aria-hidden="true" size={22} />
-        <div>
-          <h2 id="no-access-title">No active workspace access</h2>
-          <p>An organization owner must grant you access before you can triage incidents.</p>
-        </div>
-      </section>
-    );
-  }
-
   return (
     <div className="workflow-grid">
       <section className="work-panel" aria-labelledby="new-incident-title">
@@ -186,34 +157,6 @@ export function IncidentWorkflow({
           <Send aria-hidden="true" size={21} />
         </div>
         <form onSubmit={submit} className="incident-form">
-          <div className="field-row">
-            <label>
-              Organization
-              <select
-                value={organizationId}
-                onChange={(event) => setOrganizationId(event.target.value)}
-              >
-                {organizations.map((item) => (
-                  <option value={item.organization_id} key={item.organization_id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Workspace
-              <select
-                value={workspaceId}
-                onChange={(event) => setWorkspaceId(event.target.value)}
-              >
-                {(organization?.workspaces || []).map((item) => (
-                  <option value={item.workspace_id} key={item.workspace_id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
           <label>
             Incident title
             <input

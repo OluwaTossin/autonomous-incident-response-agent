@@ -9,6 +9,7 @@ export interface BootstrapOrganization {
   name: string;
   slug: string;
   role: "owner" | "admin" | "operator" | "viewer";
+  membership_state: "active";
   permissions: string[];
   workspaces: BootstrapWorkspace[];
 }
@@ -16,6 +17,55 @@ export interface BootstrapOrganization {
 export interface HostedBootstrap {
   user_id: string;
   organizations: BootstrapOrganization[];
+}
+
+export interface WorkspaceSummary {
+  workspace_id: string;
+  organization_id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  state: "active" | "archived";
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkspaceConfiguration {
+  schema_version: number;
+  version: number;
+  rag_top_k: number;
+  llm_temperature: number;
+  updated_at: string;
+}
+
+export interface WorkspaceDetail {
+  workspace: WorkspaceSummary;
+  configuration: WorkspaceConfiguration;
+}
+
+export interface WorkspacePage {
+  items: WorkspaceSummary[];
+  next_cursor: string | null;
+}
+
+export interface WorkspaceCreate {
+  name: string;
+  slug: string;
+  description?: string | null;
+}
+
+export interface WorkspaceMetadataUpdate {
+  expected_version: number;
+  name?: string;
+  slug?: string;
+  description?: string | null;
+}
+
+export interface WorkspaceConfigurationUpdate {
+  expected_version: number;
+  rag_top_k?: number;
+  llm_temperature?: number;
 }
 
 export interface IncidentCreate {

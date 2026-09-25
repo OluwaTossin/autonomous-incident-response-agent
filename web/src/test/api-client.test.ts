@@ -22,6 +22,8 @@ describe("hosted server API client", () => {
     [401, "unauthenticated"],
     [403, "forbidden"],
     [422, "validation"],
+    [404, "not_found"],
+    [409, "conflict"],
     [500, "unavailable"],
   ] as const)("maps backend %s to %s", async (status, kind) => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("internal detail", { status })));
@@ -30,5 +32,30 @@ describe("hosted server API client", () => {
       status,
       kind,
     } satisfies Partial<HostedApiError>);
+  });
+
+  it("uses tenant-scoped workspace routes for management operations", async () => {
+    const fetchMock = vi.fn(async (url: string, init: RequestInit) => {
+      return Response.json({ url, method: init.method || "GET" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new HostedApiClient("http://api.internal", 1_000);
+
+    await client.listWorkspaces("token", "org one");
+    await client.getWorkspace("token", "org one", "workspace one");
+    await client.createWorkspace("token", "org one", { name: "Ops", slug: "ops" });
+    await client.updateWorkspace("token", "org one", "workspace one", { expected_version: 2, name: "Operations" });
+    await client.updateWorkspaceConfiguration("token", "org one", "workspace one", { expected_version: 3, rag_top_k: 12 });
+    await client.archiveWorkspace("token", "org one", "workspace one", 2);
+
+    const calls = fetchMock.mock.calls.map(([url, init]) => [url, init.method || "GET"]);
+    expect(calls).toEqual([
+      ["http://api.internal/v3/organizations/org%20one/workspaces?limit=50", "GET"],
+      ["http://api.internal/v3/organizations/org%20one/workspaces/workspace%20one", "GET"],
+      ["http://api.internal/v3/organizations/org%20one/workspaces", "POST"],
+      ["http://api.internal/v3/organizations/org%20one/workspaces/workspace%20one", "PATCH"],
+      ["http://api.internal/v3/organizations/org%20one/workspaces/workspace%20one/configuration", "PATCH"],
+      ["http://api.internal/v3/organizations/org%20one/workspaces/workspace%20one/archive", "POST"],
+    ]);
   });
 });

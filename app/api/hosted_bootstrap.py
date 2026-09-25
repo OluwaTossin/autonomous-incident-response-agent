@@ -21,6 +21,7 @@ class BootstrapOrganizationResponse(BaseModel):
     name: str
     slug: str
     role: str
+    membership_state: str
     permissions: list[str]
     workspaces: list[BootstrapWorkspaceResponse]
 
@@ -52,6 +53,7 @@ def build_hosted_bootstrap_router(
                     name=organization.name,
                     slug=organization.slug,
                     role=organization.role,
+                    membership_state=organization.membership_state,
                     permissions=list(organization.permissions),
                     workspaces=[
                         BootstrapWorkspaceResponse(

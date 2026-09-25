@@ -106,3 +106,8 @@ Workspace creation requires `workspace.create`; metadata/configuration updates r
 Restricted memberships see only explicitly granted active workspaces. Service accounts and
 system actors require explicit grants from the shared permission vocabulary. RLS remains a
 second boundary and rejects missing or cross-tenant context even if repository code errs.
+
+V3.14 exposes this lifecycle through tenant-authorized hosted routes and a server-rendered
+organization/workspace experience. See
+[`organization-workspace-ux.md`](organization-workspace-ux.md) for routing, BFF, CSRF,
+permission-aware controls, pagination, and optimistic-conflict behavior.

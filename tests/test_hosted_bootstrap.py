@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.api.hosted_bootstrap import build_hosted_bootstrap_router
 from app.application.bootstrap import HostedBootstrapService
+from app.application.workspaces import WorkspacePage
 from app.auth.context import ActorContext, AuthenticationMethod
 from app.authorization.service import HumanAuthorizationFacts
 from app.domain.common import ActorKind, ActorReference
@@ -65,9 +66,11 @@ class Governance:
 
 
 class Workspaces:
-    def list_visible(self, actor, organization_id):
-        return (
-            Workspace(
+    def list_visible_page(self, actor, organization_id, *, limit, before=None):
+        assert limit == 100
+        return WorkspacePage(
+            (
+                Workspace(
                 WORKSPACE_ID,
                 ORG_ID,
                 "Production",
@@ -75,7 +78,9 @@ class Workspaces:
                 actor.actor,
                 NOW,
                 NOW,
+                ),
             ),
+            None,
         )
 
 
@@ -85,6 +90,7 @@ def test_bootstrap_returns_only_authoritative_scope_and_permissions() -> None:
 
     assert bootstrap.user_id == str(USER_ID)
     assert bootstrap.organizations[0].role == "operator"
+    assert bootstrap.organizations[0].membership_state == "active"
     assert "incident.create" in bootstrap.organizations[0].permissions
     assert bootstrap.organizations[0].workspaces[0].id == str(WORKSPACE_ID)
 
@@ -98,8 +104,29 @@ def test_me_route_uses_authenticated_actor_dependency() -> None:
 
     assert response.status_code == 200
     assert response.json()["organizations"][0]["organization_id"] == str(ORG_ID)
+    assert response.json()["organizations"][0]["membership_state"] == "active"
     assert response.json()["organizations"][0]["workspaces"][0] == {
         "workspace_id": str(WORKSPACE_ID),
         "name": "Production",
         "slug": "production",
     }
+
+
+def test_restricted_membership_does_not_advertise_workspace_creation() -> None:
+    class RestrictedAuthorization:
+        def human_membership_facts(self, actor, organization_id):
+            return HumanAuthorizationFacts(
+                MembershipId("00000000-0000-4000-8000-000000000004"),
+                MembershipRole.ADMIN,
+                WorkspaceAccessMode.RESTRICTED,
+                False,
+            )
+
+    service = HostedBootstrapService(
+        RestrictedAuthorization(), Governance(), Workspaces()
+    )
+
+    permissions = service.get(_actor()).organizations[0].permissions
+
+    assert "workspace.create" not in permissions
+    assert "workspace.update" in permissions

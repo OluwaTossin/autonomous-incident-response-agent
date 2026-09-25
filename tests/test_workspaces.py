@@ -181,6 +181,21 @@ class WorkspaceRepo:
     def list(self):
         return list(self.store.workspaces.values())
 
+    def list_page(self, *, limit, before):
+        values = sorted(
+            self.store.workspaces.values(),
+            key=lambda item: (item.created_at, str(item.id)),
+            reverse=True,
+        )
+        if before is not None:
+            values = [
+                item
+                for item in values
+                if (item.created_at, str(item.id))
+                < (before.created_at, str(before.workspace_id))
+            ]
+        return values[:limit]
+
     def save(self, workspace, *, expected_version):
         current = self.store.workspaces.get(workspace.id)
         if current is None or current.version != expected_version:
@@ -267,6 +282,23 @@ def test_owner_can_create_get_update_archive_with_audit() -> None:
         "workspace.metadata_updated",
         "workspace.archived",
     ]
+
+
+def test_visible_workspace_page_is_bounded_and_respects_restrictions() -> None:
+    store = Store()
+    store.restricted_users.add(VIEWER_ID)
+    store.allowed_workspaces[VIEWER_ID] = {WORKSPACE}
+    service = _workspace_service(store)
+
+    page = service.list_visible_page(_human(VIEWER_ID), ORG, limit=1)
+
+    assert len(page.items) <= 1
+    assert all(item.id == WORKSPACE for item in page.items)
+    assert page.next_cursor is not None
+    next_page = service.list_visible_page(
+        _human(VIEWER_ID), ORG, limit=1, before=page.next_cursor
+    )
+    assert next_page.items == (store.workspaces[WORKSPACE],)
 
 
 def test_workspace_description_can_be_cleared_explicitly() -> None:

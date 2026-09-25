@@ -144,6 +144,21 @@ def test_workspace_lifecycle_configuration_and_audit_are_durable(
         )
     assert service.get(actor, organization_id, workspace.id) == workspace
     assert service.list_visible(actor, organization_id) == (workspace,)
+    second_workspace = service.create(
+        actor, organization_id, name="Staging API", slug="staging-api"
+    )
+    page = service.list_visible_page(actor, organization_id, limit=1)
+    assert len(page.items) == 1
+    assert page.next_cursor is not None
+    next_page = service.list_visible_page(
+        actor, organization_id, limit=1, before=page.next_cursor
+    )
+    assert len(next_page.items) == 1
+    assert {page.items[0].id, next_page.items[0].id} == {
+        workspace.id,
+        second_workspace.id,
+    }
+    assert next_page.next_cursor is None
     configuration = service.get_configuration(actor, organization_id, workspace.id)
     assert configuration.schema_version == 1
     assert configuration.version == 1
@@ -189,7 +204,7 @@ def test_workspace_lifecycle_configuration_and_audit_are_durable(
         events = session.scalars(
             select(AuditEventRecord).order_by(AuditEventRecord.occurred_at)
         ).all()
-        assert len(events) == 4
+        assert len(events) == 5
         assert {event.event_type for event in events} == {
             "workspace.created",
             "workspace.metadata_updated",
@@ -197,7 +212,10 @@ def test_workspace_lifecycle_configuration_and_audit_are_durable(
             "workspace.archived",
         }
         assert all(event.actor_id == UUID(str(user_id)) for event in events)
-        assert all(event.workspace_id == UUID(str(workspace.id)) for event in events)
+        assert {event.workspace_id for event in events} == {
+            UUID(str(workspace.id)),
+            UUID(str(second_workspace.id)),
+        }
 
 
 def test_workspace_configuration_rls_fails_closed_and_isolates_scope(
