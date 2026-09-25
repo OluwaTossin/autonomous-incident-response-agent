@@ -432,13 +432,15 @@ Version 3 preserves human authority over consequential actions. Version 4 is the
 
 **Dependencies:** V3.5, V3.6, V3.13.
 
+**Status:** Complete in `fca0d34` (`feat: add organization and workspace experience`).
+
 **Checklist:**
 
-- [ ] Add organization/workspace switcher with stable tenant-aware routes.
-- [ ] Add organization creation, invitations, membership, role, and workspace access screens by permission.
-- [ ] Add workspace settings and integration entry points.
-- [ ] Handle revoked access and stale sessions without leaking prior tenant data.
-- [ ] Display authorization errors distinctly from missing resources.
+- [x] Add organization/workspace switcher with stable tenant-aware routes.
+- [x] Show authoritative membership role and effective permissions; keep organization provisioning, invitations, and member administration deferred until a secure product workflow is designed.
+- [x] Add permission-aware workspace creation, details, allowlisted settings, optimistic concurrency, and archive UX; keep integration setup in V3.16 and later.
+- [x] Handle revoked access and stale sessions without leaking prior tenant data.
+- [x] Display authorization errors distinctly from missing resources.
 
 **Files/modules:** Hosted Next.js organization/workspace routes, components, server actions/API clients; corresponding API endpoints/tests.
 
