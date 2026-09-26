@@ -52,6 +52,8 @@ jobs:
           tests/test_migration_service.py
         env:
           ENABLE_GRADIO_UI: "0"
+      - name: Release-bound production readiness gate
+        run: uv run pytest -q tests/readiness tests/ci tests/infra
       - name: Backend and self-hosted regression tests
         run: uv run pytest -q --ignore=tests/postgres
         env:

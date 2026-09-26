@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aira.example/schemas/readiness-evidence-v1.json",
+  "title": "AIRA release-bound production readiness evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "release", "checks", "security_findings", "conditions", "go_live_approval", "created_at"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "created_at": {"type": "string", "format": "date-time"},
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["git_sha", "api_digest", "worker_digest", "web_digest", "migration_revision", "environment"],
+      "properties": {
+        "git_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "api_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "worker_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "web_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "migration_revision": {"type": "string", "pattern": "^[0-9a-f]{4,64}$"},
+        "environment": {"enum": ["staging", "production"]}
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status", "evidence_refs"],
+        "properties": {
+          "status": {"enum": ["PLANNED", "LOCAL_VALIDATED", "CI_VALIDATED", "LIVE_VALIDATED", "FAILED"]},
+          "evidence_refs": {"type": "array", "items": {"type": "string"}},
+          "details": {"type": "string"}
+        }
+      }
+    },
+    "security_findings": {"type": "array", "items": {"type": "object"}},
+    "conditions": {"type": "array", "items": {"type": "object"}},
+    "go_live_approval": {"type": "object"}
+  }
+}
