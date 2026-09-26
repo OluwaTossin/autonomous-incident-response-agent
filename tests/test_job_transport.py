@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
@@ -100,6 +101,7 @@ def _envelope(job: Job, dispatch: JobDispatch, *, workspace=WORKSPACE) -> str:
         dispatch.dispatch_generation,
         ORG,
         workspace,
+        job.correlation.correlation_id,
     ).to_json()
 
 
@@ -131,15 +133,22 @@ class Queue:
 
 
 class DispatchService:
-    def __init__(self, dispatch, queue, *, fail_ack=False):
+    def __init__(self, dispatch, queue, *, fail_ack=False, job=None):
         self.dispatch = dispatch
         self.queue = queue
         self.fail_ack = fail_ack
+        self.job = job or _job()
         self.events = []
 
     def claim_dispatches(self, *args, **kwargs):
         self.events.append("claim")
         return (self.dispatch,)
+
+    def list_unpublished_dispatches(self, *args, **kwargs):
+        return (self.dispatch,)
+
+    def get_job(self, *args, **kwargs):
+        return self.job
 
     def mark_dispatch_published(self, *args, **kwargs):
         assert self.queue.sent
@@ -259,6 +268,7 @@ def test_message_envelope_is_strict_versioned_and_identifier_only() -> None:
 
     assert decoded.job_id == job.id
     assert decoded.dispatch_generation == 1
+    assert decoded.correlation_id == job.correlation.correlation_id
     assert "attempt" not in raw
     assert "claim_token" not in raw
     assert "payload" not in raw
@@ -267,12 +277,17 @@ def test_message_envelope_is_strict_versioned_and_identifier_only() -> None:
     with pytest.raises(MessageEnvelopeError):
         JobDispatchEnvelope.from_json("not-json")
 
+    legacy = json.loads(raw)
+    legacy["schema_version"] = 1
+    del legacy["correlation_id"]
+    assert JobDispatchEnvelope.from_json(json.dumps(legacy)).correlation_id is None
+
 
 def test_outbox_dispatcher_acknowledges_only_after_send_and_recovers_failures() -> None:
     job = _job()
     queue = Queue()
     dispatch = _dispatch(job, claimed=True)
-    service = DispatchService(dispatch, queue)
+    service = DispatchService(dispatch, queue, job=job)
 
     result = OutboxDispatcher(service, queue, publisher_id="publisher").publish_ready(
         _actor(), ORG, WORKSPACE
@@ -415,6 +430,17 @@ def test_stale_future_and_forged_routing_messages_do_not_execute() -> None:
     forged = _envelope(service.job, service.dispatch, workspace=OTHER_WORKSPACE)
     assert processor.process(QueueMessage(forged, "r")) is MessageDisposition.DELETE
     assert handler.calls == []
+
+    service = JobService(_job(), _dispatch(_job()))
+    processor, mismatch_handler = _processor(service, Queue())
+    mismatched = json.loads(_envelope(service.job, service.dispatch))
+    mismatched["correlation_id"] = str(CorrelationId.new())
+    assert (
+        processor.process(QueueMessage(json.dumps(mismatched), "r"))
+        is MessageDisposition.RETAIN
+    )
+    assert mismatch_handler.calls == []
+    assert "claim" not in service.calls
 
 
 def test_retry_cancellation_and_unknown_handler_commit_before_delete() -> None:

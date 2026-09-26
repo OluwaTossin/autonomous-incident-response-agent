@@ -157,6 +157,10 @@ class HostedAlertIngestionService:
         context = self._authorize_machine(
             actor, organization_id, workspace_id
         )
+        try:
+            request_correlation_id = CorrelationId(actor.request_id or "")
+        except ValueError:
+            request_correlation_id = CorrelationId.new()
         now = self._clock()
         if event.observed_at > now + self._future_tolerance:
             raise AlertIngestionConflict("Alarm event time is unreasonably far in the future")
@@ -212,7 +216,13 @@ class HostedAlertIngestionService:
                     )
                 else:
                     result = self._process_new(
-                        uow, context, integration.id, receipt, event, now
+                        uow,
+                        context,
+                        integration.id,
+                        receipt,
+                        event,
+                        now,
+                        request_correlation_id,
                     )
         except Exception:
             self._observer.record(
@@ -226,6 +236,11 @@ class HostedAlertIngestionService:
             int((self._monotonic() - started) * 1000),
             result.outcome.value,
         )
+        self._observer.record(
+            f"alert_events_{result.outcome.value}",
+            int((self._monotonic() - started) * 1000),
+            result.outcome.value,
+        )
         return result
 
     def _process_new(
@@ -236,6 +251,7 @@ class HostedAlertIngestionService:
         receipt: AlertEventReceipt,
         event: CloudWatchAlarmEvent,
         now: datetime,
+        request_correlation_id: CorrelationId,
     ) -> AlertIngestionResult:
         uow.alarm_states.lock_identity(integration_id, event.alarm_identity_hash)
         current = uow.alarm_states.get(integration_id, event.alarm_identity_hash)
@@ -268,7 +284,7 @@ class HostedAlertIngestionService:
         if event.state is CloudWatchAlarmValue.ALARM:
             if incident is None:
                 incident, triage_run_id = self._create_incident_and_triage(
-                    uow, context, integration_id, event, now
+                    uow, context, integration_id, event, now, request_correlation_id
                 )
             else:
                 status = AlertReceiptStatus.IGNORED_POLICY
@@ -379,6 +395,7 @@ class HostedAlertIngestionService:
         integration_id: IntegrationId,
         event: CloudWatchAlarmEvent,
         now: datetime,
+        request_correlation_id: CorrelationId,
     ) -> tuple[Incident, TriageRunId]:
         incident_id = IncidentId.new()
         run_id = TriageRunId(
@@ -386,7 +403,7 @@ class HostedAlertIngestionService:
         )
         job_id = JobId.new()
         correlation = CorrelationContext(
-            CorrelationId.new(),
+            request_correlation_id,
             incident_id=incident_id,
             triage_run_id=run_id,
             job_id=job_id,

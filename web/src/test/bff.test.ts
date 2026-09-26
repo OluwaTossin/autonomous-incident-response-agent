@@ -56,6 +56,16 @@ describe("BFF authentication and error mapping", () => {
     expect(body).toContain('"used":true');
     expect(body).not.toContain("server-held-token");
     expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-correlation-id")).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it("preserves a valid correlation id across the BFF boundary", async () => {
+    const id = crypto.randomUUID();
+    const correlated = new NextRequest("https://aira.example/api/incidents", {
+      headers: { cookie: "aira_session=opaque-id", "x-correlation-id": id },
+    });
+    const response = await withBffSession(correlated, false, async () => ({ ok: true }));
+    expect(response.headers.get("x-correlation-id")).toBe(id);
   });
 
   it("revokes the local session after a backend 401", async () => {

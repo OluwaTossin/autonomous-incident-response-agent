@@ -234,6 +234,10 @@ resource "aws_iam_role_policy" "worker_data" {
 locals {
   api_environment = [
     { name = "AIRA_ENV", value = "production" },
+    { name = "AIRA_BUILD_SHA", value = var.build_sha },
+    { name = "AIRA_METRIC_NAMESPACE", value = "AIRA/Hosted" },
+    { name = "AIRA_OTEL_EXPORTER_OTLP_ENDPOINT", value = var.otel_exporter_otlp_endpoint },
+    { name = "AIRA_TRACE_SAMPLE_RATIO", value = var.environment == "prod" ? "0.05" : "1.0" },
     { name = "AIRA_AWS_REGION", value = var.aws_region },
     { name = "AIRA_SQS_QUEUE_URL", value = aws_sqs_queue.jobs.url },
     { name = "AIRA_ALERT_QUEUE_URL", value = aws_sqs_queue.alerts.url },
@@ -256,6 +260,8 @@ locals {
   ])
   worker_secrets = concat(local.api_secrets, [{ name = "AIRA_WORKER_SCOPE_GRANTS", valueFrom = aws_secretsmanager_secret.worker_scope_grants.arn }])
   web_environment = [
+    { name = "AIRA_ENV", value = "production" },
+    { name = "AIRA_BUILD_SHA", value = var.build_sha },
     { name = "AIRA_WEB_APP_ORIGIN", value = "https://${var.web_hostname}" },
     { name = "AIRA_WEB_API_BASE_URL", value = "https://${var.api_hostname}" },
     { name = "AIRA_WEB_OIDC_ISSUER", value = "https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.this.id}" },

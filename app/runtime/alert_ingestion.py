@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+from dataclasses import replace
 
 from pydantic import ValidationError
 
@@ -24,6 +25,9 @@ from app.persistence.postgres.authorization import (
 from app.persistence.postgres.engine import create_postgres_engine, create_session_factory
 from app.runtime.config import alert_routes, validate_hosted_settings
 from app.worker.runtime import install_shutdown_handlers
+from app.observability.context import correlation_id, log_context
+from app.observability.logging import log_event
+from app.observability.telemetry import HostedTelemetry
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +39,7 @@ def run_alert_ingestion(settings: Settings) -> None:
     routes = alert_routes(settings)
     engine = create_postgres_engine(settings.aira_database_url)
     sessions = create_session_factory(engine)
-    actor = trusted_system_actor(
+    base_actor = trusted_system_actor(
         system_name="alert-ingress",
         workload_issuer="aws:iam",
         workload_subject=settings.aira_workload_subject,
@@ -63,9 +67,11 @@ def run_alert_ingestion(settings: Settings) -> None:
             for route in routes
         ),
     )
+    telemetry = HostedTelemetry.from_settings(settings, "alert-ingestion")
     service = HostedAlertIngestionService(
         authorization,
         lambda context: PostgresAlertIngestionUnitOfWork(sessions, context),
+        observer=telemetry.observers.lifecycle,
     )
     queue = Boto3SqsQueue(
         create_sqs_client(
@@ -86,19 +92,38 @@ def run_alert_ingestion(settings: Settings) -> None:
         ):
             try:
                 envelope = EventBridgeAlarmEnvelope.model_validate(json.loads(message.body))
+                request_correlation = correlation_id(envelope.event_id)
+                actor = replace(base_actor, request_id=request_correlation)
                 route = next(
                     route
                     for route in routes
                     if route.aws_account_id == envelope.account
                     and envelope.region in route.regions
                 )
-                service.ingest(
-                    actor,
-                    route.scope.organization_id,
-                    route.scope.workspace_id,
-                    IntegrationId(route.integration_id),
-                    envelope.to_domain(),
-                )
+                with log_context(
+                    correlation_id=request_correlation,
+                    request_id=request_correlation,
+                    organization_id=route.scope.organization_id,
+                    workspace_id=route.scope.workspace_id,
+                    integration_id=route.integration_id,
+                    eventbridge_event_id=envelope.event_id,
+                ):
+                    result = service.ingest(
+                        actor,
+                        route.scope.organization_id,
+                        route.scope.workspace_id,
+                        IntegrationId(route.integration_id),
+                        envelope.to_domain(),
+                    )
+                    log_event(
+                        logger,
+                        logging.INFO,
+                        "alert.ingested",
+                        "CloudWatch alarm event processed",
+                        incident_id=result.incident_id,
+                        triage_run_id=result.triage_run_id,
+                        result=result.outcome.value,
+                    )
             except (StopIteration, ValidationError, ValueError, json.JSONDecodeError):
                 logger.exception("Alert delivery rejected; SQS retry/DLQ remains authoritative")
                 continue

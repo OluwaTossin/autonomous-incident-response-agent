@@ -39,3 +39,43 @@ def test_images_are_immutable_and_no_provider_mutation_permissions_exist() -> No
 def test_v2_terraform_tree_remains_separate() -> None:
     assert (ROOT.parent / "envs" / "dev" / "frontend_cdn.tf").is_file()
     assert "../../modules/platform" in (ROOT / "envs" / "dev" / "main.tf").read_text()
+
+
+def test_hosted_observability_dependencies_do_not_enter_v2_image() -> None:
+    repository = ROOT.parents[2]
+    assert "--extra hosted" in (repository / "Dockerfile.hosted").read_text()
+    assert "--extra hosted" not in (repository / "Dockerfile").read_text()
+
+
+def test_hosted_observability_has_required_dashboards_and_alarms() -> None:
+    dashboards = _text("observability_dashboards.tf")
+    alarms = _text("observability_alarms.tf")
+    monitoring = _text("monitoring.tf")
+    runtime = _text("runtime.tf")
+    assert dashboards.count('resource "aws_cloudwatch_dashboard"') == 4
+    for resource in (
+        'resource "aws_cloudwatch_metric_alarm" "target_unhealthy"',
+        'resource "aws_cloudwatch_metric_alarm" "target_5xx"',
+        'resource "aws_cloudwatch_metric_alarm" "queue_age"',
+        'resource "aws_cloudwatch_metric_alarm" "worker_count"',
+        'resource "aws_cloudwatch_metric_alarm" "database_storage"',
+    ):
+        assert resource in alarms
+    assert 'resource "aws_cloudwatch_metric_alarm" "jobs_dlq"' in monitoring
+    assert 'resource "aws_cloudwatch_metric_alarm" "alerts_dlq"' in monitoring
+    assert "alarm_actions = var.alarm_action_arns" in alarms
+    assert "retention_in_days = var.log_retention_days" in runtime
+
+
+def test_observability_terraform_has_no_tenant_metric_dimensions() -> None:
+    source = (_text("observability_dashboards.tf") + _text("observability_alarms.tf")).casefold()
+    for forbidden in (
+        "organization_id",
+        "workspace_id",
+        "incident_id",
+        "triage_run_id",
+        "job_id",
+        "integration_id",
+        "log_group",
+    ):
+        assert forbidden not in source

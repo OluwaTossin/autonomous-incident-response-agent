@@ -56,6 +56,8 @@ from app.persistence.postgres.workspace_unit_of_work import PostgresWorkspaceUni
 from app.runtime.config import validate_hosted_settings, worker_scopes
 from app.runtime.alert_ingestion import run_alert_ingestion
 from app.worker.entrypoint import run_dispatcher, run_polling_worker
+from app.observability.logging import configure_json_logging, log_event
+from app.observability.telemetry import HostedTelemetry
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +65,7 @@ logger = logging.getLogger(__name__)
 def create_api(settings: Settings | None = None):
     settings = settings or get_settings()
     validate_hosted_settings(settings)
+    telemetry = HostedTelemetry.from_settings(settings, "api")
     engine = create_postgres_engine(settings.aira_database_url)
     sessions = create_session_factory(engine)
     authorization = AuthorizationService(
@@ -87,9 +90,17 @@ def create_api(settings: Settings | None = None):
 
     workspaces = HostedWorkspaceService(authorization, workspace_uow)
     governance = OrganizationGovernanceService(authorization, governance_uow)
-    actions = HostedActionProposalService(authorization, incident_uow)
-    approvals = HostedApprovalService(authorization, incident_uow)
-    execution_intents = HostedExecutionIntentService(authorization, incident_uow)
+    actions = HostedActionProposalService(
+        authorization, incident_uow, observer=telemetry.observers.actions
+    )
+    approvals = HostedApprovalService(
+        authorization, incident_uow, observer=telemetry.observers.approvals
+    )
+    execution_intents = HostedExecutionIntentService(
+        authorization,
+        incident_uow,
+        observer=telemetry.observers.execution_intents,
+    )
     role_assumer = Boto3AwsRoleAssumer(
         boto3.client("sts", region_name=settings.aira_aws_region),
         source_role_arn=settings.aira_aws_source_role_arn,
@@ -100,7 +111,9 @@ def create_api(settings: Settings | None = None):
             connection.execute(text("SELECT 1"))
 
     application = build_hosted_api(
-        HostedIncidentService(authorization, incident_uow),
+        HostedIncidentService(
+            authorization, incident_uow, observer=telemetry.observers.lifecycle
+        ),
         actor_dependency,
         bootstrap=HostedBootstrapService(authorization, governance, workspaces),
         workspaces=workspaces,
@@ -109,22 +122,35 @@ def create_api(settings: Settings | None = None):
             integration_uow,
             role_assumer,
             trusted_principal_arn=settings.aira_aws_trusted_principal_arn,
+            observer=telemetry.observers.lifecycle,
         ),
-        alert_ingestion=HostedAlertIngestionService(authorization, alert_uow),
+        alert_ingestion=HostedAlertIngestionService(
+            authorization, alert_uow, observer=telemetry.observers.lifecycle
+        ),
         machine_actor_dependency=actor_dependency,
         action_proposals=actions,
         approvals=approvals,
         execution_intents=execution_intents,
         readiness_check=readiness,
+        telemetry=telemetry,
     )
     application.state.database_engine = engine
     return application
 
 
-def _configure_logging() -> None:
-    logging.basicConfig(
-        level=os.environ.get("LOG_LEVEL", "INFO").upper(),
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+def _configure_logging(settings: Settings, service: str) -> None:
+    configure_json_logging(
+        service=service,
+        environment=settings.aira_env,
+        build_sha=settings.aira_build_sha,
+    )
+    logging.getLogger().setLevel(os.environ.get("LOG_LEVEL", "INFO").upper())
+    log_event(
+        logger,
+        logging.INFO,
+        "runtime.started",
+        "Hosted runtime started",
+        configuration_mode="hosted",
     )
 
 
@@ -140,9 +166,10 @@ def _serve_api() -> None:
     )
 
 
-def create_worker(settings: Settings | None = None):
+def create_worker(settings: Settings | None = None, *, service: str = "worker"):
     settings = settings or get_settings()
     scopes = worker_scopes(settings)
+    telemetry = HostedTelemetry.from_settings(settings, service)
     engine = create_postgres_engine(settings.aira_database_url)
     sessions = create_session_factory(engine)
     permissions = frozenset(
@@ -208,9 +235,14 @@ def create_worker(settings: Settings | None = None):
     knowledge = HostedKnowledgeBundleService(
         authorization, repository, builder, publisher
     )
-    actions = HostedActionProposalService(authorization, incident_uow)
+    actions = HostedActionProposalService(
+        authorization, incident_uow, observer=telemetry.observers.actions
+    )
     lifecycle = HostedTriageLifecycle(
-        authorization, incident_uow, proposal_generator=actions
+        authorization,
+        incident_uow,
+        observer=telemetry.observers.lifecycle,
+        proposal_generator=actions,
     )
     cache = VerifiedBundleCache(Path("/tmp/aira-faiss-cache"), knowledge_storage)
 
@@ -232,7 +264,12 @@ def create_worker(settings: Settings | None = None):
         knowledge,
         CachedHostedFaissRetriever(cache),
         top_k,
-        context_enricher=build_incident_context_enricher(settings, role_assumer),
+        context_enricher=build_incident_context_enricher(
+            settings,
+            role_assumer,
+            observer=telemetry.observers.lifecycle,
+            snapshot_observer=telemetry.observers.context_snapshots,
+        ),
     )
     return build_hosted_worker(
         settings,
@@ -245,6 +282,11 @@ def create_worker(settings: Settings | None = None):
         publisher_id=f"dispatcher-{os.getpid()}",
         triage_handler=triage_handler,
         triage_lifecycle=lifecycle,
+        job_observer=telemetry.observers.lifecycle,
+        dispatch_observer=telemetry.observers.dispatch,
+        outbox_observer=telemetry.observers.outbox_backlog,
+        worker_observer=telemetry.observers.lifecycle,
+        job_metric_observer=telemetry.observers.job_execution,
     )
 
 
@@ -252,18 +294,19 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="AIRA hosted runtime")
     parser.add_argument("process", choices=("api", "worker", "dispatcher", "alert-ingestion"))
     args = parser.parse_args(argv)
-    _configure_logging()
+    settings = get_settings()
+    _configure_logging(settings, args.process)
     if args.process == "api":
         _serve_api()
         return
     if args.process == "worker":
-        composition = create_worker()
+        composition = create_worker(settings, service="worker")
         run_polling_worker(composition.polling_worker)
     elif args.process == "dispatcher":
-        composition = create_worker()
+        composition = create_worker(settings, service="dispatcher")
         run_dispatcher(composition.dispatcher_runtime)
     else:
-        run_alert_ingestion(get_settings())
+        run_alert_ingestion(settings)
 
 
 if __name__ == "__main__":

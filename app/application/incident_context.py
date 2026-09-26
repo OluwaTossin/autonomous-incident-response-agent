@@ -123,6 +123,19 @@ class NoopContextEnrichmentObserver:
         return None
 
 
+class ContextSnapshotObserver(Protocol):
+    def record_snapshot(
+        self, *, item_count: int, truncated: bool, result: str, provider: str
+    ) -> None: ...
+
+
+class NoopContextSnapshotObserver:
+    def record_snapshot(
+        self, *, item_count: int, truncated: bool, result: str, provider: str
+    ) -> None:
+        return None
+
+
 class IncidentContextEnricher:
     """Collect CloudWatch evidence from one persisted alarm binding."""
 
@@ -134,12 +147,14 @@ class IncidentContextEnricher:
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         monotonic: Callable[[], float] = time.monotonic,
         observer: ContextEnrichmentObserver = NoopContextEnrichmentObserver(),
+        snapshot_observer: ContextSnapshotObserver = NoopContextSnapshotObserver(),
     ) -> None:
         self._role_assumer = role_assumer
         self._policy = policy
         self._clock = clock
         self._monotonic = monotonic
         self._observer = observer
+        self._snapshot_observer = snapshot_observer
 
     def collect(
         self,
@@ -335,6 +350,12 @@ class IncidentContextEnricher:
         outcome = "partial" if partial else "succeeded"
         self._observer.record(
             f"context_enrichment_{outcome}", self._duration(started), outcome
+        )
+        self._snapshot_observer.record_snapshot(
+            item_count=len(snapshot.items),
+            truncated=snapshot.truncated,
+            result=outcome,
+            provider="cloudwatch",
         )
         return snapshot
 

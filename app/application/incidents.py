@@ -284,7 +284,7 @@ class HostedIncidentService:
         now = self._clock()
         incident_id = IncidentId.new()
         correlation = CorrelationContext(
-            CorrelationId.new(), incident_id=incident_id
+            _actor_correlation_id(actor), incident_id=incident_id
         )
         incident = Incident(
             id=incident_id,
@@ -440,7 +440,7 @@ class HostedIncidentService:
         job_id = JobId.new()
         now = self._clock()
         correlation = CorrelationContext(
-            CorrelationId.new(),
+            _actor_correlation_id(actor),
             incident_id=incident_id,
             triage_run_id=run_id,
             job_id=job_id,
@@ -667,6 +667,13 @@ class HostedIncidentService:
         self._observer.record(
             event, max(0, int((self._monotonic() - started) * 1000)), outcome
         )
+
+
+def _actor_correlation_id(actor: ActorContext) -> CorrelationId:
+    try:
+        return CorrelationId(actor.request_id or "")
+    except ValueError:
+        return CorrelationId.new()
 
 
 def _validate_idempotency_key(value: str) -> str:

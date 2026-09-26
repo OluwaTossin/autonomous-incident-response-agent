@@ -1,5 +1,7 @@
 import "server-only";
 
+import { currentCorrelationId, structuredLog } from "./observability";
+
 import type {
   ActionProposal,
   Approval,
@@ -535,6 +537,8 @@ export class HostedApiClient implements HostedApi {
     init: RequestInit = {},
   ): Promise<T> {
     let response: Response;
+    const correlationId = currentCorrelationId();
+    const started = performance.now();
     try {
       response = await fetch(`${this.baseUrl}${path}`, {
         ...init,
@@ -543,14 +547,26 @@ export class HostedApiClient implements HostedApi {
           "content-type": "application/json",
           ...init.headers,
           authorization: `Bearer ${accessToken}`,
+          ...(correlationId ? { "x-correlation-id": correlationId } : {}),
         },
         cache: "no-store",
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch {
+      structuredLog("error", "bff.backend_unavailable", "Hosted API request failed", {
+        operation: requestOperation(path),
+        error_category: "transient_dependency",
+        duration_ms: Math.round(performance.now() - started),
+      });
       throw new HostedApiError(503, "unavailable", "AIRA is temporarily unavailable");
     }
     if (!response.ok) {
+      structuredLog("warn", "bff.backend_rejected", "Hosted API request was rejected", {
+        operation: requestOperation(path),
+        status_code: response.status,
+        error_category: statusKind(response.status),
+        duration_ms: Math.round(performance.now() - started),
+      });
       throw new HostedApiError(
         response.status,
         statusKind(response.status),
@@ -559,6 +575,13 @@ export class HostedApiClient implements HostedApi {
     }
     return (await response.json()) as T;
   }
+}
+
+function requestOperation(path: string): string {
+  return path
+    .split("?")[0]
+    .replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, "{id}")
+    .slice(0, 160);
 }
 
 function statusKind(status: number): HostedApiError["kind"] {

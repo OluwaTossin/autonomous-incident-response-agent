@@ -33,7 +33,7 @@ jobs:
         with:
           version: "latest"
       - name: Sync (dev tools)
-        run: uv sync --frozen --extra dev
+        run: uv sync --frozen --extra dev --extra hosted
       - name: Ruff
         run: uv run ruff check app tests scripts/ci
 
@@ -75,7 +75,7 @@ jobs:
         with:
           version: "latest"
       - name: Sync
-        run: uv sync --frozen --extra dev
+        run: uv sync --frozen --extra dev --extra hosted
       - name: Pytest (unit + integration)
         run: uv run pytest tests/unit tests/integration -q
         env:
@@ -124,7 +124,7 @@ jobs:
         with:
           version: "latest"
       - name: Sync (Dockerfile runs stub index script during image build)
-        run: uv sync --frozen --extra dev
+        run: uv sync --frozen --extra dev --extra hosted
       - name: Docker build
         run: docker build -f Dockerfile -t aira-api:ci .
       - name: Docker build frontend (static nginx)
@@ -145,7 +145,7 @@ jobs:
         with:
           version: "latest"
       - name: Sync
-        run: uv sync --frozen --extra dev
+        run: uv sync --frozen --extra dev --extra hosted
       - name: RAG build + triage-eval (skipped if no OPENAI_API_KEY secret)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

@@ -26,6 +26,18 @@ variable "enable_runtime_services" {
   type    = bool
   default = false
 }
+variable "build_sha" {
+  type    = string
+  default = "unknown"
+}
+variable "otel_exporter_otlp_endpoint" {
+  type    = string
+  default = ""
+}
+variable "alarm_action_arns" {
+  type    = list(string)
+  default = []
+}
 variable "tags" {
   type    = map(string)
   default = {}

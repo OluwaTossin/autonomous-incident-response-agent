@@ -31,6 +31,8 @@ from app.domain.operations import (
 )
 from app.jobs.contracts import QueueConsumer, QueueMessage
 from app.jobs.envelope import JobDispatchEnvelope, MessageEnvelopeError
+from app.observability.logging import log_event
+from app.observability.tracing import span
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +87,19 @@ class WorkerObserver(Protocol):
 
 class NoopWorkerObserver:
     def record(self, event: str, duration_ms: int, outcome: str) -> None:
+        return None
+
+
+class WorkerJobMetricObserver(Protocol):
+    def record(
+        self, event: str, duration_ms: int, outcome: str, job_type: str
+    ) -> None: ...
+
+
+class NoopWorkerJobMetricObserver:
+    def record(
+        self, event: str, duration_ms: int, outcome: str, job_type: str
+    ) -> None:
         return None
 
 
@@ -174,7 +189,10 @@ class WorkerHeartbeat:
             self._observer.record(
                 "job_lease_renewal", _duration_ms(started), "failed"
             )
-            logger.exception("Durable job lease renewal failed")
+            logger.exception(
+                "Durable job lease renewal failed",
+                extra={"job_id": str(self._job.id)},
+            )
             return False
         self._observer.record("job_lease_renewal", _duration_ms(started), "succeeded")
         try:
@@ -185,7 +203,10 @@ class WorkerHeartbeat:
             self._observer.record(
                 "visibility_extension", _duration_ms(started), "failed"
             )
-            logger.exception("SQS visibility extension failed")
+            logger.exception(
+                "SQS visibility extension failed",
+                extra={"job_id": str(self._job.id)},
+            )
         else:
             self._observer.record(
                 "visibility_extension", _duration_ms(started), "succeeded"
@@ -211,6 +232,7 @@ class WorkerMessageProcessor:
         visibility_timeout_seconds: int = 300,
         heartbeat_interval_seconds: float = 60.0,
         observer: WorkerObserver = NoopWorkerObserver(),
+        job_metrics: WorkerJobMetricObserver = NoopWorkerJobMetricObserver(),
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         if not worker_id.strip() or len(worker_id) > 120:
@@ -228,6 +250,7 @@ class WorkerMessageProcessor:
         self._visibility_timeout_seconds = visibility_timeout_seconds
         self._heartbeat_interval_seconds = heartbeat_interval_seconds
         self._observer = observer
+        self._job_metrics = job_metrics
         self._clock = clock
 
     def process(self, message: QueueMessage) -> MessageDisposition:
@@ -260,8 +283,52 @@ class WorkerMessageProcessor:
             return MessageDisposition.DELETE
         except Exception:
             self._observer.record("worker_message", _duration_ms(started), "transient")
-            logger.exception("Unable to load authoritative job dispatch")
+            logger.exception(
+                "Unable to load authoritative job dispatch",
+                extra={
+                    "job_id": str(envelope.job_id),
+                    "dispatch_id": str(envelope.dispatch_id),
+                },
+            )
             return MessageDisposition.RETAIN
+
+        if (
+            envelope.correlation_id is not None
+            and envelope.correlation_id != job.correlation.correlation_id
+        ):
+            self._observer.record(
+                "worker_message", _duration_ms(started), "correlation_mismatch"
+            )
+            logger.warning(
+                "Job transport correlation does not match authoritative state",
+                extra={
+                    "job_id": str(job.id),
+                    "dispatch_id": str(dispatch.id),
+                    "correlation_id": str(job.correlation.correlation_id),
+                },
+            )
+            return MessageDisposition.RETAIN
+
+        log_event(
+            logger,
+            logging.INFO,
+            "job.received",
+            "Durable job dispatch loaded",
+            correlation_id=job.correlation.correlation_id,
+            organization_id=job.scope.organization_id,
+            workspace_id=job.scope.workspace_id,
+            incident_id=job.correlation.incident_id,
+            triage_run_id=job.correlation.triage_run_id,
+            job_id=job.id,
+            dispatch_id=dispatch.id,
+            job_type=job.kind.value,
+        )
+        self._job_metrics.record(
+            "job_queue_delay",
+            max(0, int((self._clock() - job.created_at).total_seconds() * 1000)),
+            "loaded",
+            job.kind.value,
+        )
 
         if (
             dispatch.dispatch_generation != envelope.dispatch_generation
@@ -304,9 +371,19 @@ class WorkerMessageProcessor:
             )
         except JobNotClaimable:
             self._observer.record("duplicate_delivery", _duration_ms(started), "claim_lost")
+            self._job_metrics.record(
+                "stale_claim", _duration_ms(started), "claim_lost", job.kind.value
+            )
             return self._disposition_after_claim_race(envelope)
         except Exception:
-            logger.exception("Durable job claim failed")
+            logger.exception(
+                "Durable job claim failed",
+                extra={
+                    "job_id": str(job.id),
+                    "dispatch_id": str(dispatch.id),
+                    "correlation_id": str(job.correlation.correlation_id),
+                },
+            )
             return MessageDisposition.RETAIN
 
         heartbeat = WorkerHeartbeat(
@@ -324,11 +401,19 @@ class WorkerMessageProcessor:
         try:
             if self._cancellation_requested(envelope):
                 raise JobCancellationRequested("Job cancellation was requested")
-            raw_outcome = handler.handle(
-                self._actor,
-                claimed,
-                cancellation_requested=lambda: self._cancellation_requested(envelope),
-            )
+            with span(
+                "job.execute",
+                **{
+                    "service.name": "worker",
+                    "job.type": claimed.kind.value,
+                    "operation.name": "job_execute",
+                },
+            ):
+                raw_outcome = handler.handle(
+                    self._actor,
+                    claimed,
+                    cancellation_requested=lambda: self._cancellation_requested(envelope),
+                )
             outcome = (
                 raw_outcome
                 if isinstance(raw_outcome, JobHandlerOutcome)
@@ -370,7 +455,13 @@ class WorkerMessageProcessor:
             )
         except Exception:
             heartbeat.stop()
-            logger.exception("Job handler failed")
+            logger.exception(
+                "Job handler failed",
+                extra={
+                    "job_id": str(claimed.id),
+                    "correlation_id": str(claimed.correlation.correlation_id),
+                },
+            )
             return self._record_failure(
                 claimed,
                 JobFailure(
@@ -402,9 +493,31 @@ class WorkerMessageProcessor:
         except Exception:
             if self._cancellation_requested(envelope):
                 return self._acknowledge_cancellation(claimed, started, coordinator)
-            logger.exception("Durable job completion failed")
+            logger.exception(
+                "Durable job completion failed",
+                extra={
+                    "job_id": str(claimed.id),
+                    "correlation_id": str(claimed.correlation.correlation_id),
+                },
+            )
             return MessageDisposition.RETAIN
         self._observer.record("worker_job", _duration_ms(started), "succeeded")
+        self._job_metrics.record(
+            "jobs_succeeded", _duration_ms(started), "succeeded", job.kind.value
+        )
+        log_event(
+            logger,
+            logging.INFO,
+            "job.succeeded",
+            "Durable job completed",
+            correlation_id=job.correlation.correlation_id,
+            incident_id=job.correlation.incident_id,
+            triage_run_id=job.correlation.triage_run_id,
+            job_id=job.id,
+            dispatch_id=dispatch.id,
+            job_type=job.kind.value,
+            duration_ms=_duration_ms(started),
+        )
         return MessageDisposition.DELETE
 
     def _fail_without_handler(
@@ -455,10 +568,20 @@ class WorkerMessageProcessor:
                 )
             )
         except Exception:
-            logger.exception("Durable job failure transition failed")
+            logger.exception(
+                "Durable job failure transition failed",
+                extra={
+                    "job_id": str(claimed.id),
+                    "correlation_id": str(claimed.correlation.correlation_id),
+                },
+            )
             return MessageDisposition.RETAIN
         outcome = "retry" if updated.state is JobState.PENDING else "failed"
         self._observer.record("worker_job", _duration_ms(started), outcome)
+        event = "jobs_retried" if updated.state is JobState.PENDING else "jobs_failed"
+        self._job_metrics.record(
+            event, _duration_ms(started), outcome, claimed.kind.value
+        )
         return MessageDisposition.DELETE
 
     def _acknowledge_cancellation(
@@ -479,9 +602,18 @@ class WorkerMessageProcessor:
                     claimed.claim_token,
                 )
         except Exception:
-            logger.exception("Durable job cancellation acknowledgement failed")
+            logger.exception(
+                "Durable job cancellation acknowledgement failed",
+                extra={
+                    "job_id": str(claimed.id),
+                    "correlation_id": str(claimed.correlation.correlation_id),
+                },
+            )
             return MessageDisposition.RETAIN
         self._observer.record("worker_job", _duration_ms(started), "cancelled")
+        self._job_metrics.record(
+            "jobs_cancelled", _duration_ms(started), "cancelled", claimed.kind.value
+        )
         return MessageDisposition.DELETE
 
     def _cancellation_requested(self, envelope: JobDispatchEnvelope) -> bool:

@@ -14,6 +14,9 @@ module "platform" {
   log_retention_days                  = 14
   force_destroy_nonproduction         = true
   enable_runtime_services             = var.enable_runtime_services
+  build_sha                           = var.build_sha
+  otel_exporter_otlp_endpoint         = var.otel_exporter_otlp_endpoint
+  alarm_action_arns                   = var.alarm_action_arns
   api_image_digest                    = var.api_image_digest
   worker_image_digest                 = var.worker_image_digest
   web_image_digest                    = var.web_image_digest

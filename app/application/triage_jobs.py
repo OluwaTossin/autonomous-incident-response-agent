@@ -59,6 +59,7 @@ from app.knowledge.contracts import (
     Retriever,
 )
 from app.models.triage import TriageOutput
+from app.observability.tracing import span
 from app.worker.orchestration import JobHandlerOutcome
 
 logger = logging.getLogger(__name__)
@@ -178,6 +179,7 @@ class HostedTriageLifecycle:
                     context, run, "context_enrichment.started", now, job_id=claimed.id
                 )
             )
+        self._observer.record("context_enrichment_started", 0, "started")
 
     def persist_context(
         self,
@@ -528,10 +530,17 @@ class HostedTriageJobHandler:
             if snapshot is None:
                 self._lifecycle.mark_enrichment_started(actor, job)
                 try:
-                    collected = self._context_enricher.collect(
-                        inputs.aws_binding,
-                        cancellation_requested=cancellation_requested,
-                    )
+                    with span(
+                        "aws.context_enrichment",
+                        **{
+                            "aws.provider": "cloudwatch",
+                            "operation.name": "context_enrichment",
+                        },
+                    ):
+                        collected = self._context_enricher.collect(
+                            inputs.aws_binding,
+                            cancellation_requested=cancellation_requested,
+                        )
                 except ContextEnrichmentFailure as exc:
                     self._lifecycle.record_enrichment_failed(actor, job)
                     if exc.retryable:
@@ -564,11 +573,15 @@ class HostedTriageJobHandler:
             ) from exc
         top_k = self._top_k(actor, job.scope.organization_id, job.scope.workspace_id)
         retrieval = RetrievalContext(index, self._retriever, top_k)
-        execution = execute_triage(
-            incident_payload,
-            pipeline=partial(self._pipeline, retrieval_context=retrieval),
-            id_factory=lambda: str(inputs.run.id),
-        )
+        with span(
+            "triage.execute",
+            **{"job.type": job.kind.value, "operation.name": "triage"},
+        ):
+            execution = execute_triage(
+                incident_payload,
+                pipeline=partial(self._pipeline, retrieval_context=retrieval),
+                id_factory=lambda: str(inputs.run.id),
+            )
         _raise_execution_failure(execution)
         completion = _validated_completion(inputs.run, execution, snapshot=snapshot)
         if cancellation_requested():

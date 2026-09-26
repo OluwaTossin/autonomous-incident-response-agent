@@ -8,3 +8,6 @@ worker_image_digest   = "sha256:000000000000000000000000000000000000000000000000
 web_image_digest      = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 allowed_eventbridge_source_accounts = []
 enable_runtime_services             = false
+build_sha                           = "0000000000000000000000000000000000000000"
+otel_exporter_otlp_endpoint         = ""
+alarm_action_arns                   = []

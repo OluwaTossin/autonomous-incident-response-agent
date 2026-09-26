@@ -19,6 +19,8 @@ from app.application.actions import HostedActionProposalService
 from app.application.approvals import HostedApprovalService
 from app.application.execution_intents import HostedExecutionIntentService
 from app.application.workspaces import HostedWorkspaceService
+from app.observability.http import install_http_observability
+from app.observability.telemetry import HostedTelemetry
 
 
 def build_hosted_api(
@@ -33,12 +35,15 @@ def build_hosted_api(
     approvals: HostedApprovalService | None = None,
     execution_intents: HostedExecutionIntentService | None = None,
     readiness_check: Callable[[], None] | None = None,
+    telemetry: HostedTelemetry | None = None,
 ) -> FastAPI:
     application = FastAPI(
         title="AIRA Hosted API",
         version="3",
         description="Tenant-authorized durable incident and asynchronous triage API.",
     )
+    if telemetry is not None:
+        install_http_observability(application, telemetry)
 
     @application.get("/healthz", include_in_schema=False)
     def healthz() -> dict[str, str]:

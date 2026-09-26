@@ -8,40 +8,71 @@ import { validateCsrf } from "./csrf";
 import { runtime } from "./runtime";
 import type { BrowserSession } from "./session-service";
 import type { BrowserError, BrowserErrorCode } from "./types";
+import {
+  emitWebRequestMetrics,
+  structuredLog,
+  withRequestTelemetry,
+} from "./observability";
 
 export async function withBffSession(
   request: NextRequest,
   mutation: boolean,
   operation: (session: BrowserSession) => Promise<unknown>,
 ): Promise<NextResponse> {
-  const config = webConfig();
-  const rawSessionId = request.cookies.get(config.sessionCookie)?.value;
-  if (!rawSessionId) return errorResponse(401, "unauthenticated", "Sign in is required");
-  const session = await runtime().sessions.load(rawSessionId);
-  if (!session) {
-    return clearSession(
-      errorResponse(401, "unauthenticated", "Your session has expired"),
-    );
-  }
-  if (mutation && !validateCsrf(request, session, config.appOrigin)) {
-    return errorResponse(403, "forbidden", "Request verification failed");
-  }
-  try {
-    const payload = await operation(session);
-    return NextResponse.json(payload, {
-      headers: { "cache-control": "private, no-store" },
-    });
-  } catch (error) {
-    if (error instanceof HostedApiError) {
-      const response = errorResponse(error.status, error.kind, error.message);
-      if (error.status === 401) {
-        await runtime().sessions.revoke(rawSessionId);
-        return clearSession(response);
-      }
+  return withRequestTelemetry(request, async (correlationId) => {
+    const started = performance.now();
+    const finish = (response: NextResponse) => {
+      response.headers.set("x-correlation-id", correlationId);
+      emitWebRequestMetrics(
+        mutation ? "bff_mutation" : "bff_read",
+        response.status,
+        Math.round(performance.now() - started),
+      );
       return response;
+    };
+    const config = webConfig();
+    const rawSessionId = request.cookies.get(config.sessionCookie)?.value;
+    if (!rawSessionId) {
+      structuredLog("warn", "bff.authentication_failed", "BFF session is missing", {
+        result: "unauthenticated",
+      });
+      return finish(errorResponse(401, "unauthenticated", "Sign in is required"));
     }
-    return errorResponse(500, "unexpected", "The request could not be completed");
-  }
+    const session = await runtime().sessions.load(rawSessionId);
+    if (!session) {
+      structuredLog("warn", "bff.authentication_failed", "BFF session is invalid", {
+        result: "unauthenticated",
+      });
+      return finish(clearSession(
+        errorResponse(401, "unauthenticated", "Your session has expired"),
+      ));
+    }
+    if (mutation && !validateCsrf(request, session, config.appOrigin)) {
+      structuredLog("warn", "bff.authorization_failed", "BFF CSRF validation failed", {
+        result: "forbidden",
+      });
+      return finish(errorResponse(403, "forbidden", "Request verification failed"));
+    }
+    try {
+      const payload = await operation(session);
+      return finish(NextResponse.json(payload, {
+        headers: { "cache-control": "private, no-store" },
+      }));
+    } catch (error) {
+      if (error instanceof HostedApiError) {
+        const response = errorResponse(error.status, error.kind, error.message);
+        if (error.status === 401) {
+          await runtime().sessions.revoke(rawSessionId);
+          return finish(clearSession(response));
+        }
+        return finish(response);
+      }
+      structuredLog("error", "bff.request_failed", "BFF operation failed", {
+        error_category: "internal",
+      });
+      return finish(errorResponse(500, "unexpected", "The request could not be completed"));
+    }
+  });
 }
 
 export function errorResponse(

@@ -95,6 +95,19 @@ class Settings(BaseModel):
     enable_gradio_ui: str = Field(default="1", validation_alias="ENABLE_GRADIO_UI")
 
     aira_env: str = Field(default="local", validation_alias="AIRA_ENV")
+    aira_build_sha: str = Field(default="unknown", validation_alias="AIRA_BUILD_SHA")
+    aira_metric_namespace: str = Field(
+        default="AIRA/Hosted", validation_alias="AIRA_METRIC_NAMESPACE"
+    )
+    aira_otel_exporter_endpoint: str = Field(
+        default="", validation_alias="AIRA_OTEL_EXPORTER_OTLP_ENDPOINT"
+    )
+    aira_trace_sample_ratio: float = Field(
+        default=0.05,
+        ge=0,
+        le=1,
+        validation_alias="AIRA_TRACE_SAMPLE_RATIO",
+    )
 
     # Hosted-only database URLs. Empty keeps every Version 2 command PostgreSQL-independent.
     aira_database_url: str = Field(default="", validation_alias="AIRA_DATABASE_URL")

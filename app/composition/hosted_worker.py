@@ -12,6 +12,7 @@ from app.application.job_dispatch import OutboxDispatcher
 from app.application.incident_context import (
     ContextCollectionPolicy,
     IncidentContextEnricher,
+    NoopContextSnapshotObserver,
 )
 from app.application.jobs import HostedJobService, KnowledgeIndexBuildJobHandler
 from app.application.triage_jobs import HostedTriageJobHandler, HostedTriageLifecycle
@@ -30,6 +31,19 @@ from app.worker.runtime import (
     PollingWorker,
     WorkerRuntimeConfig,
 )
+from app.application.jobs import JobLifecycleObserver, NoopJobLifecycleObserver
+from app.application.job_dispatch import (
+    DispatchObserver,
+    NoopDispatchObserver,
+    NoopOutboxBacklogObserver,
+    OutboxBacklogObserver,
+)
+from app.worker.orchestration import (
+    NoopWorkerJobMetricObserver,
+    NoopWorkerObserver,
+    WorkerJobMetricObserver,
+    WorkerObserver,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +59,9 @@ class HostedWorkerComposition:
 def build_incident_context_enricher(
     settings: Settings,
     role_assumer: AwsRoleAssumer,
+    *,
+    observer=None,
+    snapshot_observer=None,
 ) -> IncidentContextEnricher:
     """Build the deployment-owned bounded CloudWatch collection policy."""
     return IncidentContextEnricher(
@@ -61,6 +78,8 @@ def build_incident_context_enricher(
             max_provider_calls=settings.aira_context_max_provider_calls,
             max_context_chars=settings.aira_context_max_chars,
         ),
+        observer=observer or NoopJobLifecycleObserver(),
+        snapshot_observer=snapshot_observer or NoopContextSnapshotObserver(),
     )
 
 
@@ -77,6 +96,11 @@ def build_hosted_worker(
     sqs_client: Any | None = None,
     triage_handler: HostedTriageJobHandler | None = None,
     triage_lifecycle: HostedTriageLifecycle | None = None,
+    job_observer: JobLifecycleObserver = NoopJobLifecycleObserver(),
+    dispatch_observer: DispatchObserver = NoopDispatchObserver(),
+    outbox_observer: OutboxBacklogObserver = NoopOutboxBacklogObserver(),
+    worker_observer: WorkerObserver = NoopWorkerObserver(),
+    job_metric_observer: WorkerJobMetricObserver = NoopWorkerJobMetricObserver(),
 ) -> HostedWorkerComposition:
     """Compose only injected, allowlisted hosted worker dependencies."""
     client = sqs_client or create_sqs_client(
@@ -90,6 +114,7 @@ def build_hosted_worker(
     jobs = HostedJobService(
         authorization,
         lambda context: PostgresJobUnitOfWork(session_factory, context),
+        observer=job_observer,
     )
     handler = KnowledgeIndexBuildJobHandler(
         jobs,
@@ -112,6 +137,8 @@ def build_hosted_worker(
         lease_duration=timedelta(seconds=settings.aira_worker_job_lease_seconds),
         visibility_timeout_seconds=settings.aira_sqs_visibility_timeout_seconds,
         heartbeat_interval_seconds=settings.aira_worker_heartbeat_seconds,
+        observer=worker_observer,
+        job_metrics=job_metric_observer,
     )
     dispatcher = OutboxDispatcher(
         jobs,
@@ -119,6 +146,8 @@ def build_hosted_worker(
         publisher_id=publisher_id,
         batch_size=settings.aira_dispatcher_batch_size,
         claim_duration=timedelta(seconds=settings.aira_dispatcher_lease_seconds),
+        observer=dispatch_observer,
+        backlog_observer=outbox_observer,
     )
     polling_worker = PollingWorker(
         queue,

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import timedelta
-from typing import Protocol
+from datetime import UTC, datetime, timedelta
+from typing import Callable, Protocol
 
 from app.application.jobs import HostedJobService
 from app.auth.context import ActorContext
@@ -22,6 +22,19 @@ class DispatchObserver(Protocol):
 
 class NoopDispatchObserver:
     def record(self, event: str, outcome: str) -> None:
+        return None
+
+
+class OutboxBacklogObserver(Protocol):
+    def record_backlog(
+        self, *, pending_count: int, oldest_age_seconds: float, claimed_count: int
+    ) -> None: ...
+
+
+class NoopOutboxBacklogObserver:
+    def record_backlog(
+        self, *, pending_count: int, oldest_age_seconds: float, claimed_count: int
+    ) -> None:
         return None
 
 
@@ -43,6 +56,8 @@ class OutboxDispatcher:
         batch_size: int = 10,
         claim_duration: timedelta = timedelta(seconds=30),
         observer: DispatchObserver = NoopDispatchObserver(),
+        backlog_observer: OutboxBacklogObserver = NoopOutboxBacklogObserver(),
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         if not publisher_id.strip() or len(publisher_id) > 120:
             raise ValueError("Publisher ID is invalid")
@@ -54,6 +69,8 @@ class OutboxDispatcher:
         self._batch_size = batch_size
         self._claim_duration = claim_duration
         self._observer = observer
+        self._backlog_observer = backlog_observer
+        self._clock = clock
 
     def publish_ready(
         self,
@@ -61,6 +78,9 @@ class OutboxDispatcher:
         organization_id: OrganizationId,
         workspace_id: WorkspaceId,
     ) -> DispatchBatchResult:
+        backlog = self._jobs.list_unpublished_dispatches(
+            actor, organization_id, workspace_id, limit=500
+        )
         dispatches = self._jobs.claim_dispatches(
             actor,
             organization_id,
@@ -69,16 +89,33 @@ class OutboxDispatcher:
             claim_duration=self._claim_duration,
             limit=self._batch_size,
         )
+        oldest_age = (
+            max(
+                0.0,
+                (self._clock() - min(item.created_at for item in backlog)).total_seconds(),
+            )
+            if backlog
+            else 0.0
+        )
+        self._backlog_observer.record_backlog(
+            pending_count=len(backlog),
+            oldest_age_seconds=oldest_age,
+            claimed_count=len(dispatches),
+        )
         published = failed = conflicts = 0
         for dispatch in dispatches:
             if dispatch.claim_token is None:
                 raise RuntimeError("Claimed dispatch is missing its claim token")
+            job = self._jobs.get_job(
+                actor, organization_id, workspace_id, dispatch.job_id
+            )
             envelope = JobDispatchEnvelope(
                 job_id=dispatch.job_id,
                 dispatch_id=dispatch.id,
                 dispatch_generation=dispatch.dispatch_generation,
                 routing_organization_id=dispatch.scope.organization_id,
                 routing_workspace_id=dispatch.scope.workspace_id,
+                correlation_id=job.correlation.correlation_id,
             )
             try:
                 self._publisher.send(envelope.to_json())

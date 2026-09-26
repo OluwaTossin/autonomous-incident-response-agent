@@ -40,7 +40,11 @@ class HostedActorDependency:
     def __call__(self, request: Request) -> ActorContext:
         authorization = request.headers.get("authorization", "")
         scheme, separator, credential = authorization.partition(" ")
-        request_id = _safe_request_id(request.headers.get("x-request-id"))
+        request_id = _safe_request_id(
+            getattr(request.state, "correlation_id", None)
+            or request.headers.get("x-correlation-id")
+            or request.headers.get("x-request-id")
+        )
         try:
             if not separator or not credential:
                 raise AuthenticationFailed("Authentication failed")

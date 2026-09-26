@@ -130,8 +130,9 @@ Material recurring costs are NAT gateways/data processing, RDS/Multi-AZ storage 
 backups, ECS/Fargate, ALB, interface endpoints, CloudWatch Logs, KMS requests, S3, and SQS.
 Dev sizing lowers capacity but does not remove encryption or isolation.
 
-V3.23 owns tenant-aware traces, bounded metric dimensions, dashboards, and measured SLO
-thresholds. V3.25 owns broader hardening/scanning policy. V3.26 owns deployment
+V3.23 defines hosted structured logs, bounded metrics, OpenTelemetry boundaries,
+dashboards, alarms, and initial internal SLOs in `observability.md`, `slos.md`, and the
+hosted observability runbook. V3.25 owns broader hardening/scanning policy. V3.26 owns deployment
 automation. V3.29 owns restore, failover, load, egress, and production smoke rehearsals.
 V4 remains the boundary for actual remediation execution.
 

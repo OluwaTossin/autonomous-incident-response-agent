@@ -52,7 +52,8 @@ old image.
 - API liveness: `/healthz`; readiness: `/readyz` with `SELECT 1`.
 - ECS deployment circuit breakers roll back unhealthy deployments.
 - Job and alert DLQ depth alarms indicate durable transport failure.
-- ALB 5xx and RDS CPU alarms are initial signals, not the V3.23 SLO suite.
+- Aggregate dashboards, alarms, SLO inputs, and response procedures are defined in
+  `../observability.md`, `../slos.md`, and `hosted-observability.md`.
 
 V3.22 performed validation and local builds only. It did not run Terraform apply or a live
 AWS deployment.

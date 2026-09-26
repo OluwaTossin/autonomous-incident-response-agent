@@ -55,6 +55,12 @@ def validate_hosted_settings(settings: Settings, *, worker: bool = False) -> Non
             raise RuntimeError(f"{name} must be a non-local HTTPS URL")
     if settings.aira_sqs_endpoint_url or settings.aira_sts_endpoint_url:
         raise RuntimeError("Hosted production cannot override AWS service endpoints")
+    if settings.aira_metric_namespace != "AIRA/Hosted":
+        raise RuntimeError("Hosted metric namespace must be AIRA/Hosted")
+    if settings.aira_otel_exporter_endpoint:
+        endpoint = urlparse(settings.aira_otel_exporter_endpoint)
+        if endpoint.scheme != "https" or not endpoint.netloc:
+            raise RuntimeError("AIRA_OTEL_EXPORTER_OTLP_ENDPOINT must be HTTPS")
 
 
 def worker_scopes(settings: Settings) -> tuple[WorkspaceScope, ...]:

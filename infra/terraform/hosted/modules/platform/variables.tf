@@ -43,6 +43,25 @@ variable "enable_runtime_services" {
   description = "Start hosted ECS services only after images, secrets, and migrations are ready."
   type        = bool
 }
+variable "build_sha" {
+  description = "Git SHA or immutable build identifier included in runtime telemetry."
+  type        = string
+  default     = "unknown"
+}
+variable "otel_exporter_otlp_endpoint" {
+  description = "Optional HTTPS OTLP trace endpoint; empty keeps tracing collector-free."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.otel_exporter_otlp_endpoint == "" || startswith(var.otel_exporter_otlp_endpoint, "https://")
+    error_message = "otel_exporter_otlp_endpoint must be empty or HTTPS."
+  }
+}
+variable "alarm_action_arns" {
+  description = "Optional reviewed SNS/action ARNs for platform alarms."
+  type        = list(string)
+  default     = []
+}
 variable "api_image_digest" {
   type = string
   validation {

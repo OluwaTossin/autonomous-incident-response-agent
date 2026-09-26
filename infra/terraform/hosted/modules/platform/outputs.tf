@@ -42,3 +42,11 @@ output "cognito_domain" { value = "https://${aws_cognito_user_pool_domain.this.d
 output "customer_assume_role_principal_arn" { value = aws_iam_role.customer_assumer.arn }
 output "eventbridge_bus_arn" { value = aws_cloudwatch_event_bus.alerts.arn }
 output "eventbridge_bus_name" { value = aws_cloudwatch_event_bus.alerts.name }
+output "observability_dashboard_names" {
+  value = {
+    platform          = aws_cloudwatch_dashboard.platform.dashboard_name
+    async             = aws_cloudwatch_dashboard.async.dashboard_name
+    incident_pipeline = aws_cloudwatch_dashboard.incident_pipeline.dashboard_name
+    control_plane     = aws_cloudwatch_dashboard.control_plane.dashboard_name
+  }
+}

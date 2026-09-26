@@ -12,6 +12,7 @@ import {
   sha256,
 } from "./security";
 import type { SessionStore, StoredSession } from "./session-store";
+import { structuredLog } from "./observability";
 
 interface LoginSecrets {
   nonce: string;
@@ -89,6 +90,9 @@ export class SessionService {
       now,
     );
     if (!transaction || !constantTimeEqual(transaction.stateHash, sha256(state))) {
+      structuredLog("warn", "auth.callback_failed", "Login transaction validation failed", {
+        error_category: "authorization",
+      });
       throw new Error("Login transaction is invalid");
     }
     const secrets = decryptJson<LoginSecrets>(
@@ -125,6 +129,9 @@ export class SessionService {
       absoluteExpiresAt,
       revokedAt: null,
       version: 1,
+    });
+    structuredLog("info", "auth.session_created", "Browser session created", {
+      result: "succeeded",
     });
     return { sessionId, returnPath: transaction.returnPath, absoluteExpiresAt };
   }
@@ -167,6 +174,9 @@ export class SessionService {
     secrets: SessionSecrets,
   ): Promise<StoredSession | null> {
     if (!secrets.tokens.refreshToken) {
+      structuredLog("warn", "auth.refresh_failed", "Session has no refresh credential", {
+        error_category: "authorization",
+      });
       await this.store.revokeSession(stored.idHash, this.clock());
       return null;
     }
@@ -200,6 +210,9 @@ export class SessionService {
         this.config.inactivitySeconds,
       );
     } catch {
+      structuredLog("warn", "auth.refresh_failed", "Identity provider refresh failed", {
+        error_category: "provider",
+      });
       await this.store.revokeSession(stored.idHash, this.clock());
       return null;
     }
