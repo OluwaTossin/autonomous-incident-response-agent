@@ -142,6 +142,37 @@ def test_first_sign_in_provisions_by_issuer_and_subject() -> None:
     assert "subject-1" not in repr(context)
 
 
+def test_first_sign_in_can_bind_verified_access_and_identity_tokens() -> None:
+    store = MemoryIdentityStore()
+    access = VerifiedHumanIdentity(ISSUER, "subject-1")
+    identity = VerifiedHumanIdentity(
+        ISSUER, "subject-1", "operator@example.com", "Operator"
+    )
+    authenticator = HumanAuthenticator(
+        FakeVerifier(access),
+        store,
+        identity_verifier=FakeVerifier(identity),
+        user_id_factory=lambda: USER_ID,
+        clock=lambda: NOW,
+    )
+    context = authenticator.authenticate("access", identity_token="identity")
+    assert context.actor.actor_id == USER_ID
+    assert store.users.by_identity[(ISSUER, "subject-1")].email == "operator@example.com"
+
+
+def test_identity_token_must_bind_to_access_token_subject() -> None:
+    store = MemoryIdentityStore()
+    authenticator = HumanAuthenticator(
+        FakeVerifier(VerifiedHumanIdentity(ISSUER, "subject-1")),
+        store,
+        identity_verifier=FakeVerifier(
+            VerifiedHumanIdentity(ISSUER, "subject-2", "x@example.com", "X")
+        ),
+    )
+    with pytest.raises(AuthenticationFailed):
+        authenticator.authenticate("access", identity_token="identity")
+
+
 def test_returning_user_is_reused_and_profile_metadata_changes() -> None:
     store = MemoryIdentityStore()
     _human_authenticator(store).authenticate("token")

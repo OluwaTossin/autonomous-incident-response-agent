@@ -41,6 +41,11 @@ infra/terraform/envs/*/*.auto.tfvars
 infra/terraform/envs/*/*.tfvars
 !infra/terraform/envs/*/*.tfvars.example
 infra/terraform/envs/*/backend.hcl
+infra/terraform/hosted/envs/*/*.auto.tfvars
+infra/terraform/hosted/envs/*/*.tfvars
+!infra/terraform/hosted/envs/*/*.tfvars.example
+infra/terraform/hosted/envs/*/backend.hcl
+infra/terraform/hosted/customer-eventbridge/*.tfvars
 infra/terraform/bootstrap/terraform.tfvars
 **/tfplan
 *.tfplan

@@ -97,7 +97,7 @@ export class SessionService {
     );
     const tokens = await this.provider.exchangeCode(code, secrets.verifier);
     const identity = await this.provider.verifyCallbackTokens(tokens, secrets.nonce);
-    const bootstrap = await this.api.bootstrap(tokens.accessToken);
+    const bootstrap = await this.api.bootstrap(tokens.accessToken, tokens.idToken);
     const sessionId = randomToken();
     const csrfToken = randomToken();
     const absoluteExpiresAt = new Date(

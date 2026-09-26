@@ -38,7 +38,7 @@ export class HostedApiError extends Error {
 }
 
 export interface HostedApi {
-  bootstrap(accessToken: string): Promise<HostedBootstrap>;
+  bootstrap(accessToken: string, identityToken?: string): Promise<HostedBootstrap>;
   listWorkspaces(
     accessToken: string,
     organizationId: string,
@@ -177,8 +177,10 @@ export class HostedApiClient implements HostedApi {
     private readonly timeoutMs: number,
   ) {}
 
-  bootstrap(accessToken: string): Promise<HostedBootstrap> {
-    return this.request("/v3/me", accessToken);
+  bootstrap(accessToken: string, identityToken?: string): Promise<HostedBootstrap> {
+    return this.request("/v3/me", accessToken, identityToken ? {
+      headers: { "x-aira-id-token": identityToken },
+    } : undefined);
   }
 
   listWorkspaces(

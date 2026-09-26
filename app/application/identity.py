@@ -73,16 +73,34 @@ class HumanAuthenticator:
         verifier: OidcJwtVerifier,
         uow_factory: IdentityUnitOfWorkFactory,
         *,
+        identity_verifier: OidcJwtVerifier | None = None,
         user_id_factory: Callable[[], UserId] = UserId.new,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self._verifier = verifier
+        self._identity_verifier = identity_verifier
         self._uow_factory = uow_factory
         self._user_id_factory = user_id_factory
         self._clock = clock
 
-    def authenticate(self, token: str, *, request_id: str | None = None) -> ActorContext:
+    def authenticate(
+        self,
+        token: str,
+        *,
+        request_id: str | None = None,
+        identity_token: str | None = None,
+    ) -> ActorContext:
         identity = self._verifier.verify(token)
+        if identity_token is not None:
+            if self._identity_verifier is None:
+                raise AuthenticationFailed("Authentication failed")
+            claims = self._identity_verifier.verify(identity_token)
+            if (
+                claims.issuer != identity.issuer
+                or claims.subject != identity.subject
+            ):
+                raise AuthenticationFailed("Authentication failed")
+            identity = claims
         user = self._resolve_user(identity)
         return ActorContext(
             actor=ActorReference(ActorKind.HUMAN, actor_id=user.id),

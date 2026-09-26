@@ -65,10 +65,12 @@ class Boto3AwsRoleAssumer:
         self,
         sts_client: Any,
         *,
+        source_role_arn: str | None = None,
         client_factory=None,
         config: Config | None = None,
     ) -> None:
         self._sts = sts_client
+        self._source_role_arn = (source_role_arn or "").strip() or None
         self._client_factory = client_factory or _default_client_factory
         self._config = config or Config(
             connect_timeout=3.0,
@@ -85,7 +87,8 @@ class Boto3AwsRoleAssumer:
         duration_seconds: int,
     ) -> AwsAssumedSession:
         try:
-            response = self._sts.assume_role(
+            sts = self._source_sts_client(session_name) if self._source_role_arn else self._sts
+            response = sts.assume_role(
                 RoleArn=role_arn,
                 ExternalId=external_id,
                 RoleSessionName=session_name,
@@ -99,6 +102,21 @@ class Boto3AwsRoleAssumer:
             )
         except Exception as exc:
             raise _safe_aws_error(exc, operation="assume_role") from exc
+
+    def _source_sts_client(self, session_name: str):
+        response = self._sts.assume_role(
+            RoleArn=self._source_role_arn,
+            RoleSessionName=f"{session_name[:48]}-source",
+            DurationSeconds=3600,
+        )
+        credentials = response["Credentials"]
+        return self._client_factory(
+            "sts",
+            aws_access_key_id=credentials["AccessKeyId"],
+            aws_secret_access_key=credentials["SecretAccessKey"],
+            aws_session_token=credentials["SessionToken"],
+            config=self._config,
+        )
 
 
 class _Boto3AssumedSession:

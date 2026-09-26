@@ -109,6 +109,30 @@ class Settings(BaseModel):
     aira_aws_trusted_principal_arn: str = Field(
         default="", validation_alias="AIRA_AWS_TRUSTED_PRINCIPAL_ARN"
     )
+    aira_aws_source_role_arn: str = Field(
+        default="", validation_alias="AIRA_AWS_SOURCE_ROLE_ARN"
+    )
+    aira_public_origin: str = Field(
+        default="", validation_alias="AIRA_PUBLIC_ORIGIN"
+    )
+    aira_document_bucket: str = Field(
+        default="", validation_alias="AIRA_DOCUMENT_BUCKET"
+    )
+    aira_knowledge_bucket: str = Field(
+        default="", validation_alias="AIRA_KNOWLEDGE_BUCKET"
+    )
+    aira_kms_key_arn: str = Field(
+        default="", validation_alias="AIRA_KMS_KEY_ARN"
+    )
+    aira_alert_queue_url: str = Field(
+        default="", validation_alias="AIRA_ALERT_QUEUE_URL"
+    )
+    aira_worker_scope_grants: str = Field(
+        default="", validation_alias="AIRA_WORKER_SCOPE_GRANTS"
+    )
+    aira_workload_subject: str = Field(
+        default="", validation_alias="AIRA_WORKLOAD_SUBJECT"
+    )
     aira_sts_endpoint_url: str = Field(
         default="", validation_alias="AIRA_STS_ENDPOINT_URL"
     )

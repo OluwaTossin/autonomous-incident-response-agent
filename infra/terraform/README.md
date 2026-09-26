@@ -1,5 +1,9 @@
 # Terraform — AWS (Phase 10)
 
+> Version 3 hosted infrastructure is isolated under [`hosted/`](hosted/README.md).
+> The modules and environment roots below remain the Version 2 deployment and are not
+> imported by the hosted stack.
+
 Modular layout under [`modules/`](modules/) and **environment roots** [`envs/dev`](envs/dev/) and [`envs/prod`](envs/prod/). **Remote state:** [`bootstrap/`](bootstrap/) provisions **S3 + DynamoDB** (default **eu-west-1**); each env uses [`backend.hcl`](envs/dev/backend.hcl.example) at `terraform init`.
 
 | Module | Role |
@@ -132,4 +136,3 @@ From **repository root** (interactive confirm — type `dev` or `prod`). If you 
 ```
 
 Details, `TF_DESTROY_AUTO_APPROVE`, ALB deletion protection, and bootstrap: **[`scripts/terraform/README.md`](../../scripts/terraform/README.md)**.
-

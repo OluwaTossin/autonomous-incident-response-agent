@@ -26,6 +26,7 @@ from app.persistence.postgres.job_unit_of_work import PostgresJobUnitOfWork
 from app.worker.orchestration import JobHandlerRegistry, WorkerMessageProcessor
 from app.worker.runtime import (
     HostedWorkerRuntime,
+    HostedDispatcherRuntime,
     PollingWorker,
     WorkerRuntimeConfig,
 )
@@ -34,6 +35,8 @@ from app.worker.runtime import (
 @dataclass(frozen=True, slots=True)
 class HostedWorkerComposition:
     runtime: HostedWorkerRuntime
+    polling_worker: PollingWorker
+    dispatcher_runtime: HostedDispatcherRuntime
     jobs: HostedJobService
     queue: Boto3SqsQueue
     dispatcher: OutboxDispatcher
@@ -139,4 +142,20 @@ def build_hosted_worker(
             triage_lifecycle.reconcile_scope if triage_lifecycle is not None else None
         ),
     )
-    return HostedWorkerComposition(runtime, jobs, queue, dispatcher)
+    dispatcher_runtime = HostedDispatcherRuntime(
+        jobs,
+        dispatcher,
+        actor,
+        scopes,
+        reconciler=(
+            triage_lifecycle.reconcile_scope if triage_lifecycle is not None else None
+        ),
+    )
+    return HostedWorkerComposition(
+        runtime,
+        polling_worker,
+        dispatcher_runtime,
+        jobs,
+        queue,
+        dispatcher,
+    )

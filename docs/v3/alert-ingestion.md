@@ -1,16 +1,18 @@
 # CloudWatch alarm ingestion
 
-V3.17 adds the durable application boundary for CloudWatch Alarm State Change events
-delivered through EventBridge. It does not provision EventBridge resources and does not
-query CloudWatch Logs or Metrics for incident context.
+V3.17 adds the durable application boundary for CloudWatch Alarm State Change events.
+V3.22 selects the production transport: customer regional EventBridge rule -> central
+AIRA EventBridge bus -> encrypted alert SQS queue/DLQ -> private alert receiver. It does
+not query CloudWatch Logs or Metrics for incident context.
 
 ## Architecture and authentication
 
 ```text
 CloudWatch Alarm
-  -> EventBridge delivery infrastructure (V3.22)
-  -> authenticated AIRA machine boundary
-  -> authorize routing hints for the machine actor
+  -> customer EventBridge forwarding role
+  -> account-allowlisted AIRA EventBridge bus
+  -> encrypted SQS alert queue and private workload-identity receiver
+  -> match EventBridge-generated account/region to deployment-owned route
   -> establish transaction-local tenant context
   -> load persisted READY AwsIntegration under forced RLS
   -> validate account, region, event schema, and alarm capability
@@ -30,9 +32,11 @@ actors are rejected. Organization and workspace path values are untrusted routin
 the machine actor must hold explicit permissions for that scope, and the persisted
 integration must match it under forced RLS. Event JSON never supplies tenant authority.
 
-V3.22 owns the final AWS delivery topology, workload identity, EventBridge target/bus/rule
-resources, resource policies, IAM roles, and ingress throttling. No production ARN is
-invented by V3.17.
+The HTTP route remains a tested adapter, but the hosted AWS composition uses the SQS
+receiver. Its route secret binds exactly one account/region to a persisted integration and
+tenant scope; duplicate bindings fail startup. The ingestion service still revalidates the
+persisted integration under RLS. See [`hosted-aws.md`](hosted-aws.md) and the customer
+module under `infra/terraform/hosted/customer-eventbridge/`.
 
 ## Supported event contract
 

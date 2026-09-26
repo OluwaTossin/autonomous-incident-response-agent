@@ -86,11 +86,21 @@ contract documented in [`alert-ingestion.md`](alert-ingestion.md). Delivery requ
 integration and validates the persisted account, configured region, and alarm-read
 capability. Event JSON never selects tenant scope.
 
+The V3.22 hosted Terraform stack now provisions the central EventBridge bus and exposes its
+ARN as `eventbridge_bus_arn`. The regional customer-account module under
+`infra/terraform/hosted/customer-eventbridge` accepts that ARN and the AIRA account ID to
+create the bounded forwarding rule and target role. Operators must then add the exact
+account-and-region-to-integration binding to the alert-route secret described in
+[`alert-ingestion.md`](alert-ingestion.md); deployment output or an event payload is never
+accepted as tenant authority. The initial hosted implementation deliberately supports one
+active route for each customer account and region pair.
+
 ## Phase boundaries
 
-V3.17 provides the application intake contract but does not provision EventBridge. V3.18
+V3.17 provides the application intake contract. V3.22 provisions the hosted EventBridge
+boundary and customer-side regional forwarding module. V3.18
 uses only verified capabilities, configured regions, and exact log-source allowlists for the
 bounded incident context collection documented in
 [`context-enrichment.md`](context-enrichment.md). V3.22 owns the production AIRA workload principal, EventBridge resources,
-network/IAM deployment, and runtime configuration. No Terraform or live AWS change is part
-of V3.16 or V3.17.
+network/IAM deployment, and runtime configuration. No live AWS change was part of V3.16 or
+V3.17.

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from collections.abc import Callable
+
+from fastapi import FastAPI, HTTPException
 
 from app.api.hosted_alert_ingestion import build_hosted_alert_ingestion_router
 from app.api.hosted_bootstrap import build_hosted_bootstrap_router
@@ -30,12 +32,26 @@ def build_hosted_api(
     action_proposals: HostedActionProposalService | None = None,
     approvals: HostedApprovalService | None = None,
     execution_intents: HostedExecutionIntentService | None = None,
+    readiness_check: Callable[[], None] | None = None,
 ) -> FastAPI:
     application = FastAPI(
         title="AIRA Hosted API",
         version="3",
         description="Tenant-authorized durable incident and asynchronous triage API.",
     )
+
+    @application.get("/healthz", include_in_schema=False)
+    def healthz() -> dict[str, str]:
+        return {"status": "ok", "service": "aira-hosted-api"}
+
+    @application.get("/readyz", include_in_schema=False)
+    def readyz() -> dict[str, str]:
+        try:
+            if readiness_check is not None:
+                readiness_check()
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail="Service unavailable") from exc
+        return {"status": "ready", "service": "aira-hosted-api"}
     application.include_router(
         build_hosted_incident_router(
             incidents,

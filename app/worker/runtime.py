@@ -160,3 +160,59 @@ class HostedWorkerRuntime:
                     },
                 )
         return self._polling_worker.run_once(stop_event)
+
+
+class HostedDispatcherRuntime:
+    """Own outbox publication and lease recovery without consuming SQS."""
+
+    def __init__(
+        self,
+        jobs: HostedJobService,
+        dispatcher: OutboxDispatcher,
+        actor: ActorContext,
+        scopes: tuple[WorkspaceScope, ...],
+        *,
+        interval_seconds: float = 1.0,
+        reconciler: Callable[[ActorContext, OrganizationId, WorkspaceId], int]
+        | None = None,
+    ) -> None:
+        if not scopes:
+            raise ValueError("Hosted dispatcher requires at least one authorized scope")
+        if interval_seconds <= 0:
+            raise ValueError("Dispatcher interval must be positive")
+        self._jobs = jobs
+        self._dispatcher = dispatcher
+        self._actor = actor
+        self._scopes = scopes
+        self._interval_seconds = interval_seconds
+        self._reconciler = reconciler
+
+    def run(self, stop: threading.Event | None = None) -> None:
+        stop_event = stop or threading.Event()
+        while not stop_event.is_set():
+            self.run_once()
+            stop_event.wait(self._interval_seconds)
+
+    def run_once(self) -> int:
+        published = 0
+        for scope in self._scopes:
+            try:
+                self._jobs.recover_expired_jobs(
+                    self._actor, scope.organization_id, scope.workspace_id
+                )
+                if self._reconciler is not None:
+                    self._reconciler(
+                        self._actor, scope.organization_id, scope.workspace_id
+                    )
+                published += self._dispatcher.publish_ready(
+                    self._actor, scope.organization_id, scope.workspace_id
+                )
+            except Exception:
+                logger.exception(
+                    "Dispatcher recovery/publication cycle failed",
+                    extra={
+                        "organization_id": str(scope.organization_id),
+                        "workspace_id": str(scope.workspace_id),
+                    },
+                )
+        return published

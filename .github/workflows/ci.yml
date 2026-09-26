@@ -55,6 +55,16 @@ jobs:
       - name: Validate (dev)
         working-directory: infra/terraform/envs/dev
         run: terraform validate
+      - name: Init hosted roots (no backend)
+        run: |
+          for root in hosted/envs/dev hosted/envs/prod hosted/customer-eventbridge; do
+            terraform -chdir="infra/terraform/${root}" init -backend=false -input=false -lockfile=readonly
+          done
+      - name: Validate hosted roots
+        run: |
+          terraform -chdir=infra/terraform/hosted/envs/dev validate
+          terraform -chdir=infra/terraform/hosted/envs/prod validate
+          terraform -chdir=infra/terraform/hosted/customer-eventbridge validate
 
   test:
     needs: lint
@@ -89,6 +99,22 @@ jobs:
         env:
           NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:8000
 
+  hosted-web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
   docker:
     needs: [test, terraform]
     runs-on: ubuntu-latest
@@ -103,6 +129,10 @@ jobs:
         run: docker build -f Dockerfile -t aira-api:ci .
       - name: Docker build frontend (static nginx)
         run: docker build -f frontend/Dockerfile --build-arg NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:18080 -t aira-ui:ci ./frontend
+      - name: Docker build hosted API/worker image
+        run: docker build -f Dockerfile.hosted -t aira-hosted:ci .
+      - name: Docker build hosted web image
+        run: docker build -f web/Dockerfile -t aira-hosted-web:ci ./web
 
   # Job-level `if` cannot use `secrets.*` (GitHub rejects it). Optional OpenAI steps run in shell.
   eval-smoke:

@@ -1,0 +1,10 @@
+aws_account_id        = "123456789012"
+route53_zone_id       = "Z0123456789EXAMPLE"
+web_hostname          = "app.example.com"
+api_hostname          = "api.example.com"
+cognito_domain_prefix = "aira-prod-example"
+api_image_digest      = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+worker_image_digest   = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+web_image_digest      = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+allowed_eventbridge_source_accounts = []
+enable_runtime_services             = false

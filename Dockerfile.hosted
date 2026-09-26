@@ -1,0 +1,24 @@
+FROM python:3.12-slim-bookworm
+
+WORKDIR /app
+ENV PYTHONUNBUFFERED=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PATH="/app/.venv/bin:$PATH"
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY pyproject.toml uv.lock README.md alembic.ini ./
+COPY app ./app
+COPY migrations ./migrations
+RUN uv sync --frozen --no-dev
+RUN groupadd --system --gid 10001 aira \
+    && useradd --system --uid 10001 --gid aira --create-home --home-dir /app aira \
+    && chown -R aira:aira /app
+USER aira
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl --fail --silent --show-error http://127.0.0.1:8000/healthz || exit 1
+CMD ["python", "-m", "app.runtime.hosted", "api"]

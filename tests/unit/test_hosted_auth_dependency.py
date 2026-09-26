@@ -49,6 +49,14 @@ def _request(authorization: str):
     return request
 
 
+class PairedAuthenticator(Authenticator):
+    def authenticate(
+        self, credential: str, *, request_id=None, identity_token=None
+    ) -> ActorContext:
+        assert identity_token == "identity-token"
+        return super().authenticate(credential, request_id=request_id)
+
+
 def test_dependency_authenticates_human_and_service_account_schemes() -> None:
     dependency = HostedActorDependency(
         Authenticator("human-token", HUMAN),
@@ -56,6 +64,16 @@ def test_dependency_authenticates_human_and_service_account_schemes() -> None:
     )
     assert dependency(_request("Bearer human-token")) is HUMAN
     assert dependency(_request("AiraServiceAccount machine-secret")) is MACHINE
+
+
+def test_dependency_forwards_server_held_identity_token_for_bootstrap() -> None:
+    request = _request("Bearer human-token")
+    request.headers["x-aira-id-token"] = "identity-token"
+    dependency = HostedActorDependency(
+        PairedAuthenticator("human-token", HUMAN),
+        Authenticator("machine-secret", MACHINE),
+    )
+    assert dependency(request) is HUMAN
 
 
 @pytest.mark.parametrize(

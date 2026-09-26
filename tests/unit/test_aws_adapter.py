@@ -105,6 +105,31 @@ def test_assume_role_encapsulates_credentials_and_uses_bounded_inputs() -> None:
     assert not hasattr(session, "access_key_id")
 
 
+def test_customer_role_is_assumed_through_stable_source_role() -> None:
+    task_sts = Sts()
+    broker_sts = Sts()
+
+    def factory(service, **_values):
+        assert service == "sts"
+        return broker_sts
+
+    assumer = Boto3AwsRoleAssumer(
+        task_sts,
+        source_role_arn="arn:aws:iam::111122223333:role/aira/customer-read",
+        client_factory=factory,
+    )
+    assumer.assume_role(
+        role_arn="arn:aws:iam::123456789012:role/aira-read/context",
+        external_id="workspace-external-id",
+        session_name="aira-context",
+        duration_seconds=900,
+    )
+
+    assert task_sts.calls[0]["RoleArn"].endswith("role/aira/customer-read")
+    assert "ExternalId" not in task_sts.calls[0]
+    assert broker_sts.calls[0]["ExternalId"] == "workspace-external-id"
+
+
 @pytest.mark.parametrize(
     "code,expected",
     [

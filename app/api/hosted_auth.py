@@ -12,7 +12,11 @@ from app.auth.errors import AuthenticationFailed
 
 class HumanRequestAuthenticator(Protocol):
     def authenticate(
-        self, token: str, *, request_id: str | None = None
+        self,
+        token: str,
+        *,
+        request_id: str | None = None,
+        identity_token: str | None = None,
     ) -> ActorContext: ...
 
 
@@ -41,9 +45,14 @@ class HostedActorDependency:
             if not separator or not credential:
                 raise AuthenticationFailed("Authentication failed")
             if scheme.lower() == "bearer":
-                return self._human.authenticate(
-                    credential, request_id=request_id
-                )
+                identity_token = request.headers.get("x-aira-id-token")
+                if identity_token:
+                    return self._human.authenticate(
+                        credential,
+                        request_id=request_id,
+                        identity_token=identity_token,
+                    )
+                return self._human.authenticate(credential, request_id=request_id)
             if scheme.lower() == "airaserviceaccount":
                 return self._service_account.authenticate(
                     credential, request_id=request_id
