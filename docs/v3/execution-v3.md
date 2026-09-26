@@ -737,14 +737,23 @@ size metadata. No Terraform apply or live AWS mutation was performed.
 
 **Dependencies:** V3.3-V3.24.
 
+**Status:** Complete in `5a407be` (`feat: harden hosted platform security`).
+The hosted threat model, trust boundaries, security controls, forced-RLS inventory,
+SSRF protections, process-specific IAM, runtime/container hardening, reviewed dependency
+remediation, local security scans, release gates, and incident runbook are complete. No
+unresolved critical/high release-blocking finding remains. External penetration testing,
+live deployment validation, destructive tenant-erasure verification, WAF, and other
+documented production controls remain later release-readiness gates. No Terraform apply or
+live AWS mutation was performed.
+
 **Checklist:**
 
-- [ ] Update threat model and data-flow diagrams for identity, tenancy, S3, SQS, RDS, integrations, and actions.
-- [ ] Review authorization, RLS, IAM, KMS, presigned URLs, SSRF, CSRF, CORS, headers, input limits, and secret handling.
-- [ ] Add dependency/container/IaC scanning and patch policy.
-- [ ] Add data retention, export, deletion, redaction, and support-access controls.
-- [ ] Add abuse protection and distributed rate limiting where hosted endpoints need it.
-- [ ] Conduct security review/penetration test and close release-blocking findings.
+- [x] Update the threat model and data-flow diagram for identity, tenancy, S3, SQS, RDS, integrations, and actions.
+- [x] Review authorization, RLS, IAM, KMS, presigned URLs, SSRF, CSRF, CORS, headers, input limits, and secret handling.
+- [x] Add dependency, container, secret, SAST, and IaC scanning commands plus a reviewed patch policy; defer CI enforcement to V3.26.
+- [x] Define data classification, retention, deletion, redaction, and exceptional support-access boundaries; keep tenant-wide export and organization erasure fail-closed pending release-readiness design and destructive verification.
+- [x] Review abuse controls and preserve bounded inputs, context collection, and tenant quotas; document WAF and a dedicated distributed login limiter as production residuals.
+- [x] Conduct the local/static security review and close release-blocking findings; explicitly defer external penetration testing and live-environment validation to release readiness.
 
 **Files/modules:** Security docs/tests/middleware/policies, CI scans, Terraform controls, incident-response runbooks.
 
