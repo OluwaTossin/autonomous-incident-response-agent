@@ -44,6 +44,7 @@ from app.domain.incidents import (
 )
 from app.domain.incident_context import IncidentContextSnapshot
 from app.domain.operations import Job, JobKind, JobState
+from app.domain.usage import QuotaType, UsageType
 from app.models.incident import IncidentPayload
 
 
@@ -236,6 +237,7 @@ class HostedIncidentUnitOfWork(Protocol):
     jobs: JobRepository
     dispatches: JobDispatchRepository
     audit_events: AuditEventRepository
+    usage: object
 
     def __enter__(self) -> Self: ...
     def __exit__(self, exc_type, exc_value, traceback) -> None: ...
@@ -264,12 +266,14 @@ class HostedIncidentService:
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         monotonic: Callable[[], float] = time.monotonic,
         observer: IncidentLifecycleObserver = NoopIncidentLifecycleObserver(),
+        enforce_quotas: bool = False,
     ) -> None:
         self._authorization = authorization
         self._uow_factory = uow_factory
         self._clock = clock
         self._monotonic = monotonic
         self._observer = observer
+        self._enforce_quotas = enforce_quotas
 
     def create_incident(
         self,
@@ -481,17 +485,54 @@ class HostedIncidentService:
                 updated_at=now,
                 correlation=correlation,
             )
+            if self._enforce_quotas:
+                uow.usage.lock(QuotaType.CONCURRENT_TRIAGE_RUNS)
             resolved_job, created = uow.jobs.create_or_get(job)
             if resolved_job.payload_hash != job.payload_hash:
                 raise HostedTriageConflict(
                     "Idempotency key is already bound to another triage request"
                 )
             if created:
+                if self._enforce_quotas:
+                    uow.usage.decision(
+                        QuotaType.TRIAGE_REQUESTS_PER_HOUR, 1, at=now
+                    )
+                    concurrency = uow.jobs.count_active(JobKind.TRIAGE)
+                    uow.usage.admit_current(
+                        QuotaType.CONCURRENT_TRIAGE_RUNS,
+                        concurrency,
+                        0,
+                        at=now,
+                    )
                 uow.triage_runs.add(run)
                 uow.dispatches.add(resolved_job, at=now)
                 uow.audit_events.add(
                     _audit(context, run, "triage.requested", now, job_id=resolved_job.id)
                 )
+                if self._enforce_quotas:
+                    source_reference = str(run.id)
+                    uow.usage.record(
+                        UsageType.TRIAGE_REQUESTED,
+                        1,
+                        source="triage_run",
+                        source_reference=source_reference,
+                        correlation=correlation,
+                        actor=context.actor,
+                        at=now,
+                        resource_type="triage_run",
+                        resource_id=source_reference,
+                    )
+                    uow.usage.record(
+                        UsageType.JOB_CREATED,
+                        1,
+                        source="triage_run",
+                        source_reference=source_reference,
+                        correlation=correlation,
+                        actor=context.actor,
+                        at=now,
+                        resource_type="job",
+                        resource_id=str(resolved_job.id),
+                    )
             else:
                 resolved_run = uow.triage_runs.get(run_id)
                 if resolved_run is None:

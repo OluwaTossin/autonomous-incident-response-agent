@@ -18,6 +18,7 @@ from app.config.settings import Settings
 from app.domain.identifiers import IntegrationId
 from app.jobs.sqs import Boto3SqsQueue, create_sqs_client
 from app.persistence.postgres.alert_ingestion import PostgresAlertIngestionUnitOfWork
+from app.persistence.postgres.usage import quota_defaults_from_settings
 from app.persistence.postgres.authorization import (
     PostgresAuthorizationFactsRepository,
     PostgresTenantResourceValidator,
@@ -39,6 +40,7 @@ def run_alert_ingestion(settings: Settings) -> None:
     routes = alert_routes(settings)
     engine = create_postgres_engine(settings.aira_database_url)
     sessions = create_session_factory(engine)
+    quota_defaults = quota_defaults_from_settings(settings)
     base_actor = trusted_system_actor(
         system_name="alert-ingress",
         workload_issuer="aws:iam",
@@ -70,8 +72,11 @@ def run_alert_ingestion(settings: Settings) -> None:
     telemetry = HostedTelemetry.from_settings(settings, "alert-ingestion")
     service = HostedAlertIngestionService(
         authorization,
-        lambda context: PostgresAlertIngestionUnitOfWork(sessions, context),
+        lambda context: PostgresAlertIngestionUnitOfWork(
+            sessions, context, quota_defaults, telemetry.observers.quotas
+        ),
         observer=telemetry.observers.lifecycle,
+        enforce_quotas=True,
     )
     queue = Boto3SqsQueue(
         create_sqs_client(

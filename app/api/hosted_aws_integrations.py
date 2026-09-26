@@ -306,6 +306,20 @@ def _trust_response(value: AwsTrustInstructions) -> TrustInstructionsResponse:
 
 
 def _http_error(exc: Exception) -> HTTPException:
+    from app.domain.usage import QuotaExceeded
+
+    if isinstance(exc, QuotaExceeded):
+        decision = exc.decision
+        return HTTPException(
+            429,
+            detail={
+                "code": "quota_exceeded",
+                "message": str(exc),
+                "quota_type": decision.quota_type.value,
+                "limit": decision.limit,
+                "remaining": decision.remaining,
+            },
+        )
     if isinstance(exc, AuthorizationDenied):
         return HTTPException(
             403, detail={"code": "forbidden", "message": "Access denied"}

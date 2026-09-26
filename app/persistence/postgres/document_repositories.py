@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -28,6 +28,16 @@ from app.persistence.postgres.models import DocumentRecord, DocumentVersionRecor
 class PostgresDocumentRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
+
+    def count_retained(self) -> int:
+        return int(
+            self._session.scalar(
+                select(func.count()).select_from(DocumentRecord).where(
+                    DocumentRecord.state != DocumentState.ARCHIVED.value
+                )
+            )
+            or 0
+        )
 
     def add(self, document: Document) -> None:
         self._session.add(document_to_record(document))
@@ -72,6 +82,27 @@ class PostgresDocumentRepository:
 class PostgresDocumentVersionRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
+
+    def retained_bytes(self) -> int:
+        return int(
+            self._session.scalar(
+                select(
+                    func.coalesce(
+                        func.sum(
+                            case(
+                                (
+                                    DocumentVersionRecord.verified_size_bytes.is_not(None),
+                                    DocumentVersionRecord.verified_size_bytes,
+                                ),
+                                else_=DocumentVersionRecord.size_bytes,
+                            )
+                        ),
+                        0,
+                    )
+                ).where(DocumentVersionRecord.object_deleted_at.is_(None))
+            )
+            or 0
+        )
 
     def add(self, version: DocumentVersion) -> None:
         try:
@@ -133,4 +164,3 @@ class PostgresDocumentVersionRepository:
         if result.rowcount != 1:
             raise DocumentConflict("Document version state changed concurrently")
         self._session.flush()
-

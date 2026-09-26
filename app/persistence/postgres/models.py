@@ -2034,6 +2034,16 @@ class UsageEventRecord(Base, WorkspaceTenantColumns, CorrelationColumns):
             name="uq_usage_events_idempotency",
         ),
         CheckConstraint("quantity >= 0", name="ck_usage_events_quantity"),
+        CheckConstraint("quantity >= 0", name="ck_usage_events_integral"),
+        CheckConstraint(
+            "category IN ('incident_created','triage_requested','triage_completed','job_created',"
+            "'document_bytes_stored','document_version_created','knowledge_index_build',"
+            "'knowledge_bundle_bytes','aws_integration_count','alert_event_accepted',"
+            "'context_log_bytes','context_metric_points','action_proposal_created',"
+            "'approval_requested','execution_intent_prepared','llm_input_tokens','llm_output_tokens')",
+            name="ck_usage_events_type",
+        ),
+        CheckConstraint("unit IN ('event','byte','token','item')", name="ck_usage_events_unit"),
         CheckConstraint(
             "actor_kind IS NULL OR actor_kind IN ('human', 'service_account', 'system')",
             name="ck_usage_events_actor_kind",
@@ -2044,11 +2054,28 @@ class UsageEventRecord(Base, WorkspaceTenantColumns, CorrelationColumns):
             "workspace_id",
             "occurred_at",
         ),
+        Index(
+            "ix_usage_events_scope_type_occurred",
+            "organization_id",
+            "workspace_id",
+            "category",
+            "occurred_at",
+        ),
+        Index(
+            "uq_usage_events_source_reference",
+            "organization_id",
+            "workspace_id",
+            "category",
+            "source",
+            "source_reference",
+            unique=True,
+            postgresql_where=text("source_reference IS NOT NULL"),
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
     category: Mapped[str] = mapped_column(String(80), nullable=False)
-    quantity: Mapped[float] = mapped_column(Float, nullable=False)
+    quantity: Mapped[int] = mapped_column(BigInteger, nullable=False)
     unit: Mapped[str] = mapped_column(String(40), nullable=False)
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
@@ -2057,10 +2084,101 @@ class UsageEventRecord(Base, WorkspaceTenantColumns, CorrelationColumns):
     actor_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
     actor_system_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source: Mapped[str] = mapped_column(String(80), nullable=False)
+    source_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    resource_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    resource_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     retention_policy_ref: Mapped[str | None] = mapped_column(String(160), nullable=True)
     retain_until: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+
+
+class UsageCounterRecord(Base, WorkspaceTenantColumns):
+    __tablename__ = "usage_counters"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "workspace_id"],
+            ["workspaces.organization_id", "workspaces.id"],
+            name="fk_usage_counters_workspace_scope",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint("quantity >= 0", name="ck_usage_counters_quantity"),
+        CheckConstraint(
+            "usage_type IN ('incident_created','triage_requested','triage_completed','job_created',"
+            "'document_bytes_stored','document_version_created','knowledge_index_build',"
+            "'knowledge_bundle_bytes','aws_integration_count','alert_event_accepted',"
+            "'context_log_bytes','context_metric_points','action_proposal_created',"
+            "'approval_requested','execution_intent_prepared','llm_input_tokens','llm_output_tokens')",
+            name="ck_usage_counters_type",
+        ),
+        CheckConstraint("window_seconds IN (0, 3600)", name="ck_usage_counters_window"),
+        Index("ix_usage_counters_scope_type", "organization_id", "workspace_id", "usage_type"),
+    )
+
+    organization_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    workspace_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    usage_type: Mapped[str] = mapped_column(String(80), primary_key=True)
+    window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
+    window_seconds: Mapped[int] = mapped_column(Integer, primary_key=True)
+    quantity: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class QuotaPolicyRecord(Base, TimestampColumns, ActorColumns):
+    __tablename__ = "quota_policies"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "workspace_id"],
+            ["workspaces.organization_id", "workspaces.id"],
+            name="fk_quota_policies_workspace_scope",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id"],
+            ["organizations.id"],
+            name="fk_quota_policies_organization",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "quota_type IN ('triage_requests_per_hour','concurrent_triage_runs',"
+            "'document_count','document_bytes','active_aws_integrations',"
+            "'alert_events_per_hour','concurrent_index_builds','execution_intents_per_hour')",
+            name="ck_quota_policies_type",
+        ),
+        CheckConstraint("hard_limit > 0", name="ck_quota_policies_limit"),
+        CheckConstraint("warning_percent BETWEEN 1 AND 100", name="ck_quota_policies_warning"),
+        CheckConstraint(
+            "window_kind IN ('lifetime','utc_hour','concurrent')",
+            name="ck_quota_policies_window",
+        ),
+        CheckConstraint("policy_version > 0", name="ck_quota_policies_version"),
+        CheckConstraint(_ACTOR_CHECK, name="ck_quota_policies_actor_kind"),
+        Index(
+            "uq_quota_policies_organization",
+            "organization_id",
+            "quota_type",
+            unique=True,
+            postgresql_where=text("workspace_id IS NULL"),
+        ),
+        Index(
+            "uq_quota_policies_workspace",
+            "organization_id",
+            "workspace_id",
+            "quota_type",
+            unique=True,
+            postgresql_where=text("workspace_id IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    organization_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    workspace_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    quota_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    hard_limit: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    warning_percent: Mapped[int] = mapped_column(Integer, nullable=False)
+    window_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    policy_version: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
 class AuditEventRecord(Base, CorrelationColumns):

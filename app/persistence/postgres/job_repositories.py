@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import timedelta
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -20,6 +20,17 @@ from app.persistence.postgres.models import JobDispatchRecord, JobRecord
 class PostgresJobRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
+
+    def count_active(self, kind) -> int:
+        return int(
+            self._session.scalar(
+                select(func.count()).select_from(JobRecord).where(
+                    JobRecord.kind == kind.value,
+                    JobRecord.state.in_(("pending", "running")),
+                )
+            )
+            or 0
+        )
 
     def create_or_get(self, job: Job) -> tuple[Job, bool]:
         record = job_to_record(job)

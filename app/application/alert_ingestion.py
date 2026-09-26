@@ -60,6 +60,7 @@ from app.domain.incidents import (
     TriageRunState,
 )
 from app.domain.operations import Job, JobKind, JobState
+from app.domain.usage import QuotaExceeded, QuotaType, UsageType
 from app.models.incident import IncidentPayload
 
 
@@ -114,6 +115,7 @@ class AlertIngestionUnitOfWork(Protocol):
     jobs: JobRepository
     dispatches: JobDispatchRepository
     audit_events: AuditEventRepository
+    usage: object
 
     def __enter__(self) -> Self: ...
     def __exit__(self, exc_type, exc_value, traceback) -> None: ...
@@ -138,6 +140,7 @@ class HostedAlertIngestionService:
         monotonic: Callable[[], float] = time.monotonic,
         observer: AlertIngestionObserver = NoopAlertIngestionObserver(),
         future_tolerance: timedelta = timedelta(minutes=5),
+        enforce_quotas: bool = False,
     ) -> None:
         self._authorization = authorization
         self._uow_factory = uow_factory
@@ -145,6 +148,7 @@ class HostedAlertIngestionService:
         self._monotonic = monotonic
         self._observer = observer
         self._future_tolerance = future_tolerance
+        self._enforce_quotas = enforce_quotas
 
     def ingest(
         self,
@@ -215,15 +219,49 @@ class HostedAlertIngestionService:
                         persisted.triage_run_id,
                     )
                 else:
-                    result = self._process_new(
-                        uow,
-                        context,
-                        integration.id,
-                        receipt,
-                        event,
-                        now,
-                        request_correlation_id,
-                    )
+                    try:
+                        if self._enforce_quotas:
+                            uow.usage.decision(
+                                QuotaType.ALERT_EVENTS_PER_HOUR, 1, at=now
+                            )
+                    except QuotaExceeded:
+                        ignored = receipt.processed(AlertReceiptStatus.IGNORED_POLICY)
+                        uow.alert_receipts.save(ignored)
+                        uow.audit_events.add(
+                            _audit(
+                                context,
+                                "alarm_event.quota_rejected",
+                                "alert_event_receipt",
+                                str(receipt.id),
+                                now,
+                                event,
+                            )
+                        )
+                        result = AlertIngestionResult(
+                            AlertIngestionOutcome.IGNORED, receipt.id, None, None
+                        )
+                    else:
+                        if self._enforce_quotas:
+                            uow.usage.record(
+                                UsageType.ALERT_EVENT_ACCEPTED,
+                                1,
+                                source="eventbridge",
+                                source_reference=event.event_id,
+                                correlation=CorrelationContext(request_correlation_id),
+                                actor=context.actor,
+                                at=now,
+                                resource_type="alert_event_receipt",
+                                resource_id=str(receipt.id),
+                            )
+                        result = self._process_new(
+                            uow,
+                            context,
+                            integration.id,
+                            receipt,
+                            event,
+                            now,
+                            request_correlation_id,
+                        )
         except Exception:
             self._observer.record(
                 "alarm_ingestion_failure",

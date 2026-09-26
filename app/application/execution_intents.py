@@ -35,6 +35,7 @@ from app.domain.identifiers import (
     OrganizationId,
     WorkspaceId,
 )
+from app.domain.usage import QuotaType, UsageType
 from app.integrations.action_connectors import (
     ActionConnectorRegistry,
     ConnectorValidationError,
@@ -122,6 +123,7 @@ class HostedExecutionIntentService:
         intent_lifetime: timedelta = timedelta(minutes=30),
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         observer: ExecutionIntentObserver = NoopExecutionIntentObserver(),
+        enforce_quotas: bool = False,
     ) -> None:
         for name, value in (
             ("Approval preparation TTL", approval_preparation_ttl),
@@ -136,6 +138,7 @@ class HostedExecutionIntentService:
         self._intent_lifetime = intent_lifetime
         self._clock = clock
         self._observer = observer
+        self._enforce_quotas = enforce_quotas
 
     def prepare(
         self,
@@ -196,6 +199,10 @@ class HostedExecutionIntentService:
                         )
                     )
                 else:
+                    if self._enforce_quotas:
+                        uow.usage.decision(
+                            QuotaType.EXECUTION_INTENTS_PER_HOUR, 1, at=now
+                        )
                     result = ExecutionIntent(
                         id=ExecutionIntentId.new(),
                         scope=proposal.scope,
@@ -229,6 +236,18 @@ class HostedExecutionIntentService:
                     )
                     result, created = uow.execution_intents.create_or_get(result)
                     if created:
+                        if self._enforce_quotas:
+                            uow.usage.record(
+                                UsageType.EXECUTION_INTENT_PREPARED,
+                                1,
+                                source="execution_intent",
+                                source_reference=str(result.id),
+                                correlation=CorrelationContext(CorrelationId.new()),
+                                actor=context.actor,
+                                at=now,
+                                resource_type="execution_intent",
+                                resource_id=str(result.id),
+                            )
                         uow.audit_events.add(
                             _connector_audit(context, result, "passed")
                         )

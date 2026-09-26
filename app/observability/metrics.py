@@ -41,6 +41,7 @@ ALLOWED_DIMENSIONS = frozenset(
         "ProposalType",
         "Risk",
         "Connector",
+        "QuotaType",
     }
 )
 _NAME = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
@@ -268,6 +269,19 @@ class OutboxBacklogMetricObserver:
         self._sink.gauge("outbox_claimed_count", max(0, claimed_count), **dimensions)
 
 
+class QuotaMetricObserver:
+    def __init__(self, sink: MetricSink) -> None:
+        self._sink = sink
+
+    def record(self, event: str, quota_type: str, operation: str, result: str) -> None:
+        self._sink.counter(
+            f"{_metric_name(event)}_total",
+            QuotaType=quota_type,
+            Operation=operation,
+            Result=result,
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class HostedMetricObservers:
     lifecycle: LifecycleMetricObserver
@@ -278,6 +292,7 @@ class HostedMetricObservers:
     job_execution: JobExecutionMetricObserver
     context_snapshots: ContextSnapshotMetricObserver
     outbox_backlog: OutboxBacklogMetricObserver
+    quotas: QuotaMetricObserver
 
     @classmethod
     def build(cls, sink: MetricSink, service: str) -> HostedMetricObservers:
@@ -290,4 +305,5 @@ class HostedMetricObservers:
             JobExecutionMetricObserver(sink),
             ContextSnapshotMetricObserver(sink),
             OutboxBacklogMetricObserver(sink),
+            QuotaMetricObserver(sink),
         )

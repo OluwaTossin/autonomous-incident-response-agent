@@ -38,6 +38,7 @@ from app.domain.knowledge import (
     DocumentVersion,
     DocumentVersionState,
 )
+from app.domain.usage import QuotaType, UsageType
 
 _SAFE_FILENAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,254}$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -72,6 +73,7 @@ class DocumentRepository(Protocol):
     def get(self, document_id: DocumentId) -> Document | None: ...
     def list(self, *, include_archived: bool = False) -> Sequence[Document]: ...
     def save(self, document: Document, *, expected_state: DocumentState) -> None: ...
+    def count_retained(self) -> int: ...
 
 
 class DocumentVersionRepository(Protocol):
@@ -85,6 +87,7 @@ class DocumentVersionRepository(Protocol):
         *,
         expected_state: DocumentVersionState,
     ) -> None: ...
+    def retained_bytes(self) -> int: ...
 
 
 class AuditEventRepository(Protocol):
@@ -95,6 +98,7 @@ class DocumentUnitOfWork(Protocol):
     documents: DocumentRepository
     document_versions: DocumentVersionRepository
     audit_events: AuditEventRepository
+    usage: object
 
     def __enter__(self) -> Self: ...
     def __exit__(self, exc_type, exc_value, traceback) -> None: ...
@@ -160,12 +164,14 @@ class HostedDocumentService:
         *,
         policy: DocumentUploadPolicy = DocumentUploadPolicy(),
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        enforce_quotas: bool = False,
     ) -> None:
         self._authorization = authorization
         self._uow_factory = uow_factory
         self._storage = storage
         self._policy = policy
         self._clock = clock
+        self._enforce_quotas = enforce_quotas
 
     def initiate_document_upload(
         self,
@@ -208,6 +214,15 @@ class HostedDocumentService:
             now=now,
         )
         with self._uow_factory(context) as uow:
+            if self._enforce_quotas:
+                for quota_type, current_reader, requested in (
+                    (QuotaType.DOCUMENT_COUNT, uow.documents.count_retained, 1),
+                    (QuotaType.DOCUMENT_BYTES, uow.document_versions.retained_bytes, size_bytes),
+                ):
+                    uow.usage.lock(quota_type)
+                    uow.usage.admit_current(
+                        quota_type, current_reader(), requested, at=now
+                    )
             uow.documents.add(document)
             uow.document_versions.add(version)
             upload = self._storage.create_presigned_upload(
@@ -337,6 +352,7 @@ class HostedDocumentService:
         *,
         correlation: CorrelationContext | None = None,
     ) -> DocumentVersionMetadata:
+        correlation = correlation or CorrelationContext(CorrelationId.new())
         context = self._authorize_manage(actor, organization_id, workspace_id)
         with self._uow_factory(context) as uow:
             document = self._required_document(uow, document_id, context)
@@ -399,6 +415,30 @@ class HostedDocumentService:
                 version=finalized,
                 details=(("size_bytes", str(finalized.verified_size_bytes)),),
             )
+            if self._enforce_quotas:
+                source_reference = str(finalized.id)
+                uow.usage.record(
+                    UsageType.DOCUMENT_VERSION_CREATED,
+                    1,
+                    source="document_version",
+                    source_reference=source_reference,
+                    correlation=correlation,
+                    actor=context.actor,
+                    at=self._clock(),
+                    resource_type="document_version",
+                    resource_id=source_reference,
+                )
+                uow.usage.record(
+                    UsageType.DOCUMENT_BYTES_STORED,
+                    finalized.verified_size_bytes or 0,
+                    source="document_version",
+                    source_reference=source_reference,
+                    correlation=correlation,
+                    actor=context.actor,
+                    at=self._clock(),
+                    resource_type="document_version",
+                    resource_id=source_reference,
+                )
             return self._metadata(finalized)
 
     def issue_download(

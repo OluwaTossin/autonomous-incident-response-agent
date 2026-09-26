@@ -26,6 +26,7 @@ from app.persistence.postgres.job_repositories import (
     PostgresJobRepository,
 )
 from app.persistence.postgres.repositories import PostgresAuditEventRepository
+from app.persistence.postgres.usage import PostgresUsageQuotaRepository
 from app.persistence.postgres.tenant import TenantContext, apply_tenant_context
 
 
@@ -34,11 +35,15 @@ class PostgresHostedIncidentUnitOfWork:
         self,
         session_factory: sessionmaker[Session],
         context: AuthorizedTenantContext,
+        quota_defaults=None,
+        quota_observer=None,
     ) -> None:
         if context.workspace_id is None:
             raise ValueError("Hosted incident transactions require workspace scope")
         self._session_factory = session_factory
         self._context = context
+        self._quota_defaults = quota_defaults
+        self._quota_observer = quota_observer
         self.session: Session | None = None
 
     def __enter__(self) -> PostgresHostedIncidentUnitOfWork:
@@ -61,6 +66,9 @@ class PostgresHostedIncidentUnitOfWork:
         self.jobs = PostgresJobRepository(self.session)
         self.dispatches = PostgresJobDispatchRepository(self.session)
         self.audit_events = PostgresAuditEventRepository(self.session)
+        self.usage = PostgresUsageQuotaRepository(
+            self.session, self._context, self._quota_defaults, self._quota_observer
+        )
         return self
 
     def __exit__(

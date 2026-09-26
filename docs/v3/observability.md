@@ -64,6 +64,12 @@ Current application signals include:
 - Triage request/start/success/failure/retry/cancellation and execution duration.
 - Alarm receipt/outcome/failure and context-enrichment complete/partial/failure duration.
 - Action policy/proposal, approval outcome/decision latency, and immutable execution-intent preparation/validation/lifecycle signals.
+- Quota warnings and rejections by bounded quota type, operation, and result, plus usage
+  recording/reconciliation failures when those paths occur.
+
+Durable tenant usage and PostgreSQL counters are the source of quota truth. CloudWatch
+metrics never replace the ledger and never carry organization, workspace, actor, incident,
+job, or other tenant/entity identifiers.
 
 SQS supplies authoritative transport depth and oldest-message age. PostgreSQL remains the
 authoritative job/outbox state. V3.23 does not infer durable state from queue metrics.

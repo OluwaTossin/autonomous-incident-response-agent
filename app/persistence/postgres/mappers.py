@@ -1328,6 +1328,10 @@ def usage_event_to_record(event: UsageEvent) -> UsageEventRecord:
         actor_id=actor["actor_id"] if actor else None,
         actor_system_name=actor["actor_system_name"] if actor else None,
         idempotency_key=event.idempotency_key,
+        source=event.source,
+        source_reference=event.source_reference,
+        resource_type=event.resource_type,
+        resource_id=event.resource_id,
         retention_policy_ref=event.retention.policy_ref,
         retain_until=event.retention.retain_until,
         **_correlation_columns(event.correlation),
@@ -1350,6 +1354,10 @@ def usage_event_from_record(record: UsageEventRecord) -> UsageEvent:
         correlation=_correlation(record),
         actor=actor,
         idempotency_key=record.idempotency_key,
+        source=record.source,
+        source_reference=record.source_reference,
+        resource_type=record.resource_type,
+        resource_id=record.resource_id,
         retention=RetentionMarker(record.retention_policy_ref, record.retain_until),
     )
 

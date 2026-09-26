@@ -27,12 +27,13 @@ import type {
   WorkspaceMetadataUpdate,
   WorkspacePage,
   WorkspaceSummary,
+  UsageSummary,
 } from "./types";
 
 export class HostedApiError extends Error {
   constructor(
     readonly status: number,
-    readonly kind: "unauthenticated" | "forbidden" | "validation" | "not_found" | "conflict" | "unavailable" | "unexpected",
+    readonly kind: "unauthenticated" | "forbidden" | "validation" | "not_found" | "conflict" | "quota_exceeded" | "unavailable" | "unexpected",
     message: string,
   ) {
     super(message);
@@ -51,6 +52,7 @@ export interface HostedApi {
     organizationId: string,
     workspaceId: string,
   ): Promise<WorkspaceDetail>;
+  getUsage(accessToken: string, organizationId: string, workspaceId: string): Promise<UsageSummary>;
   createWorkspace(
     accessToken: string,
     organizationId: string,
@@ -204,6 +206,13 @@ export class HostedApiClient implements HostedApi {
     workspaceId: string,
   ): Promise<WorkspaceDetail> {
     return this.request(this.workspaceScope(organizationId, workspaceId), accessToken);
+  }
+
+  getUsage(accessToken: string, organizationId: string, workspaceId: string): Promise<UsageSummary> {
+    return this.request(
+      this.scope(organizationId, workspaceId, "/usage"),
+      accessToken,
+    );
   }
 
   createWorkspace(
@@ -589,6 +598,7 @@ function statusKind(status: number): HostedApiError["kind"] {
   if (status === 403) return "forbidden";
   if (status === 404) return "not_found";
   if (status === 409) return "conflict";
+  if (status === 429) return "quota_exceeded";
   if (status === 422 || status === 400) return "validation";
   if (status >= 500) return "unavailable";
   return "unexpected";
@@ -599,6 +609,7 @@ function safeMessage(status: number): string {
   if (status === 403) return "You do not have access to this operation";
   if (status === 404) return "The requested AIRA resource was not found";
   if (status === 409) return "The requested operation conflicts with current state";
+  if (status === 429) return "This workspace has reached an operational capacity limit. Review usage or wait for the quota window to reset.";
   if (status === 400 || status === 422) return "The submitted data was not accepted";
   return status >= 500
     ? "AIRA is temporarily unavailable"

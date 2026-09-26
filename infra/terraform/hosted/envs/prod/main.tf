@@ -17,6 +17,7 @@ module "platform" {
   build_sha                           = var.build_sha
   otel_exporter_otlp_endpoint         = var.otel_exporter_otlp_endpoint
   alarm_action_arns                   = var.alarm_action_arns
+  quota_defaults                      = var.quota_defaults
   api_image_digest                    = var.api_image_digest
   worker_image_digest                 = var.worker_image_digest
   web_image_digest                    = var.web_image_digest

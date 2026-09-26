@@ -151,5 +151,9 @@ class UsageEventId(DomainId):
     pass
 
 
+class QuotaPolicyId(DomainId):
+    pass
+
+
 class CorrelationId(DomainId):
     pass

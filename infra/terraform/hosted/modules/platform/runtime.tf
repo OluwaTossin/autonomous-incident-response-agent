@@ -249,6 +249,14 @@ locals {
     { name = "AIRA_AWS_TRUSTED_PRINCIPAL_ARN", value = aws_iam_role.customer_assumer.arn },
     { name = "AIRA_AWS_SOURCE_ROLE_ARN", value = aws_iam_role.customer_assumer.arn },
     { name = "AIRA_PUBLIC_ORIGIN", value = "https://${var.web_hostname}" },
+    { name = "AIRA_QUOTA_TRIAGE_PER_HOUR", value = tostring(var.quota_defaults.triage_per_hour) },
+    { name = "AIRA_QUOTA_CONCURRENT_TRIAGE", value = tostring(var.quota_defaults.concurrent_triage) },
+    { name = "AIRA_QUOTA_DOCUMENT_COUNT", value = tostring(var.quota_defaults.document_count) },
+    { name = "AIRA_QUOTA_DOCUMENT_BYTES", value = tostring(var.quota_defaults.document_bytes) },
+    { name = "AIRA_QUOTA_ACTIVE_AWS_INTEGRATIONS", value = tostring(var.quota_defaults.active_aws_integrations) },
+    { name = "AIRA_QUOTA_ALERTS_PER_HOUR", value = tostring(var.quota_defaults.alerts_per_hour) },
+    { name = "AIRA_QUOTA_CONCURRENT_INDEX_BUILDS", value = tostring(var.quota_defaults.concurrent_index_builds) },
+    { name = "AIRA_QUOTA_EXECUTION_INTENTS_PER_HOUR", value = tostring(var.quota_defaults.execution_intents_per_hour) },
   ]
   api_secrets = [
     { name = "AIRA_DATABASE_URL", valueFrom = aws_secretsmanager_secret.database_runtime.arn },

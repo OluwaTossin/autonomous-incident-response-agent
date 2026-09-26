@@ -376,6 +376,24 @@ export interface FeedbackCreate {
   notes: string | null;
 }
 
+export interface QuotaSummary {
+  quota_type: string;
+  status: "allowed" | "warning" | "rejected";
+  current: number;
+  limit: number;
+  remaining: number;
+  reset_at: string | null;
+  policy_version: number;
+}
+
+export interface UsageSummary {
+  organization_id: string;
+  workspace_id: string;
+  generated_at: string;
+  quotas: QuotaSummary[];
+  billing_enabled: false;
+}
+
 export type BrowserErrorCode =
   | "unauthenticated"
   | "forbidden"
@@ -383,6 +401,7 @@ export type BrowserErrorCode =
   | "unavailable"
   | "not_found"
   | "conflict"
+  | "quota_exceeded"
   | "unexpected";
 
 export interface BrowserError {

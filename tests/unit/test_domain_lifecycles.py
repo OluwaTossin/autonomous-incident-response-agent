@@ -332,7 +332,7 @@ def test_usage_and_audit_events_are_tenant_scoped_and_attributed() -> None:
     usage = UsageEvent(
         id=_id(UsageEventId, 21),
         scope=scope,
-        category="llm_tokens",
+        category="llm_input_tokens",
         quantity=125,
         unit="token",
         occurred_at=NOW,

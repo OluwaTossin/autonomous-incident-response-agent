@@ -16,7 +16,9 @@ budget rather than translating it into downtime.
 - **Target:** 99.9%.
 - **SLI:** eligible requests without an unexpected 5xx or unavailable-backend response / all eligible requests.
 - **Numerator:** eligible ALB/API requests returning below 500.
-- **Denominator:** all API requests excluding health probes, deliberate client validation 4xx, correct 401/403 responses, and approved maintenance.
+- **Denominator:** all API requests excluding health probes, deliberate client validation
+  4xx, correct 401/403 responses, policy-correct `quota_exceeded` 429 responses, and approved
+  maintenance. Internal quota evaluation failures remain eligible server failures.
 - **Source:** ALB target metrics plus `AIRA/Hosted` API request/server-error metrics.
 - **Budget:** 0.1%, equivalent to 2,592 seconds over 30 days.
 - **Alerting:** provisional fast burn at 14.4x (1.44% error ratio) and slow burn at 6x (0.6%); require sustained datapoints rather than alerting on one 5xx.
@@ -38,7 +40,9 @@ budget rather than translating it into downtime.
 - **Target:** 99.9%.
 - **SLI:** valid triage requests that atomically persist `TriageRun`, `Job`, and outbox row / valid authorized non-duplicate requests.
 - **Numerator:** requests crossing that PostgreSQL transaction boundary, including idempotent replays already bound to the same request.
-- **Denominator:** valid authorized requests; rejected validation, authorization, conflicts, and client cancellation before acceptance are excluded.
+- **Denominator:** valid authorized requests; rejected validation, authorization, conflicts,
+  deliberate quota admission rejections, and client cancellation before acceptance are
+  excluded.
 - **Source:** triage request lifecycle metrics and PostgreSQL audit/state consistency sampling.
 - **Budget:** 0.1% of eligible requests per rolling 30 days.
 - **Alerting:** request failures, dispatcher failures, queue age, and job DLQ.

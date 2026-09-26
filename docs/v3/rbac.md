@@ -63,6 +63,10 @@ V3.21 gives every incident reader intent inspection, while only Owner/Admin may 
 cancel an intent. Service accounts receive none of these permissions by default. See
 [`execution-intents.md`](execution-intents.md).
 
+V3.24 keeps `usage.read` Owner/Admin-only and applies it to workspace usage/quota summaries.
+No browser permission raises quotas, and no quota mutation endpoint is exposed. See
+[`usage-quotas.md`](usage-quotas.md).
+
 ## Membership Lifecycle
 
 Membership state progresses through `invited -> active -> suspended/revoked` and

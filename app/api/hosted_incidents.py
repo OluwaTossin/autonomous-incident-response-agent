@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, status
@@ -1225,6 +1225,27 @@ def _decode_triage_cursor(value: str) -> TriageRunListCursor:
 
 
 def _http_error(exc: Exception) -> HTTPException:
+    from app.domain.usage import QuotaExceeded
+
+    if isinstance(exc, QuotaExceeded):
+        decision = exc.decision
+        headers = (
+            {"Retry-After": str(max(1, int((decision.reset_at - datetime.now(UTC)).total_seconds())))}
+            if decision.reset_at is not None
+            else None
+        )
+        return HTTPException(
+            429,
+            detail={
+                "code": "quota_exceeded",
+                "message": str(exc),
+                "quota_type": decision.quota_type.value,
+                "limit": decision.limit,
+                "remaining": decision.remaining,
+                "reset_at": decision.reset_at.isoformat() if decision.reset_at else None,
+            },
+            headers=headers,
+        )
     if isinstance(exc, AuthorizationDenied):
         return HTTPException(
             403, detail={"code": "forbidden", "message": "Access denied"}

@@ -213,6 +213,15 @@ class Settings(BaseModel):
     aira_worker_concurrency: int = Field(
         default=4, ge=1, le=64, validation_alias="AIRA_WORKER_CONCURRENCY"
     )
+    # Hosted operational capacity defaults. Tenant overrides remain PostgreSQL-owned.
+    aira_quota_triage_per_hour: int = Field(default=100, ge=1, validation_alias="AIRA_QUOTA_TRIAGE_PER_HOUR")
+    aira_quota_concurrent_triage: int = Field(default=4, ge=1, validation_alias="AIRA_QUOTA_CONCURRENT_TRIAGE")
+    aira_quota_document_count: int = Field(default=1000, ge=1, validation_alias="AIRA_QUOTA_DOCUMENT_COUNT")
+    aira_quota_document_bytes: int = Field(default=5_368_709_120, ge=1, validation_alias="AIRA_QUOTA_DOCUMENT_BYTES")
+    aira_quota_active_aws_integrations: int = Field(default=20, ge=1, validation_alias="AIRA_QUOTA_ACTIVE_AWS_INTEGRATIONS")
+    aira_quota_alerts_per_hour: int = Field(default=1000, ge=1, validation_alias="AIRA_QUOTA_ALERTS_PER_HOUR")
+    aira_quota_concurrent_index_builds: int = Field(default=1, ge=1, validation_alias="AIRA_QUOTA_CONCURRENT_INDEX_BUILDS")
+    aira_quota_execution_intents_per_hour: int = Field(default=100, ge=1, validation_alias="AIRA_QUOTA_EXECUTION_INTENTS_PER_HOUR")
     aira_dispatcher_batch_size: int = Field(
         default=10, ge=1, le=100, validation_alias="AIRA_DISPATCHER_BATCH_SIZE"
     )

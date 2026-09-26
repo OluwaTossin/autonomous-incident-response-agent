@@ -17,6 +17,7 @@ from app.domain.common import (
     require_aware,
 )
 from app.domain.identifiers import AuditEventId, UsageEventId
+from app.domain.usage import USAGE_UNITS, UsageType, UsageUnit
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,16 +31,35 @@ class UsageEvent:
     correlation: CorrelationContext
     actor: ActorReference | None = None
     idempotency_key: str | None = None
+    source: str = "application"
+    source_reference: str | None = None
+    resource_type: str | None = None
+    resource_id: str | None = None
     retention: RetentionMarker = RetentionMarker()
 
     def __post_init__(self) -> None:
-        if not self.category.strip() or not self.unit.strip():
-            raise DomainInvariantError("Usage category and unit cannot be blank")
+        try:
+            usage_type = UsageType(self.category)
+            unit = UsageUnit(self.unit)
+        except ValueError as exc:
+            raise DomainInvariantError("Usage type and unit must be allowlisted") from exc
+        if USAGE_UNITS[usage_type] is not unit:
+            raise DomainInvariantError("Usage unit does not match usage type")
         if not math.isfinite(self.quantity) or self.quantity < 0:
             raise DomainInvariantError("Usage quantity must be finite and non-negative")
+        if self.quantity != int(self.quantity):
+            raise DomainInvariantError("Usage quantity must be an integer")
         require_aware(self.occurred_at, "occurred_at")
         if self.idempotency_key is not None and not self.idempotency_key.strip():
             raise DomainInvariantError("Usage idempotency_key cannot be blank")
+        source = self.source.strip()
+        if not source or len(source) > 80:
+            raise DomainInvariantError("Usage source is invalid")
+        object.__setattr__(self, "source", source)
+        for name in ("source_reference", "resource_type", "resource_id"):
+            value = getattr(self, name)
+            if value is not None and (not value.strip() or len(value) > 255):
+                raise DomainInvariantError(f"Usage {name} is invalid")
 
 
 @dataclass(frozen=True, slots=True)

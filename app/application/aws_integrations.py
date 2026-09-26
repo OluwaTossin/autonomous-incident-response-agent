@@ -31,6 +31,7 @@ from app.domain.identifiers import (
     OrganizationId,
     WorkspaceId,
 )
+from app.domain.usage import QuotaType, UsageType
 from app.integrations.aws import AwsIntegrationCallError, AwsRoleAssumer
 from app.persistence.postgres.aws_integrations import AwsIntegrationVersionConflict
 
@@ -54,6 +55,7 @@ class AwsIntegrationRepository(Protocol):
     def get(self, integration_id: IntegrationId) -> AwsIntegration | None: ...
     def list(self, *, limit: int) -> Sequence[AwsIntegration]: ...
     def save(self, integration: AwsIntegration, *, expected_version: int) -> None: ...
+    def count_active(self) -> int: ...
 
 
 class AuditRepository(Protocol):
@@ -63,6 +65,7 @@ class AuditRepository(Protocol):
 class AwsIntegrationUnitOfWork(Protocol):
     aws_integrations: AwsIntegrationRepository
     audit_events: AuditRepository
+    usage: object
     def __enter__(self): ...
     def __exit__(self, exc_type, exc_value, traceback) -> None: ...
 
@@ -96,6 +99,7 @@ class HostedAwsIntegrationService:
         external_id_factory: Callable[[], str] = lambda: secrets.token_urlsafe(32),
         monotonic: Callable[[], float] = time.monotonic,
         observer: AwsIntegrationObserver = NoopAwsIntegrationObserver(),
+        enforce_quotas: bool = False,
     ) -> None:
         principal = trusted_principal_arn.strip()
         if not _PRINCIPAL_RE.fullmatch(principal):
@@ -110,6 +114,7 @@ class HostedAwsIntegrationService:
         self._external_id_factory = external_id_factory
         self._monotonic = monotonic
         self._observer = observer
+        self._enforce_quotas = enforce_quotas
 
     def create(
         self,
@@ -141,10 +146,30 @@ class HostedAwsIntegrationService:
         )
         started = self._monotonic()
         with self._uow_factory(context) as uow:
+            if self._enforce_quotas:
+                uow.usage.lock(QuotaType.ACTIVE_AWS_INTEGRATIONS)
+                uow.usage.admit_current(
+                    QuotaType.ACTIVE_AWS_INTEGRATIONS,
+                    uow.aws_integrations.count_active(),
+                    1,
+                    at=now,
+                )
             uow.aws_integrations.add(integration)
             uow.audit_events.add(
                 _audit(context, integration, "aws_integration.created", now)
             )
+            if self._enforce_quotas:
+                uow.usage.record(
+                    UsageType.AWS_INTEGRATION_COUNT,
+                    1,
+                    source="aws_integration",
+                    source_reference=str(integration.id),
+                    correlation=CorrelationContext(CorrelationId.new()),
+                    actor=context.actor,
+                    at=now,
+                    resource_type="aws_integration",
+                    resource_id=str(integration.id),
+                )
         self._observe("aws_integration_created", started, "succeeded")
         return integration
 

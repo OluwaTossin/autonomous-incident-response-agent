@@ -62,6 +62,20 @@ variable "alarm_action_arns" {
   type        = list(string)
   default     = []
 }
+variable "quota_defaults" {
+  description = "Non-secret deployment defaults for hosted operational capacity limits."
+  type        = map(number)
+  validation {
+    condition = alltrue([
+      for key in [
+        "triage_per_hour", "concurrent_triage", "document_count", "document_bytes",
+        "active_aws_integrations", "alerts_per_hour", "concurrent_index_builds",
+        "execution_intents_per_hour"
+      ] : contains(keys(var.quota_defaults), key) && var.quota_defaults[key] > 0
+    ])
+    error_message = "quota_defaults must provide every positive hosted quota default."
+  }
+}
 variable "api_image_digest" {
   type = string
   validation {

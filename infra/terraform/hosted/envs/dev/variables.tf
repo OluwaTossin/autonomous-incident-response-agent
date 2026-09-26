@@ -38,6 +38,19 @@ variable "alarm_action_arns" {
   type    = list(string)
   default = []
 }
+variable "quota_defaults" {
+  type = map(number)
+  default = {
+    triage_per_hour            = 25
+    concurrent_triage          = 2
+    document_count             = 100
+    document_bytes             = 536870912
+    active_aws_integrations    = 5
+    alerts_per_hour            = 100
+    concurrent_index_builds    = 1
+    execution_intents_per_hour = 25
+  }
+}
 variable "tags" {
   type    = map(string)
   default = {}

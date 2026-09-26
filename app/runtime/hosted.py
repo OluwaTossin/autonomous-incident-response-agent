@@ -22,6 +22,7 @@ from app.application.incidents import HostedIncidentService
 from app.application.knowledge_bundles import HostedKnowledgeBundleService
 from app.application.triage_jobs import HostedTriageJobHandler, HostedTriageLifecycle
 from app.application.workspaces import HostedWorkspaceService
+from app.application.usage import HostedUsageService
 from app.auth.context import trusted_system_actor
 from app.authorization.permissions import Permission
 from app.authorization.service import (
@@ -53,6 +54,7 @@ from app.persistence.postgres.incident_unit_of_work import PostgresHostedInciden
 from app.persistence.postgres.knowledge import PostgresHostedKnowledgeRepository
 from app.persistence.postgres.knowledge_sources import PostgresKnowledgeSourceContentReader
 from app.persistence.postgres.workspace_unit_of_work import PostgresWorkspaceUnitOfWork
+from app.persistence.postgres.usage import PostgresUsageUnitOfWork, quota_defaults_from_settings
 from app.runtime.config import validate_hosted_settings, worker_scopes
 from app.runtime.alert_ingestion import run_alert_ingestion
 from app.worker.entrypoint import run_dispatcher, run_polling_worker
@@ -68,13 +70,16 @@ def create_api(settings: Settings | None = None):
     telemetry = HostedTelemetry.from_settings(settings, "api")
     engine = create_postgres_engine(settings.aira_database_url)
     sessions = create_session_factory(engine)
+    quota_defaults = quota_defaults_from_settings(settings)
     authorization = AuthorizationService(
         PostgresAuthorizationFactsRepository(sessions),
         PostgresTenantResourceValidator(sessions),
     )
     actor_dependency = build_hosted_actor_dependency(settings, sessions)
     def incident_uow(context):
-        return PostgresHostedIncidentUnitOfWork(sessions, context)
+        return PostgresHostedIncidentUnitOfWork(
+            sessions, context, quota_defaults, telemetry.observers.quotas
+        )
 
     def workspace_uow(context):
         return PostgresWorkspaceUnitOfWork(sessions, context)
@@ -83,10 +88,19 @@ def create_api(settings: Settings | None = None):
         return PostgresGovernanceUnitOfWork(sessions, context)
 
     def integration_uow(context):
-        return PostgresAwsIntegrationUnitOfWork(sessions, context)
+        return PostgresAwsIntegrationUnitOfWork(
+            sessions, context, quota_defaults, telemetry.observers.quotas
+        )
 
     def alert_uow(context):
-        return PostgresAlertIngestionUnitOfWork(sessions, context)
+        return PostgresAlertIngestionUnitOfWork(
+            sessions, context, quota_defaults, telemetry.observers.quotas
+        )
+
+    def usage_uow(context):
+        return PostgresUsageUnitOfWork(
+            sessions, context, quota_defaults, telemetry.observers.quotas
+        )
 
     workspaces = HostedWorkspaceService(authorization, workspace_uow)
     governance = OrganizationGovernanceService(authorization, governance_uow)
@@ -100,6 +114,7 @@ def create_api(settings: Settings | None = None):
         authorization,
         incident_uow,
         observer=telemetry.observers.execution_intents,
+        enforce_quotas=True,
     )
     role_assumer = Boto3AwsRoleAssumer(
         boto3.client("sts", region_name=settings.aira_aws_region),
@@ -112,7 +127,10 @@ def create_api(settings: Settings | None = None):
 
     application = build_hosted_api(
         HostedIncidentService(
-            authorization, incident_uow, observer=telemetry.observers.lifecycle
+            authorization,
+            incident_uow,
+            observer=telemetry.observers.lifecycle,
+            enforce_quotas=True,
         ),
         actor_dependency,
         bootstrap=HostedBootstrapService(authorization, governance, workspaces),
@@ -123,14 +141,19 @@ def create_api(settings: Settings | None = None):
             role_assumer,
             trusted_principal_arn=settings.aira_aws_trusted_principal_arn,
             observer=telemetry.observers.lifecycle,
+            enforce_quotas=True,
         ),
         alert_ingestion=HostedAlertIngestionService(
-            authorization, alert_uow, observer=telemetry.observers.lifecycle
+            authorization,
+            alert_uow,
+            observer=telemetry.observers.lifecycle,
+            enforce_quotas=True,
         ),
         machine_actor_dependency=actor_dependency,
         action_proposals=actions,
         approvals=approvals,
         execution_intents=execution_intents,
+        usage=HostedUsageService(authorization, usage_uow),
         readiness_check=readiness,
         telemetry=telemetry,
     )
@@ -172,6 +195,7 @@ def create_worker(settings: Settings | None = None, *, service: str = "worker"):
     telemetry = HostedTelemetry.from_settings(settings, service)
     engine = create_postgres_engine(settings.aira_database_url)
     sessions = create_session_factory(engine)
+    quota_defaults = quota_defaults_from_settings(settings)
     permissions = frozenset(
         {
             Permission.ACTION_PROPOSE,
@@ -205,7 +229,9 @@ def create_worker(settings: Settings | None = None, *, service: str = "worker"):
         system_grants=grants,
     )
     def incident_uow(context):
-        return PostgresHostedIncidentUnitOfWork(sessions, context)
+        return PostgresHostedIncidentUnitOfWork(
+            sessions, context, quota_defaults, telemetry.observers.quotas
+        )
     role_assumer = Boto3AwsRoleAssumer(
         boto3.client("sts", region_name=settings.aira_aws_region),
         source_role_arn=settings.aira_aws_source_role_arn,
@@ -226,7 +252,9 @@ def create_worker(settings: Settings | None = None, *, service: str = "worker"):
     knowledge_storage = S3ImmutableObjectStorage(
         create_s3_client(knowledge_config), knowledge_config
     )
-    repository = PostgresHostedKnowledgeRepository(sessions)
+    repository = PostgresHostedKnowledgeRepository(
+        sessions, quota_defaults, telemetry.observers.quotas
+    )
     builder = HostedKnowledgeBundleBuilder(
         PostgresKnowledgeSourceContentReader(sessions, document_storage),
         embedding_model=settings.embedding_model,
@@ -243,6 +271,7 @@ def create_worker(settings: Settings | None = None, *, service: str = "worker"):
         incident_uow,
         observer=telemetry.observers.lifecycle,
         proposal_generator=actions,
+        record_usage=True,
     )
     cache = VerifiedBundleCache(Path("/tmp/aira-faiss-cache"), knowledge_storage)
 

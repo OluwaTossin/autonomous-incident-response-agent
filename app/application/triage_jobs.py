@@ -53,6 +53,7 @@ from app.domain.operations import (
     JobResultReference,
     JobState,
 )
+from app.domain.usage import UsageType
 from app.knowledge.contracts import (
     PublishedKnowledgeIndexReference,
     RetrievalContext,
@@ -79,6 +80,8 @@ class TriageCompletion:
     result: TriageOutput
     evidence: tuple[Evidence, ...]
     duration_ms: int
+    llm_input_tokens: int | None = None
+    llm_output_tokens: int | None = None
 
 
 class ActiveKnowledgeResolver(Protocol):
@@ -113,6 +116,7 @@ class HostedTriageLifecycle:
         retry_max: timedelta = timedelta(minutes=15),
         observer: IncidentLifecycleObserver = NoopIncidentLifecycleObserver(),
         proposal_generator: ActionProposalGenerator | None = None,
+        record_usage: bool = False,
     ) -> None:
         self._authorization = authorization
         self._uow_factory = uow_factory
@@ -121,6 +125,7 @@ class HostedTriageLifecycle:
         self._retry_max = retry_max
         self._observer = observer
         self._proposal_generator = proposal_generator
+        self._record_usage = record_usage
 
     def load_inputs(self, actor: ActorContext, job: Job) -> HostedTriageInputs:
         context = self._context(actor, job)
@@ -212,6 +217,33 @@ class HostedTriageLifecycle:
                 else "context_enrichment.completed"
             )
             uow.audit_events.add(_audit(context, run, event, now, job_id=claimed.id))
+            if self._record_usage:
+                log_bytes = sum(
+                    len(str(item.content.get("message", "")).encode("utf-8"))
+                    for item in snapshot.items
+                    if item.type is ContextItemType.LOG
+                )
+                metric_points = sum(
+                    len(item.content.get("points", ()))
+                    for item in snapshot.items
+                    if item.type is ContextItemType.METRIC
+                )
+                for usage_type, quantity in (
+                    (UsageType.CONTEXT_LOG_BYTES, log_bytes),
+                    (UsageType.CONTEXT_METRIC_POINTS, metric_points),
+                ):
+                    if quantity:
+                        uow.usage.record(
+                            usage_type,
+                            quantity,
+                            source="context_snapshot",
+                            source_reference=str(snapshot.id),
+                            correlation=run.correlation,
+                            actor=context.actor,
+                            at=now,
+                            resource_type="incident_context_snapshot",
+                            resource_id=str(snapshot.id),
+                        )
         self._observer.record(
             "context_enrichment_persisted",
             0,
@@ -317,6 +349,35 @@ class HostedTriageLifecycle:
                     job_id=completed_job.id,
                 )
             )
+            if self._record_usage:
+                completion = outcome.completion_payload
+                uow.usage.record(
+                    UsageType.TRIAGE_COMPLETED,
+                    1,
+                    source="triage_run",
+                    source_reference=str(completed_run.id),
+                    correlation=completed_run.correlation,
+                    actor=context.actor,
+                    at=now,
+                    resource_type="triage_run",
+                    resource_id=str(completed_run.id),
+                )
+                for usage_type, quantity in (
+                    (UsageType.LLM_INPUT_TOKENS, completion.llm_input_tokens),
+                    (UsageType.LLM_OUTPUT_TOKENS, completion.llm_output_tokens),
+                ):
+                    if quantity is not None:
+                        uow.usage.record(
+                            usage_type,
+                            quantity,
+                            source="triage_run",
+                            source_reference=str(completed_run.id),
+                            correlation=completed_run.correlation,
+                            actor=context.actor,
+                            at=now,
+                            resource_type="triage_run",
+                            resource_id=str(completed_run.id),
+                        )
         self._observer.record(
             "triage_succeeded",
             outcome.completion_payload.duration_ms,
@@ -661,7 +722,20 @@ def _validated_completion(
                     origin="operational",
                 )
             )
-    return TriageCompletion(result, tuple(evidence), execution.duration_ms)
+    usage = execution.metadata.get("llm_usage")
+    input_tokens = output_tokens = None
+    if isinstance(usage, dict):
+        if isinstance(usage.get("tokens_prompt"), int):
+            input_tokens = usage["tokens_prompt"]
+        if isinstance(usage.get("tokens_completion"), int):
+            output_tokens = usage["tokens_completion"]
+    return TriageCompletion(
+        result,
+        tuple(evidence),
+        execution.duration_ms,
+        input_tokens,
+        output_tokens,
+    )
 
 
 def _require_current_claim(current: Job | None, claimed: Job, now: datetime) -> None:

@@ -11,6 +11,7 @@ from app.api.hosted_bootstrap import build_hosted_bootstrap_router
 from app.api.hosted_aws_integrations import build_hosted_aws_integration_router
 from app.api.hosted_incidents import build_hosted_incident_router
 from app.api.hosted_workspaces import build_hosted_workspace_router
+from app.api.hosted_usage import build_hosted_usage_router
 from app.application.bootstrap import HostedBootstrapService
 from app.application.alert_ingestion import HostedAlertIngestionService
 from app.application.aws_integrations import HostedAwsIntegrationService
@@ -19,6 +20,7 @@ from app.application.actions import HostedActionProposalService
 from app.application.approvals import HostedApprovalService
 from app.application.execution_intents import HostedExecutionIntentService
 from app.application.workspaces import HostedWorkspaceService
+from app.application.usage import HostedUsageService
 from app.observability.http import install_http_observability
 from app.observability.telemetry import HostedTelemetry
 
@@ -34,6 +36,7 @@ def build_hosted_api(
     action_proposals: HostedActionProposalService | None = None,
     approvals: HostedApprovalService | None = None,
     execution_intents: HostedExecutionIntentService | None = None,
+    usage: HostedUsageService | None = None,
     readiness_check: Callable[[], None] | None = None,
     telemetry: HostedTelemetry | None = None,
 ) -> FastAPI:
@@ -86,4 +89,6 @@ def build_hosted_api(
                 alert_ingestion, machine_actor_dependency
             )
         )
+    if usage is not None:
+        application.include_router(build_hosted_usage_router(usage, actor_dependency))
     return application

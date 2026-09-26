@@ -5,7 +5,7 @@ from __future__ import annotations
 from types import TracebackType
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.authorization.service import AuthorizedTenantContext
@@ -22,6 +22,7 @@ from app.domain.identifiers import IntegrationId, OrganizationId, WorkspaceId
 from app.persistence.postgres.mappers import _actor, _actor_columns
 from app.persistence.postgres.models import AwsIntegrationRecord
 from app.persistence.postgres.repositories import PostgresAuditEventRepository
+from app.persistence.postgres.usage import PostgresUsageQuotaRepository
 from app.persistence.postgres.tenant import TenantContext, apply_tenant_context
 
 
@@ -32,6 +33,16 @@ class AwsIntegrationVersionConflict(RuntimeError):
 class PostgresAwsIntegrationRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
+
+    def count_active(self) -> int:
+        return int(
+            self._session.scalar(
+                select(func.count()).select_from(AwsIntegrationRecord).where(
+                    AwsIntegrationRecord.state != AwsIntegrationState.DISABLED.value
+                )
+            )
+            or 0
+        )
 
     def add(self, integration: AwsIntegration) -> None:
         self._session.add(_to_record(integration))
@@ -84,9 +95,13 @@ class PostgresAwsIntegrationUnitOfWork:
         self,
         session_factory: sessionmaker[Session],
         context: AuthorizedTenantContext,
+        quota_defaults=None,
+        quota_observer=None,
     ) -> None:
         self._session_factory = session_factory
         self._context = context
+        self._quota_defaults = quota_defaults
+        self._quota_observer = quota_observer
         self.session: Session | None = None
 
     def __enter__(self):
@@ -98,6 +113,9 @@ class PostgresAwsIntegrationUnitOfWork:
         )
         self.aws_integrations = PostgresAwsIntegrationRepository(self.session)
         self.audit_events = PostgresAuditEventRepository(self.session)
+        self.usage = PostgresUsageQuotaRepository(
+            self.session, self._context, self._quota_defaults, self._quota_observer
+        )
         return self
 
     def __exit__(

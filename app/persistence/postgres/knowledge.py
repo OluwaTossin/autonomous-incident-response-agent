@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import and_, select, update
+from sqlalchemy import and_, func, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.authorization.permissions import Permission
@@ -46,11 +46,15 @@ from app.persistence.postgres.models import (
     KnowledgeIndexVersionRecord,
 )
 from app.persistence.postgres.tenant import authorized_tenant_transaction
+from app.persistence.postgres.usage import PostgresUsageQuotaRepository
+from app.domain.usage import QuotaType, UsageType
 
 
 class PostgresHostedKnowledgeRepository:
-    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+    def __init__(self, session_factory: sessionmaker[Session], quota_defaults=None, quota_observer=None) -> None:
         self._session_factory = session_factory
+        self._quota_defaults = quota_defaults
+        self._quota_observer = quota_observer
 
     def resolve_active_index(
         self, context: AuthorizedTenantContext
@@ -197,10 +201,39 @@ class PostgresHostedKnowledgeRepository:
         if index.scope != scope or index.state is not KnowledgeIndexState.BUILDING:
             raise ValueError("New knowledge index must be BUILDING in authorized scope")
         with authorized_tenant_transaction(self._session_factory, context) as session:
+            usage = PostgresUsageQuotaRepository(
+                session, context, self._quota_defaults, self._quota_observer
+            )
+            usage.lock(QuotaType.CONCURRENT_INDEX_BUILDS)
+            current = int(
+                session.scalar(
+                    select(func.count())
+                    .select_from(KnowledgeIndexVersionRecord)
+                    .where(
+                        KnowledgeIndexVersionRecord.state
+                        == KnowledgeIndexState.BUILDING.value
+                    )
+                )
+                or 0
+            )
+            usage.admit_current(
+                QuotaType.CONCURRENT_INDEX_BUILDS, current, 1, at=at
+            )
             session.add(knowledge_index_to_record(index))
             session.flush()
             session.add_all(knowledge_index_document_records(index))
             self._audit(session, context, index.id, "knowledge_index.build_started", at)
+            usage.record(
+                UsageType.KNOWLEDGE_INDEX_BUILD,
+                1,
+                source="knowledge_index",
+                source_reference=str(index.id),
+                correlation=CorrelationContext(CorrelationId.new()),
+                actor=context.actor,
+                at=at,
+                resource_type="knowledge_index_version",
+                resource_id=str(index.id),
+            )
 
     def mark_ready(
         self,

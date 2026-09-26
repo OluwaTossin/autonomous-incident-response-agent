@@ -115,6 +115,7 @@ WORKSPACE_SCOPED_PERMISSIONS = frozenset(
         Permission.EXECUTION_INTENT_READ,
         Permission.EXECUTION_INTENT_PREPARE,
         Permission.EXECUTION_INTENT_CANCEL,
+        Permission.USAGE_READ,
     }
 )
 
