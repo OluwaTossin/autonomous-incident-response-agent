@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { HostedApiError } from "@/lib/api-client";
 import type { BrowserSession } from "@/lib/session-service";
 
 const mocks = vi.hoisted(() => ({
@@ -93,5 +94,32 @@ describe("approval mutation BFF", () => {
       "Reviewed",
     );
     expect(await response.text()).not.toContain("server-held-token");
+  });
+
+  it("does not turn valid CSRF or tenant path input into authorization", async () => {
+    mocks.approve.mockRejectedValue(
+      new HostedApiError(403, "forbidden", "Access denied"),
+    );
+
+    const response = await POST(
+      request({
+        origin: "https://aira.example",
+        "x-csrf-token": "csrf-value",
+      }),
+      { params: Promise.resolve({ approvalId: "foreign-approval" }) },
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      error: { code: "forbidden", message: "Access denied" },
+    });
+    expect(mocks.approve).toHaveBeenCalledWith(
+      "server-held-token",
+      "org-1",
+      "workspace-1",
+      "foreign-approval",
+      "Reviewed",
+    );
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
   });
 });

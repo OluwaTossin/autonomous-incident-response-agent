@@ -55,7 +55,7 @@ class VerifiedBundleCache:
     def acquire(
         self, reference: PublishedKnowledgeIndexReference
     ) -> Iterator[LocalFaissIndexHandle]:
-        key = str(reference.index.index_version_id)
+        key = _cache_key(reference)
         lock_path = self._locks / f"{key}.lock"
         with _file_lock(lock_path, exclusive=True) as lock_stream:
             directory, manifest = self._ensure(reference)
@@ -72,7 +72,7 @@ class VerifiedBundleCache:
     def _ensure(
         self, reference: PublishedKnowledgeIndexReference
     ) -> tuple[Path, KnowledgeBundleManifest]:
-        key = str(reference.index.index_version_id)
+        key = _cache_key(reference)
         final = self._root / key
         if final.is_dir():
             verify_started = self._monotonic()
@@ -230,3 +230,14 @@ def _directory_size(path: Path) -> int:
 
 def _sha256(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
+
+
+def _cache_key(reference: PublishedKnowledgeIndexReference) -> str:
+    index = reference.index
+    return "_".join(
+        (
+            str(index.scope.organization_id),
+            str(index.scope.workspace_id),
+            str(index.index_version_id),
+        )
+    )

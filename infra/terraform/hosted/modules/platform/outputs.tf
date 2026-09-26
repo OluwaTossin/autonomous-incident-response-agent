@@ -26,6 +26,7 @@ output "runtime_secret_arns" {
     web_database = aws_secretsmanager_secret.web_database.arn
     llm_provider = aws_secretsmanager_secret.llm_provider.arn
     web_session  = aws_secretsmanager_secret.web_session.arn
+    cursor_key   = aws_secretsmanager_secret.cursor_signing.arn
     worker_scope = aws_secretsmanager_secret.worker_scope_grants.arn
   }
 }

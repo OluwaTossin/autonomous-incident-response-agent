@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import base64
-import binascii
-import json
 from datetime import datetime
 from typing import Any
 
@@ -22,6 +19,7 @@ from app.auth.context import ActorContext
 from app.authorization.service import AuthorizationDenied
 from app.domain.identifiers import OrganizationId, WorkspaceId
 from app.domain.tenancy import Workspace, WorkspaceConfiguration
+from app.security.cursors import CursorCodec, InvalidCursor
 
 
 class WorkspaceCreateRequest(BaseModel):
@@ -96,6 +94,8 @@ class WorkspacePageResponse(BaseModel):
 def build_hosted_workspace_router(
     service: HostedWorkspaceService,
     actor_dependency,
+    *,
+    cursor_codec: CursorCodec,
 ) -> APIRouter:
     router = APIRouter(
         prefix="/v3/organizations/{organization_id}/workspaces",
@@ -110,15 +110,24 @@ def build_hosted_workspace_router(
         cursor: str | None = None,
     ) -> WorkspacePageResponse:
         try:
+            organization = OrganizationId(organization_id)
             page = service.list_visible_page(
                 actor,
-                OrganizationId(organization_id),
+                organization,
                 limit=limit,
-                before=_decode_cursor(cursor) if cursor else None,
+                before=(
+                    _decode_cursor(cursor_codec, cursor, organization)
+                    if cursor
+                    else None
+                ),
             )
             return WorkspacePageResponse(
                 items=[_workspace_response(item) for item in page.items],
-                next_cursor=_encode_cursor(page.next_cursor) if page.next_cursor else None,
+                next_cursor=(
+                    _encode_cursor(cursor_codec, page.next_cursor, organization)
+                    if page.next_cursor
+                    else None
+                ),
             )
         except Exception as exc:
             raise _http_error(exc) from exc
@@ -262,24 +271,37 @@ def _detail_response(
     )
 
 
-def _encode_cursor(cursor: WorkspaceListCursor) -> str:
-    payload = json.dumps(
-        [cursor.created_at.isoformat(), str(cursor.workspace_id)], separators=(",", ":")
-    ).encode()
-    return base64.urlsafe_b64encode(payload).decode().rstrip("=")
+def _encode_cursor(
+    codec: CursorCodec,
+    cursor: WorkspaceListCursor,
+    organization_id: OrganizationId,
+) -> str:
+    return codec.encode(
+        kind="workspaces",
+        scope={"organization_id": str(organization_id)},
+        values={
+            "created_at": cursor.created_at.isoformat(),
+            "workspace_id": str(cursor.workspace_id),
+        },
+    )
 
 
-def _decode_cursor(value: str) -> WorkspaceListCursor:
+def _decode_cursor(
+    codec: CursorCodec,
+    value: str,
+    organization_id: OrganizationId,
+) -> WorkspaceListCursor:
     try:
-        if len(value) > 512:
-            raise ValueError
-        padded = value + "=" * (-len(value) % 4)
-        created_at, workspace_id = json.loads(base64.urlsafe_b64decode(padded))
-        parsed = datetime.fromisoformat(created_at)
+        values = codec.decode(
+            value,
+            kind="workspaces",
+            scope={"organization_id": str(organization_id)},
+        )
+        parsed = datetime.fromisoformat(values["created_at"])
         if parsed.tzinfo is None:
             raise ValueError
-        return WorkspaceListCursor(parsed, WorkspaceId(workspace_id))
-    except (ValueError, TypeError, binascii.Error, json.JSONDecodeError) as exc:
+        return WorkspaceListCursor(parsed, WorkspaceId(values["workspace_id"]))
+    except (InvalidCursor, ValueError, TypeError, KeyError) as exc:
         raise HTTPException(status_code=422, detail="Invalid workspace cursor") from exc
 
 

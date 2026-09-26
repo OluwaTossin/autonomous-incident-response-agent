@@ -60,6 +60,7 @@ from app.runtime.alert_ingestion import run_alert_ingestion
 from app.worker.entrypoint import run_dispatcher, run_polling_worker
 from app.observability.logging import configure_json_logging, log_event
 from app.observability.telemetry import HostedTelemetry
+from app.security.cursors import CursorCodec
 
 logger = logging.getLogger(__name__)
 
@@ -156,6 +157,7 @@ def create_api(settings: Settings | None = None):
         usage=HostedUsageService(authorization, usage_uow),
         readiness_check=readiness,
         telemetry=telemetry,
+        cursor_codec=CursorCodec(settings.aira_cursor_signing_key),
     )
     application.state.database_engine = engine
     return application

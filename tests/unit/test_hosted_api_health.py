@@ -1,10 +1,15 @@
 from fastapi.testclient import TestClient
 
 from app.composition.hosted_api import build_hosted_api
+from app.security.cursors import CursorCodec
+
+CURSORS = CursorCodec("test-cursor-signing-key-at-least-32-bytes")
 
 
 def test_hosted_api_liveness_and_readiness_are_distinct() -> None:
-    healthy = TestClient(build_hosted_api(object(), lambda: None))
+    healthy = TestClient(
+        build_hosted_api(object(), lambda: None, cursor_codec=CURSORS)
+    )
     assert healthy.get("/healthz").json()["status"] == "ok"
     assert healthy.get("/readyz").json()["status"] == "ready"
 
@@ -12,7 +17,12 @@ def test_hosted_api_liveness_and_readiness_are_distinct() -> None:
         raise RuntimeError("database unavailable")
 
     not_ready = TestClient(
-        build_hosted_api(object(), lambda: None, readiness_check=unavailable)
+        build_hosted_api(
+            object(),
+            lambda: None,
+            readiness_check=unavailable,
+            cursor_codec=CURSORS,
+        )
     )
     response = not_ready.get("/readyz")
     assert response.status_code == 503

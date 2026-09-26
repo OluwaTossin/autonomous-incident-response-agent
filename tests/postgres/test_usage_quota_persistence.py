@@ -145,6 +145,56 @@ def test_final_hourly_slot_is_admitted_once_under_concurrency(
     assert sorted(outcomes) == ["allowed", "rejected"]
 
 
+def test_final_quota_slot_is_independent_between_tenants(
+    postgres_database: PostgresTestDatabase, runtime_session_factory
+) -> None:
+    first = _setup(postgres_database, runtime_session_factory, 728)
+    second = _setup(postgres_database, runtime_session_factory, 729)
+    contexts = (
+        _context(runtime_session_factory, first[0], first[1], first[3].id),
+        _context(runtime_session_factory, second[0], second[1], second[3].id),
+    )
+    defaults = {
+        QuotaType.TRIAGE_REQUESTS_PER_HOUR: QuotaLimit(
+            QuotaType.TRIAGE_REQUESTS_PER_HOUR,
+            1,
+            window=QuotaWindow.UTC_HOUR,
+        )
+    }
+
+    def admit(context) -> str:
+        with PostgresUsageUnitOfWork(
+            runtime_session_factory, context, defaults
+        ) as uow:
+            uow.usage.decision(QuotaType.TRIAGE_REQUESTS_PER_HOUR, 1, at=NOW)
+            uow.usage.record(
+                UsageType.TRIAGE_REQUESTED,
+                1,
+                source="triage_run",
+                source_reference="same-logical-reference",
+                correlation=CorrelationContext(CorrelationId.new()),
+                actor=context.actor,
+                at=NOW,
+            )
+        return "allowed"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        assert list(executor.map(admit, contexts)) == ["allowed", "allowed"]
+
+    for context in contexts:
+        with tenant_transaction(
+            runtime_session_factory,
+            TenantContext(context.organization_id, context.workspace_id),
+        ) as session:
+            assert session.scalar(
+                select(UsageCounterRecord.quantity).where(
+                    UsageCounterRecord.usage_type
+                    == UsageType.TRIAGE_REQUESTED.value,
+                    UsageCounterRecord.window_seconds == 3600,
+                )
+            ) == 1
+
+
 def test_final_triage_slot_creates_one_complete_durable_request(
     postgres_database: PostgresTestDatabase, runtime_session_factory
 ) -> None:

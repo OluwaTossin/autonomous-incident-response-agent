@@ -71,4 +71,4 @@ def test_iam_wildcards_are_limited_to_reviewed_aws_exceptions() -> None:
         for line_number, line in enumerate(_text(path).splitlines(), start=1):
             if re.search(r'(actions|resources)\s*=\s*\["\*"\]', line):
                 matches.append((path.name, line_number))
-    assert matches == [("data.tf", 5), ("data.tf", 20), ("runtime.tf", 91)]
+    assert matches == [("data.tf", 5), ("data.tf", 20), ("runtime.tf", 97)]

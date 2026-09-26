@@ -24,6 +24,9 @@ from app.observability.slo import (
 )
 from app.observability.telemetry import HostedTelemetry
 from app.observability.tracing import span
+from app.security.cursors import CursorCodec
+
+CURSORS = CursorCodec("test-cursor-signing-key-at-least-32-bytes")
 
 
 def _telemetry() -> tuple[HostedTelemetry, InMemoryMetricSink]:
@@ -40,7 +43,11 @@ def test_correlation_ids_are_bounded_uuids() -> None:
 
 def test_api_returns_and_measures_validated_correlation_id() -> None:
     telemetry, sink = _telemetry()
-    client = TestClient(build_hosted_api(object(), lambda: None, telemetry=telemetry))
+    client = TestClient(
+        build_hosted_api(
+            object(), lambda: None, telemetry=telemetry, cursor_codec=CURSORS
+        )
+    )
     supplied = str(uuid4())
 
     response = client.get("/healthz", headers={"x-correlation-id": supplied})

@@ -209,28 +209,42 @@ class HostedWorkspaceService:
         organization_context = self._authorization.authorize(
             actor, organization_id, Permission.ORGANIZATION_READ
         )
-        with self._uow_factory(organization_context) as uow:
-            candidates = tuple(
-                uow.workspaces.list_page(limit=limit + 1, before=before)
-            )
-        page_candidates = candidates[:limit]
         visible: list[Workspace] = []
-        for workspace in page_candidates:
-            try:
-                self._authorization.authorize(
-                    actor,
-                    organization_id,
-                    Permission.WORKSPACE_READ,
-                    workspace_id=workspace.id,
+        scan_before = before
+        batch_size = 101
+        while len(visible) <= limit:
+            with self._uow_factory(organization_context) as uow:
+                candidates = tuple(
+                    uow.workspaces.list_page(limit=batch_size, before=scan_before)
                 )
-            except AuthorizationDenied:
-                continue
-            visible.append(workspace)
-        next_cursor = None
-        if len(candidates) > limit and page_candidates:
-            last = page_candidates[-1]
-            next_cursor = WorkspaceListCursor(last.created_at, last.id)
-        return WorkspacePage(tuple(visible), next_cursor)
+            if not candidates:
+                break
+            for workspace in candidates:
+                try:
+                    self._authorization.authorize(
+                        actor,
+                        organization_id,
+                        Permission.WORKSPACE_READ,
+                        workspace_id=workspace.id,
+                    )
+                except AuthorizationDenied:
+                    continue
+                visible.append(workspace)
+                if len(visible) > limit:
+                    break
+            if len(visible) > limit or len(candidates) < batch_size:
+                break
+            last_candidate = candidates[-1]
+            scan_before = WorkspaceListCursor(
+                last_candidate.created_at, last_candidate.id
+            )
+        page = visible[:limit]
+        next_cursor = (
+            WorkspaceListCursor(page[-1].created_at, page[-1].id)
+            if len(visible) > limit
+            else None
+        )
+        return WorkspacePage(tuple(page), next_cursor)
 
     def update_metadata(
         self,

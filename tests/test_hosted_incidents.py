@@ -26,10 +26,12 @@ from app.domain.common import ActorKind, ActorReference
 from app.domain.identifiers import MembershipId, OrganizationId, UserId, WorkspaceId
 from app.domain.operations import JobState
 from app.domain.tenancy import MembershipRole, WorkspaceAccessMode
+from app.security.cursors import CursorCodec
 
 NOW = datetime(2026, 9, 25, 12, 0, tzinfo=UTC)
 ORG = OrganizationId("00000000-0000-4000-8000-000000000001")
 WORKSPACE = WorkspaceId("00000000-0000-4000-8000-000000000002")
+CURSORS = CursorCodec("test-cursor-signing-key-at-least-32-bytes")
 
 
 def _actor() -> ActorContext:
@@ -413,7 +415,9 @@ def test_hosted_api_returns_202_and_stable_polling_contract() -> None:
     service, _ = _service()
     application = FastAPI()
     application.include_router(
-        build_hosted_incident_router(service, lambda: _actor())
+        build_hosted_incident_router(
+            service, lambda: _actor(), cursor_codec=CURSORS
+        )
     )
     client = TestClient(application)
     prefix = f"/v3/organizations/{ORG}/workspaces/{WORKSPACE}"
@@ -490,7 +494,9 @@ def test_hosted_api_authentication_failure_stays_at_dependency_boundary() -> Non
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     application = FastAPI()
-    application.include_router(build_hosted_incident_router(service, deny))
+    application.include_router(
+        build_hosted_incident_router(service, deny, cursor_codec=CURSORS)
+    )
     response = TestClient(application).get(
         f"/v3/organizations/{ORG}/workspaces/{WORKSPACE}/incidents"
     )
@@ -500,7 +506,11 @@ def test_hosted_api_authentication_failure_stays_at_dependency_boundary() -> Non
 def test_incident_api_cursor_pagination_and_state_filter_are_deterministic() -> None:
     service, _ = _service()
     application = FastAPI()
-    application.include_router(build_hosted_incident_router(service, lambda: _actor()))
+    application.include_router(
+        build_hosted_incident_router(
+            service, lambda: _actor(), cursor_codec=CURSORS
+        )
+    )
     client = TestClient(application)
     prefix = f"/v3/organizations/{ORG}/workspaces/{WORKSPACE}"
     for index in range(2):
@@ -535,4 +545,14 @@ def test_incident_api_cursor_pagination_and_state_filter_are_deterministic() -> 
     assert client.get(f"{prefix}/incidents", params={"cursor": "invalid"}).status_code == 422
     assert client.get(
         f"{prefix}/incidents", params={"cursor": "a" * 513}
+    ).status_code == 422
+
+    replacement = "A" if cursor[-1] != "A" else "B"
+    assert client.get(
+        f"{prefix}/incidents", params={"cursor": cursor[:-1] + replacement}
+    ).status_code == 422
+    foreign_workspace = "00000000-0000-4000-8000-000000000099"
+    assert client.get(
+        f"/v3/organizations/{ORG}/workspaces/{foreign_workspace}/incidents",
+        params={"cursor": cursor},
     ).status_code == 422

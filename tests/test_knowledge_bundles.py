@@ -73,8 +73,6 @@ def _actor() -> ActorContext:
 
 class Facts:
     def human_facts(self, actor, organization_id, workspace_id):
-        if organization_id != ORG or workspace_id != WORKSPACE:
-            return None
         return HumanAuthorizationFacts(
             _id(MembershipId, 4),
             MembershipRole.OPERATOR,
@@ -94,12 +92,12 @@ class Facts:
 
 class Resources:
     def is_active(self, organization_id, workspace_id):
-        return organization_id == ORG and workspace_id == WORKSPACE
+        return workspace_id is not None
 
 
-def _context(permission=Permission.KNOWLEDGE_MANAGE):
+def _context(permission=Permission.KNOWLEDGE_MANAGE, scope=SCOPE):
     return AuthorizationService(Facts(), Resources()).authorize(
-        _actor(), ORG, permission, workspace_id=WORKSPACE
+        _actor(), scope.organization_id, permission, workspace_id=scope.workspace_id
     )
 
 
@@ -117,7 +115,7 @@ def _source(reference, payload=b"Scale checkout workers when latency rises."):
         KnowledgeSourceOrigin.TENANT,
         "checkout.md",
         "runbook",
-        scope=SCOPE,
+        scope=reference.scope,
         document_id=_id(DocumentId, 20),
         document_version_id=reference.source_document_versions[0],
         checksum_sha256=hashlib.sha256(payload).hexdigest(),
@@ -131,7 +129,7 @@ class Reader:
         self.payload = payload
 
     def read(self, context, source):
-        assert context.workspace_id == WORKSPACE
+        assert context.workspace_id == source.scope.workspace_id
         return self.payload
 
 
@@ -184,11 +182,21 @@ def _publish(storage, tmp_path, reference=None, payload=None):
     source = _source(reference, payload)
     publisher = KnowledgeBundlePublisher(storage)
     with _builder(payload, tmp_path).build(
-        _context(), reference, (source,)
+        _context(scope=reference.scope), reference, (source,)
     ) as bundle:
         publication = publisher.publish(reference, bundle)
         manifest = bundle.manifest
     return PublishedKnowledgeIndexReference(reference, publication), manifest
+
+
+def _cache_key(reference: PublishedKnowledgeIndexReference) -> str:
+    return "_".join(
+        (
+            str(reference.index.scope.organization_id),
+            str(reference.index.scope.workspace_id),
+            str(reference.index.index_version_id),
+        )
+    )
 
 
 def test_manifest_records_format_integrity_chunking_and_provenance(tmp_path) -> None:
@@ -284,7 +292,7 @@ def test_cache_downloads_once_rejects_corruption_and_redownloads(tmp_path) -> No
     cached_chunks = (
         tmp_path
         / "cache"
-        / str(published.index.index_version_id)
+        / _cache_key(published)
         / CHUNKS_FILENAME
     )
     cached_chunks.write_bytes(b"corrupt")
@@ -306,7 +314,7 @@ def test_concurrent_cache_miss_has_one_download_and_eviction_is_bounded(tmp_path
 
     with ThreadPoolExecutor(max_workers=4) as executor:
         assert set(executor.map(lambda _: acquire_first(), range(4))) == {
-            str(first.index.index_version_id)
+            _cache_key(first)
         }
     assert storage.get_count - baseline == 3
 
@@ -317,7 +325,32 @@ def test_concurrent_cache_miss_has_one_download_and_eviction_is_bounded(tmp_path
         for path in (tmp_path / "cache").iterdir()
         if path.is_dir() and path.name != ".locks"
     }
-    assert visible == {str(second.index.index_version_id)}
+    assert visible == {_cache_key(second)}
+
+
+def test_cache_identity_includes_tenant_scope_for_same_index_uuid(tmp_path) -> None:
+    storage = MemoryStorage()
+    first_reference = _reference(45)
+    second_scope = WorkspaceScope(
+        _id(OrganizationId, 101),
+        _id(WorkspaceId, 102),
+    )
+    second_reference = replace(first_reference, scope=second_scope)
+    first, _ = _publish(storage, tmp_path / "build-a", first_reference)
+    second, _ = _publish(storage, tmp_path / "build-b", second_reference)
+    cache = VerifiedBundleCache(tmp_path / "cache", storage, max_entries=2)
+
+    with cache.acquire(first) as first_handle:
+        first_directory = first_handle.index_dir
+    with cache.acquire(second) as second_handle:
+        second_directory = second_handle.index_dir
+
+    assert first.index.index_version_id == second.index.index_version_id
+    assert first_directory != second_directory
+    assert first_directory.name == _cache_key(first)
+    assert second_directory.name == _cache_key(second)
+    assert first_directory.is_dir()
+    assert second_directory.is_dir()
 
 
 def test_cache_does_not_evict_in_use_bundle(tmp_path) -> None:
@@ -340,7 +373,7 @@ def test_cache_does_not_evict_in_use_bundle(tmp_path) -> None:
         for path in cache_root.iterdir()
         if path.is_dir() and path.name != ".locks"
     }
-    assert visible == {str(second.index.index_version_id)}
+    assert visible == {_cache_key(second)}
 
 
 def test_cache_rejects_bundle_larger_than_byte_bound_and_reports_events(
@@ -364,7 +397,7 @@ def test_cache_rejects_bundle_larger_than_byte_bound_and_reports_events(
         with cache.acquire(published):
             pass
 
-    assert not (cache_root / str(published.index.index_version_id)).exists()
+    assert not (cache_root / _cache_key(published)).exists()
     assert [(event, outcome) for event, _, outcome in events] == [
         ("cache_miss", "succeeded"),
         ("bundle_download", "failed"),

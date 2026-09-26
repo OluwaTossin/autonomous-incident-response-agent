@@ -42,6 +42,7 @@ from app.domain.identifiers import (
     WorkspaceId,
 )
 from app.domain.incidents import IncidentReference, TriageRunReference
+from app.security.cursors import CursorCodec
 
 NOW = datetime(2026, 9, 25, 12, 0, tzinfo=UTC)
 ORG = OrganizationId("00000000-0000-4000-8000-000000000001")
@@ -64,6 +65,7 @@ ACTOR = ActorContext(
     issuer="https://issuer.example",
     external_subject="approver",
 )
+CURSORS = CursorCodec("test-cursor-signing-key-at-least-32-bytes")
 
 
 def _proposal() -> ActionProposal:
@@ -172,7 +174,12 @@ def test_intent_routes_are_identifier_only_and_have_no_execution_endpoint() -> N
     service = Service()
     app = FastAPI()
     app.include_router(
-        build_hosted_incident_router(object(), lambda: ACTOR, execution_intents=service)
+        build_hosted_incident_router(
+            object(),
+            lambda: ACTOR,
+            cursor_codec=CURSORS,
+            execution_intents=service,
+        )
     )
     client = TestClient(app)
 
@@ -204,7 +211,12 @@ def test_cancel_rejects_empty_reason_and_prepare_rejects_payload() -> None:
     service = Service()
     app = FastAPI()
     app.include_router(
-        build_hosted_incident_router(object(), lambda: ACTOR, execution_intents=service)
+        build_hosted_incident_router(
+            object(),
+            lambda: ACTOR,
+            cursor_codec=CURSORS,
+            execution_intents=service,
+        )
     )
     client = TestClient(app)
 

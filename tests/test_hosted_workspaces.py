@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.api.hosted_workspaces import build_hosted_workspace_router
 from app.application.workspaces import (
+    WorkspaceListCursor,
     WorkspaceNotFound,
     WorkspacePage,
     WorkspaceVersionConflict,
@@ -22,10 +23,12 @@ from app.domain.tenancy import (
     Workspace,
     WorkspaceConfiguration,
 )
+from app.security.cursors import CursorCodec
 
 NOW = datetime(2026, 9, 25, 12, 0, tzinfo=UTC)
 ORG = OrganizationId("00000000-0000-4000-8000-000000000001")
 WORKSPACE = WorkspaceId("00000000-0000-4000-8000-000000000002")
+CURSORS = CursorCodec("test-cursor-signing-key-at-least-32-bytes")
 ACTOR = ActorReference(
     ActorKind.HUMAN,
     actor_id=UserId("00000000-0000-4000-8000-000000000003"),
@@ -133,7 +136,9 @@ class WorkspaceService:
 def _client(service: WorkspaceService | None = None) -> TestClient:
     application = FastAPI()
     application.include_router(
-        build_hosted_workspace_router(service or WorkspaceService(), lambda: _actor())
+        build_hosted_workspace_router(
+            service or WorkspaceService(), lambda: _actor(), cursor_codec=CURSORS
+        )
     )
     return TestClient(application)
 
@@ -211,6 +216,34 @@ def test_workspace_routes_preserve_authentication_boundary() -> None:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     application = FastAPI()
-    application.include_router(build_hosted_workspace_router(WorkspaceService(), deny))
+    application.include_router(
+        build_hosted_workspace_router(
+            WorkspaceService(), deny, cursor_codec=CURSORS
+        )
+    )
     response = TestClient(application).get(f"/v3/organizations/{ORG}/workspaces")
     assert response.status_code == 401
+
+
+def test_workspace_cursor_is_tamper_evident_and_organization_bound() -> None:
+    class PaginatedWorkspaceService(WorkspaceService):
+        def list_visible_page(self, actor, organization_id, *, limit, before=None):
+            if before is not None:
+                return WorkspacePage((), None)
+            return WorkspacePage(
+                (self.workspace,),
+                WorkspaceListCursor(self.workspace.created_at, self.workspace.id),
+            )
+
+    client = _client(PaginatedWorkspaceService())
+    prefix = f"/v3/organizations/{ORG}/workspaces"
+    cursor = client.get(prefix, params={"limit": 1}).json()["next_cursor"]
+
+    replacement = "A" if cursor[-1] != "A" else "B"
+    assert client.get(
+        prefix, params={"cursor": cursor[:-1] + replacement}
+    ).status_code == 422
+    foreign_org = "00000000-0000-4000-8000-000000000099"
+    assert client.get(
+        f"/v3/organizations/{foreign_org}/workspaces", params={"cursor": cursor}
+    ).status_code == 422

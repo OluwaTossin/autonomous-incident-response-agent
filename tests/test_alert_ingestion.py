@@ -411,6 +411,50 @@ def test_machine_scope_and_ready_account_region_checks_fail_closed() -> None:
         not_ready.ingest(_machine(), ORG, WORKSPACE, INTEGRATION, _event())
 
 
+def test_payload_tenant_hints_cannot_select_scope_or_create_foreign_side_effects() -> None:
+    service, store = _service()
+    app = FastAPI()
+    app.include_router(build_hosted_alert_ingestion_router(service, lambda: _machine()))
+    client = TestClient(app)
+    path = f"/internal/v1/organizations/{ORG}/workspaces/{WORKSPACE}/integrations/aws/{INTEGRATION}/cloudwatch-alarms"
+    payload = _envelope(
+        organization_id="00000000-0000-4000-8000-000000000799",
+        workspace_id="00000000-0000-4000-8000-000000000798",
+        integration_id="00000000-0000-4000-8000-000000000797",
+    )
+
+    accepted = client.post(path, json=payload)
+    assert accepted.status_code == 202
+    incident = next(iter(store.incidents.values()))
+    assert incident.scope == WorkspaceScope(ORG, WORKSPACE)
+
+    counts = {
+        "receipts": len(store.receipts),
+        "incidents": len(store.incidents),
+        "runs": len(store.runs),
+        "jobs": len(store.jobs),
+        "dispatches": len(store.dispatches),
+        "audits": len(store.audits),
+    }
+    foreign_path = (
+        "/internal/v1/organizations/00000000-0000-4000-8000-000000000799/"
+        f"workspaces/{WORKSPACE}/integrations/aws/{INTEGRATION}/cloudwatch-alarms"
+    )
+    denied = client.post(
+        foreign_path,
+        json=_envelope(id="22222222-2222-4222-8222-222222222222"),
+    )
+    assert denied.status_code == 403
+    assert counts == {
+        "receipts": len(store.receipts),
+        "incidents": len(store.incidents),
+        "runs": len(store.runs),
+        "jobs": len(store.jobs),
+        "dispatches": len(store.dispatches),
+        "audits": len(store.audits),
+    }
+
+
 def test_machine_api_authentication_validation_and_acknowledgement() -> None:
     service, _ = _service()
 

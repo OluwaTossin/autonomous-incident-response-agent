@@ -115,6 +115,9 @@ class Settings(BaseModel):
         default="",
         validation_alias="AIRA_DATABASE_MIGRATION_URL",
     )
+    aira_cursor_signing_key: str = Field(
+        default="", validation_alias="AIRA_CURSOR_SIGNING_KEY"
+    )
 
     # Hosted queue/worker deployment settings. Credentials use the AWS provider chain.
     aira_sqs_queue_url: str = Field(default="", validation_alias="AIRA_SQS_QUEUE_URL")

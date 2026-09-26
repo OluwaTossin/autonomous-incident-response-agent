@@ -21,6 +21,7 @@ def _settings(**changes) -> Settings:
         "AIRA_AWS_TRUSTED_PRINCIPAL_ARN": "arn:aws:iam::1:role/aira/customer-read",
         "AIRA_AWS_SOURCE_ROLE_ARN": "arn:aws:iam::1:role/aira/customer-read",
         "AIRA_PUBLIC_ORIGIN": "https://app.example.com",
+        "AIRA_CURSOR_SIGNING_KEY": "test-cursor-signing-key-at-least-32-bytes",
         "AIRA_WORKLOAD_SUBJECT": "arn:aws:iam::1:role/aira-worker",
     }
     values.update(changes)

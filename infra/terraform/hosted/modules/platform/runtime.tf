@@ -42,6 +42,12 @@ resource "aws_secretsmanager_secret" "web_session" {
   recovery_window_in_days = var.environment == "prod" ? 30 : 7
   tags                    = merge(local.common_tags, { component = "web" })
 }
+resource "aws_secretsmanager_secret" "cursor_signing" {
+  name                    = "${local.name}/api/cursor-signing-key"
+  kms_key_id              = aws_kms_key.platform.arn
+  recovery_window_in_days = var.environment == "prod" ? 30 : 7
+  tags                    = merge(local.common_tags, { component = "api" })
+}
 resource "aws_secretsmanager_secret" "worker_scope_grants" {
   name                    = "${local.name}/worker/scope-grants"
   kms_key_id              = aws_kms_key.platform.arn
@@ -68,7 +74,7 @@ resource "aws_ecs_cluster" "this" {
 
 locals {
   execution_secret_arns = {
-    api             = [aws_secretsmanager_secret.database_runtime.arn, aws_secretsmanager_secret.llm_provider.arn]
+    api             = [aws_secretsmanager_secret.database_runtime.arn, aws_secretsmanager_secret.llm_provider.arn, aws_secretsmanager_secret.cursor_signing.arn]
     worker          = [aws_secretsmanager_secret.database_runtime.arn, aws_secretsmanager_secret.llm_provider.arn, aws_secretsmanager_secret.worker_scope_grants.arn]
     dispatcher      = [aws_secretsmanager_secret.database_runtime.arn, aws_secretsmanager_secret.worker_scope_grants.arn]
     web             = [aws_secretsmanager_secret.web_database.arn, aws_secretsmanager_secret.web_session.arn]
@@ -314,6 +320,7 @@ locals {
   api_secrets = [
     { name = "AIRA_DATABASE_URL", valueFrom = aws_secretsmanager_secret.database_runtime.arn },
     { name = "OPENAI_API_KEY", valueFrom = aws_secretsmanager_secret.llm_provider.arn },
+    { name = "AIRA_CURSOR_SIGNING_KEY", valueFrom = aws_secretsmanager_secret.cursor_signing.arn },
   ]
   worker_environment = concat(local.api_environment, [
     { name = "AIRA_RUNTIME_ROLE", value = "worker" },

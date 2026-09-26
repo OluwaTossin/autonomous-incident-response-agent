@@ -49,7 +49,7 @@ Do not include real secrets, customer content, or personal contact details in ti
 
 1. Treat as critical. Pause the implicated endpoint/worker path without modifying tenant evidence.
 2. Preserve request IDs, actor ID, organization/workspace IDs, SQL transaction context, pooled
-   connection identifiers, object keys, cache bundle identity, and queue/job IDs.
+   connection identifiers, object keys, cache bundle identity, pagination cursors, and queue/job IDs.
 3. Reproduce only in an isolated environment with synthetic multi-tenant fixtures.
 4. Test both application authorization and RLS independently. Inspect every related table, S3
    object, FAISS cache entry, log, trace, usage event, and presigned request.
@@ -57,6 +57,8 @@ Do not include real secrets, customer content, or personal contact details in ti
    approved, time-bounded, and audited.
 6. Keep the affected release blocked until scope, root cause, correction, and regression evidence
    are reviewed.
+7. If signed cursor integrity is implicated, rotate the API cursor-signing key through the approved
+   secret process and expect all outstanding pagination cursors to become invalid.
 
 ## AWS role or integration compromise
 

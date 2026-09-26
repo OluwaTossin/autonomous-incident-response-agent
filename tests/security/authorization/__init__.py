@@ -1,0 +1,1 @@
+"""Hosted authorization boundary inventories."""

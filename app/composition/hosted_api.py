@@ -23,6 +23,7 @@ from app.application.workspaces import HostedWorkspaceService
 from app.application.usage import HostedUsageService
 from app.observability.http import install_http_observability
 from app.observability.telemetry import HostedTelemetry
+from app.security.cursors import CursorCodec
 
 
 def build_hosted_api(
@@ -39,7 +40,10 @@ def build_hosted_api(
     usage: HostedUsageService | None = None,
     readiness_check: Callable[[], None] | None = None,
     telemetry: HostedTelemetry | None = None,
+    cursor_codec: CursorCodec | None = None,
 ) -> FastAPI:
+    if cursor_codec is None:
+        raise ValueError("Hosted API requires a cursor codec")
     application = FastAPI(
         title="AIRA Hosted API",
         version="3",
@@ -64,6 +68,7 @@ def build_hosted_api(
         build_hosted_incident_router(
             incidents,
             actor_dependency,
+            cursor_codec=cursor_codec,
             action_proposals=action_proposals,
             approvals=approvals,
             execution_intents=execution_intents,
@@ -75,7 +80,9 @@ def build_hosted_api(
         )
     if workspaces is not None:
         application.include_router(
-            build_hosted_workspace_router(workspaces, actor_dependency)
+            build_hosted_workspace_router(
+                workspaces, actor_dependency, cursor_codec=cursor_codec
+            )
         )
     if aws_integrations is not None:
         application.include_router(

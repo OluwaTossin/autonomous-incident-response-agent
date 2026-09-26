@@ -33,6 +33,7 @@ from app.domain.identifiers import (
     WorkspaceId,
 )
 from app.domain.incidents import IncidentReference, TriageRunReference
+from app.security.cursors import CursorCodec
 
 NOW = datetime(2026, 9, 25, 12, 0, tzinfo=UTC)
 ORG = OrganizationId("00000000-0000-4000-8000-000000000001")
@@ -50,6 +51,7 @@ ACTOR = ActorContext(
     issuer="https://issuer.example",
     external_subject="viewer",
 )
+CURSORS = CursorCodec("test-cursor-signing-key-at-least-32-bytes")
 
 
 def _proposal() -> ActionProposal:
@@ -109,6 +111,7 @@ def _client(action_service=None) -> TestClient:
         build_hosted_incident_router(
             object(),
             lambda: ACTOR,
+            cursor_codec=CURSORS,
             action_proposals=action_service or ActionService(),
         )
     )

@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import base64
-import binascii
-import json
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
@@ -55,6 +52,7 @@ from app.domain.incidents import Incident, IncidentState, TriageRun, TriageRunSt
 from app.domain.actions import ActionProposal, Approval, action_parameters_to_dict
 from app.domain.execution import ExecutionIntent
 from app.models.triage import TriageOutput
+from app.security.cursors import CursorCodec, InvalidCursor
 
 
 class HostedErrorDetail(BaseModel):
@@ -352,6 +350,8 @@ class ExecutionIntentResponse(BaseModel):
 def build_hosted_incident_router(
     service: HostedIncidentService,
     actor_dependency,
+    *,
+    cursor_codec: CursorCodec,
     action_proposals: HostedActionProposalService | None = None,
     approvals: HostedApprovalService | None = None,
     execution_intents: HostedExecutionIntentService | None = None,
@@ -401,11 +401,19 @@ def build_hosted_incident_router(
         created_to: datetime | None = None,
     ) -> IncidentPageResponse:
         try:
-            before = _decode_incident_cursor(cursor) if cursor else None
+            organization = OrganizationId(organization_id)
+            workspace = WorkspaceId(workspace_id)
+            before = (
+                _decode_incident_cursor(
+                    cursor_codec, cursor, organization, workspace
+                )
+                if cursor
+                else None
+            )
             items = service.list_incident_history(
                 actor,
-                OrganizationId(organization_id),
-                WorkspaceId(workspace_id),
+                organization,
+                workspace,
                 limit=limit + 1,
                 before=before,
                 state=incident_state,
@@ -414,7 +422,14 @@ def build_hosted_incident_router(
             )
             page = items[:limit]
             next_cursor = (
-                _encode_cursor(page[-1].incident.created_at, page[-1].incident.id)
+                _encode_cursor(
+                    cursor_codec,
+                    "incidents",
+                    organization,
+                    workspace,
+                    page[-1].incident.created_at,
+                    page[-1].incident.id,
+                )
                 if len(items) > limit
                 else None
             )
@@ -498,11 +513,19 @@ def build_hosted_incident_router(
         triage_state: TriageRunState | None = Query(None, alias="state"),
     ) -> TriageRunPageResponse:
         try:
-            before = _decode_triage_cursor(cursor) if cursor else None
+            organization = OrganizationId(organization_id)
+            workspace = WorkspaceId(workspace_id)
+            before = (
+                _decode_triage_cursor(
+                    cursor_codec, cursor, organization, workspace
+                )
+                if cursor
+                else None
+            )
             runs = service.list_triage_history(
                 actor,
-                OrganizationId(organization_id),
-                WorkspaceId(workspace_id),
+                organization,
+                workspace,
                 limit=limit + 1,
                 before=before,
                 incident_id=IncidentId(incident_id) if incident_id else None,
@@ -510,7 +533,14 @@ def build_hosted_incident_router(
             )
             page = runs[:limit]
             next_cursor = (
-                _encode_cursor(page[-1].run.created_at, page[-1].run.id)
+                _encode_cursor(
+                    cursor_codec,
+                    "triage-runs",
+                    organization,
+                    workspace,
+                    page[-1].run.created_at,
+                    page[-1].run.id,
+                )
                 if len(runs) > limit
                 else None
             )
@@ -1198,39 +1228,74 @@ def _next_attempt_at(job) -> datetime | None:
     return None
 
 
-def _encode_cursor(created_at: datetime, identifier) -> str:
-    payload = json.dumps(
-        {"created_at": created_at.isoformat(), "id": str(identifier)},
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
+def _encode_cursor(
+    codec: CursorCodec,
+    kind: str,
+    organization_id: OrganizationId,
+    workspace_id: WorkspaceId,
+    created_at: datetime,
+    identifier,
+) -> str:
+    return codec.encode(
+        kind=kind,
+        scope={
+            "organization_id": str(organization_id),
+            "workspace_id": str(workspace_id),
+        },
+        values={"created_at": created_at.isoformat(), "id": str(identifier)},
+    )
 
 
-def _decode_cursor(value: str) -> tuple[datetime, str]:
+def _decode_cursor(
+    codec: CursorCodec,
+    value: str,
+    kind: str,
+    organization_id: OrganizationId,
+    workspace_id: WorkspaceId,
+) -> tuple[datetime, str]:
     try:
-        if len(value) > 512:
+        raw = codec.decode(
+            value,
+            kind=kind,
+            scope={
+                "organization_id": str(organization_id),
+                "workspace_id": str(workspace_id),
+            },
+        )
+        created_at = datetime.fromisoformat(raw["created_at"])
+        if created_at.tzinfo is None:
             raise ValueError
-        padded = value + "=" * (-len(value) % 4)
-        raw = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
-        return datetime.fromisoformat(raw["created_at"]), str(raw["id"])
+        return created_at, str(raw["id"])
     except (
+        InvalidCursor,
         ValueError,
         TypeError,
         KeyError,
-        UnicodeDecodeError,
-        binascii.Error,
-        json.JSONDecodeError,
     ) as exc:
         raise ValueError("Invalid pagination cursor") from exc
 
 
-def _decode_incident_cursor(value: str) -> IncidentListCursor:
-    created_at, identifier = _decode_cursor(value)
+def _decode_incident_cursor(
+    codec: CursorCodec,
+    value: str,
+    organization_id: OrganizationId,
+    workspace_id: WorkspaceId,
+) -> IncidentListCursor:
+    created_at, identifier = _decode_cursor(
+        codec, value, "incidents", organization_id, workspace_id
+    )
     return IncidentListCursor(created_at, IncidentId(identifier))
 
 
-def _decode_triage_cursor(value: str) -> TriageRunListCursor:
-    created_at, identifier = _decode_cursor(value)
+def _decode_triage_cursor(
+    codec: CursorCodec,
+    value: str,
+    organization_id: OrganizationId,
+    workspace_id: WorkspaceId,
+) -> TriageRunListCursor:
+    created_at, identifier = _decode_cursor(
+        codec, value, "triage-runs", organization_id, workspace_id
+    )
     return TriageRunListCursor(created_at, TriageRunId(identifier))
 
 

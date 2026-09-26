@@ -34,6 +34,7 @@ def validate_hosted_settings(settings: Settings, *, worker: bool = False) -> Non
         "AIRA_AWS_TRUSTED_PRINCIPAL_ARN": settings.aira_aws_trusted_principal_arn,
         "AIRA_AWS_SOURCE_ROLE_ARN": settings.aira_aws_source_role_arn,
         "AIRA_PUBLIC_ORIGIN": settings.aira_public_origin,
+        "AIRA_CURSOR_SIGNING_KEY": settings.aira_cursor_signing_key,
     }
     if worker:
         required["AIRA_WORKER_SCOPE_GRANTS"] = settings.aira_worker_scope_grants
@@ -41,6 +42,8 @@ def validate_hosted_settings(settings: Settings, *, worker: bool = False) -> Non
     missing = sorted(name for name, value in required.items() if not value.strip())
     if missing:
         raise RuntimeError("Missing hosted configuration: " + ", ".join(missing))
+    if len(settings.aira_cursor_signing_key.encode("utf-8")) < 32:
+        raise RuntimeError("AIRA_CURSOR_SIGNING_KEY must be at least 32 bytes")
     if not settings.aira_database_url.startswith(
         ("postgresql://", "postgresql+psycopg://")
     ):

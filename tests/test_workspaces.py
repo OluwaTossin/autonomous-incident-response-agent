@@ -294,11 +294,8 @@ def test_visible_workspace_page_is_bounded_and_respects_restrictions() -> None:
 
     assert len(page.items) <= 1
     assert all(item.id == WORKSPACE for item in page.items)
-    assert page.next_cursor is not None
-    next_page = service.list_visible_page(
-        _human(VIEWER_ID), ORG, limit=1, before=page.next_cursor
-    )
-    assert next_page.items == (store.workspaces[WORKSPACE],)
+    assert page.items == (store.workspaces[WORKSPACE],)
+    assert page.next_cursor is None
 
 
 def test_workspace_description_can_be_cleared_explicitly() -> None:
