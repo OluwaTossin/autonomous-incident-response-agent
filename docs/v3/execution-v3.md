@@ -707,14 +707,21 @@ initialization. No Terraform apply or live AWS mutation was performed.
 
 **Dependencies:** V3.3, V3.9, V3.11, V3.18, V3.21, V3.23.
 
+**Status:** Complete in `fb40a13` (`feat: add usage accounting and tenant quotas`).
+Operational usage accounting, tenant quota admission, summary API/UI, bounded quota
+telemetry, and deployment-owned defaults are complete. Billing remains explicitly out of
+scope. Provider token usage is recorded only when authoritative metadata is available;
+knowledge-bundle byte accounting remains deferred until publication exposes authoritative
+size metadata. No Terraform apply or live AWS mutation was performed.
+
 **Checklist:**
 
-- [ ] Define usage events for triage runs, LLM tokens, document bytes, index builds/storage, enrichment queries, and connector deliveries.
-- [ ] Persist idempotent usage ledger entries and bounded aggregates.
-- [ ] Define plan labels and organization/workspace quotas.
-- [ ] Enforce limits before expensive work and expose clear retry/upgrade-independent errors.
-- [ ] Add usage APIs/UI and operator alerts.
-- [ ] Explicitly exclude invoicing and payment processing.
+- [x] Define typed usage events for triage runs, authoritative LLM tokens, document bytes, index builds, enrichment context, and connector deliveries.
+- [x] Persist idempotent usage ledger entries and bounded aggregates.
+- [x] Define deployment defaults plus versioned organization/workspace quota policies without subscription-plan semantics.
+- [x] Enforce limits before expensive work and expose clear retry/upgrade-independent errors.
+- [x] Add authorized usage summary API/UI, bounded quota telemetry, and an operator runbook.
+- [x] Explicitly exclude invoicing and payment processing.
 
 **Files/modules:** Usage domain/repositories/services, quota policy, worker hooks, APIs/UI, telemetry, migrations, tests.
 
