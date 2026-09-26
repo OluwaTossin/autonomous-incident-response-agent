@@ -11,7 +11,7 @@ from app.runtime.config import alert_routes, validate_hosted_settings, worker_sc
 def _settings(**changes) -> Settings:
     values = {
         "AIRA_ENV": "production",
-        "AIRA_DATABASE_URL": "postgresql+psycopg://aira_app:x@db/aira?sslmode=require",
+        "AIRA_DATABASE_URL": "postgresql+psycopg://aira_app:x@db/aira?sslmode=verify-full",
         "AIRA_SQS_QUEUE_URL": "https://sqs.eu-west-2.amazonaws.com/1/jobs",
         "AIRA_DOCUMENT_BUCKET": "documents",
         "AIRA_KNOWLEDGE_BUCKET": "knowledge",
@@ -59,3 +59,18 @@ def test_worker_scopes_and_alert_routes_are_explicit_and_unique() -> None:
 def test_hosted_runtime_rejects_missing_configuration() -> None:
     with pytest.raises(RuntimeError, match="AIRA_DATABASE_URL"):
         validate_hosted_settings(_settings(AIRA_DATABASE_URL=""))
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("AIRA_OIDC_JWKS_URL", "https://169.254.169.254/keys"),
+        ("AIRA_OTEL_EXPORTER_OTLP_ENDPOINT", "https://127.0.0.1/traces"),
+        ("OPENAI_API_BASE", "https://10.0.0.1/v1"),
+    ],
+)
+def test_hosted_runtime_rejects_unsafe_outbound_destinations(
+    name: str, value: str
+) -> None:
+    with pytest.raises(RuntimeError):
+        validate_hosted_settings(_settings(**{name: value}))

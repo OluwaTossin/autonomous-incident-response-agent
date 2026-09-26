@@ -42,7 +42,7 @@ jobs:
       ECS_CLUSTER: ${{ vars.DEV_ECS_CLUSTER_NAME }}
       ECS_SERVICE: ${{ vars.DEV_ECS_SERVICE_NAME }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Require AWS_DEPLOY_ROLE_ARN secret
         env:
@@ -54,20 +54,20 @@ jobs:
           fi
 
       - name: Configure AWS (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c # v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
         with:
-          version: "latest"
+          version: "0.11.6"
 
       - name: Sync
         run: uv sync --frozen --extra dev --extra hosted
 
       - name: Login to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v2
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2
 
       - name: Build & push
         env:

@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from app.config.settings import Settings
 from app.domain.common import WorkspaceScope
 from app.domain.identifiers import OrganizationId, WorkspaceId
+from app.security.outbound import UnsafeOutboundUrl, validate_public_https_url
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,23 +45,45 @@ def validate_hosted_settings(settings: Settings, *, worker: bool = False) -> Non
         ("postgresql://", "postgresql+psycopg://")
     ):
         raise RuntimeError("AIRA_DATABASE_URL must be PostgreSQL")
-    if "sslmode=" not in settings.aira_database_url:
-        raise RuntimeError("AIRA_DATABASE_URL must explicitly require PostgreSQL TLS")
+    sslmode = parse_qs(urlparse(settings.aira_database_url).query).get("sslmode", [""])[0]
+    if sslmode != "verify-full":
+        raise RuntimeError(
+            "AIRA_DATABASE_URL TLS must use sslmode=verify-full in hosted production"
+        )
     for name, value in {
         "AIRA_PUBLIC_ORIGIN": settings.aira_public_origin,
         "AIRA_OIDC_ISSUER": settings.aira_oidc_issuer,
     }.items():
-        parsed = urlparse(value)
-        if parsed.scheme != "https" or not parsed.netloc or parsed.hostname == "localhost":
-            raise RuntimeError(f"{name} must be a non-local HTTPS URL")
+        try:
+            validate_public_https_url(value, setting_name=name)
+        except UnsafeOutboundUrl as exc:
+            raise RuntimeError(str(exc)) from exc
+    if settings.aira_oidc_jwks_url:
+        try:
+            validate_public_https_url(
+                settings.aira_oidc_jwks_url, setting_name="AIRA_OIDC_JWKS_URL"
+            )
+        except UnsafeOutboundUrl as exc:
+            raise RuntimeError(str(exc)) from exc
+    if settings.openai_api_base:
+        try:
+            validate_public_https_url(
+                settings.openai_api_base, setting_name="OPENAI_API_BASE"
+            )
+        except UnsafeOutboundUrl as exc:
+            raise RuntimeError(str(exc)) from exc
     if settings.aira_sqs_endpoint_url or settings.aira_sts_endpoint_url:
         raise RuntimeError("Hosted production cannot override AWS service endpoints")
     if settings.aira_metric_namespace != "AIRA/Hosted":
         raise RuntimeError("Hosted metric namespace must be AIRA/Hosted")
     if settings.aira_otel_exporter_endpoint:
-        endpoint = urlparse(settings.aira_otel_exporter_endpoint)
-        if endpoint.scheme != "https" or not endpoint.netloc:
-            raise RuntimeError("AIRA_OTEL_EXPORTER_OTLP_ENDPOINT must be HTTPS")
+        try:
+            validate_public_https_url(
+                settings.aira_otel_exporter_endpoint,
+                setting_name="AIRA_OTEL_EXPORTER_OTLP_ENDPOINT",
+            )
+        except UnsafeOutboundUrl as exc:
+            raise RuntimeError(str(exc)) from exc
 
 
 def worker_scopes(settings: Settings) -> tuple[WorkspaceScope, ...]:

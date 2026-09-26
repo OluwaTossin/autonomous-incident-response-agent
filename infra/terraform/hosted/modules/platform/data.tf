@@ -60,6 +60,11 @@ resource "aws_s3_bucket_public_access_block" "private" {
   ignore_public_acls      = true
   restrict_public_buckets = true
 }
+resource "aws_s3_bucket_ownership_controls" "owner_enforced" {
+  for_each = { documents = aws_s3_bucket.documents.id, knowledge = aws_s3_bucket.knowledge.id }
+  bucket   = each.value
+  rule { object_ownership = "BucketOwnerEnforced" }
+}
 resource "aws_s3_bucket_versioning" "enabled" {
   for_each = { documents = aws_s3_bucket.documents.id, knowledge = aws_s3_bucket.knowledge.id }
   bucket   = each.value
@@ -199,6 +204,7 @@ resource "aws_db_instance" "postgres" {
   multi_az                        = var.database_multi_az
   db_subnet_group_name            = aws_db_subnet_group.this.name
   vpc_security_group_ids          = [aws_security_group.database.id]
+  parameter_group_name            = aws_db_parameter_group.postgres.name
   backup_retention_period         = var.database_backup_retention_days
   backup_window                   = "02:00-03:00"
   maintenance_window              = "sun:03:30-sun:04:30"
@@ -213,4 +219,14 @@ resource "aws_db_instance" "postgres" {
   performance_insights_enabled    = true
   performance_insights_kms_key_id = aws_kms_key.platform.arn
   tags                            = merge(local.common_tags, { component = "database" })
+}
+
+resource "aws_db_parameter_group" "postgres" {
+  name_prefix = "${local.name}-postgres-"
+  family      = "postgres16"
+  parameter {
+    name  = "rds.force_ssl"
+    value = "1"
+  }
+  tags = merge(local.common_tags, { component = "database" })
 }

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import json
 from datetime import datetime
 from typing import Any
@@ -270,13 +271,15 @@ def _encode_cursor(cursor: WorkspaceListCursor) -> str:
 
 def _decode_cursor(value: str) -> WorkspaceListCursor:
     try:
+        if len(value) > 512:
+            raise ValueError
         padded = value + "=" * (-len(value) % 4)
         created_at, workspace_id = json.loads(base64.urlsafe_b64decode(padded))
         parsed = datetime.fromisoformat(created_at)
         if parsed.tzinfo is None:
             raise ValueError
         return WorkspaceListCursor(parsed, WorkspaceId(workspace_id))
-    except (ValueError, TypeError, json.JSONDecodeError) as exc:
+    except (ValueError, TypeError, binascii.Error, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=422, detail="Invalid workspace cursor") from exc
 
 

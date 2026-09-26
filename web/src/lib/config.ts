@@ -1,5 +1,7 @@
 import "server-only";
 
+import { publicHttpsUrl } from "./outbound-security";
+
 export interface WebConfig {
   appOrigin: string;
   apiBaseUrl: string;
@@ -36,10 +38,8 @@ function positiveInteger(name: string, fallback: number): number {
 }
 
 function url(name: string, value: string, requireHttps: boolean): string {
+  if (requireHttps) return publicHttpsUrl(name, value);
   const parsed = new URL(value);
-  if (requireHttps && parsed.protocol !== "https:") {
-    throw new Error(`${name} must use HTTPS`);
-  }
   return parsed.toString().replace(/\/$/, "");
 }
 
@@ -60,6 +60,14 @@ export function webConfig(): WebConfig {
   if (inactivitySeconds > absoluteSeconds) {
     throw new Error("Session inactivity timeout cannot exceed absolute timeout");
   }
+  const sessionCookie = process.env.AIRA_WEB_SESSION_COOKIE?.trim() || "__Host-aira_session";
+  if (production && !sessionCookie.startsWith("__Host-")) {
+    throw new Error("AIRA_WEB_SESSION_COOKIE must use the __Host- prefix in production");
+  }
+  const logoutRedirect = process.env.AIRA_WEB_OIDC_LOGOUT_REDIRECT?.trim() || undefined;
+  if (logoutRedirect && publicHttpsUrl("AIRA_WEB_OIDC_LOGOUT_REDIRECT", logoutRedirect) !== url("AIRA_WEB_APP_ORIGIN", required("AIRA_WEB_APP_ORIGIN"), production)) {
+    throw new Error("AIRA_WEB_OIDC_LOGOUT_REDIRECT must exactly match AIRA_WEB_APP_ORIGIN");
+  }
   cached = {
     appOrigin: url("AIRA_WEB_APP_ORIGIN", required("AIRA_WEB_APP_ORIGIN"), production),
     apiBaseUrl: url("AIRA_WEB_API_BASE_URL", required("AIRA_WEB_API_BASE_URL"), production),
@@ -76,7 +84,7 @@ export function webConfig(): WebConfig {
       .split(/\s+/)
       .filter(Boolean),
     encryptionKey: key,
-    sessionCookie: process.env.AIRA_WEB_SESSION_COOKIE?.trim() || "aira_hosted_session",
+    sessionCookie,
     inactivitySeconds,
     absoluteSeconds,
     loginTransactionSeconds: positiveInteger(
@@ -84,7 +92,7 @@ export function webConfig(): WebConfig {
       600,
     ),
     apiTimeoutMs: positiveInteger("AIRA_WEB_API_TIMEOUT_MS", 10_000),
-    logoutRedirect: process.env.AIRA_WEB_OIDC_LOGOUT_REDIRECT?.trim() || undefined,
+    logoutRedirect,
     secureCookies: production,
   };
   return cached;

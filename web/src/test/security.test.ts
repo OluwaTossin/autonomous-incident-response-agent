@@ -28,6 +28,9 @@ describe("browser security primitives", () => {
     expect(safeReturnPath("https://hostile.example")).toBe("/app");
     expect(safeReturnPath("//hostile.example/path")).toBe("/app");
     expect(safeReturnPath("/%2fhostile.example")).toBe("/app");
+    expect(safeReturnPath("/%5chostile.example")).toBe("/app");
+    expect(safeReturnPath("javascript:alert(1)")).toBe("/app");
+    expect(safeReturnPath("/app%0d%0aSet-Cookie:test=1")).toBe("/app");
     expect(safeReturnPath("/configuration")).toBe("/app");
   });
 

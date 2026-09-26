@@ -524,19 +524,22 @@ def _risk(
 def _parameters_complete(candidate: NormalizedAction) -> bool:
     if candidate.proposal_type is ActionProposalType.SCALE_WORKLOAD:
         parameters = candidate.parameters
-        assert isinstance(parameters, ScaleWorkloadParameters)
+        if not isinstance(parameters, ScaleWorkloadParameters):
+            return False
         return parameters.desired_count is not None or (
             parameters.direction is not None and parameters.delta is not None
         )
     if candidate.proposal_type is ActionProposalType.ROLLBACK_DEPLOYMENT:
         parameters = candidate.parameters
-        assert isinstance(parameters, RollbackDeploymentParameters)
+        if not isinstance(parameters, RollbackDeploymentParameters):
+            return False
         return parameters.target_revision is not None
     return True
 
 
 def _result_hash(run: TriageRun) -> str:
-    assert run.result is not None
+    if run.result is None:
+        raise ValueError("A completed triage result is required for action proposals")
     encoded = json.dumps(
         run.result.model_dump(mode="json"),
         sort_keys=True,

@@ -533,3 +533,6 @@ def test_incident_api_cursor_pagination_and_state_filter_are_deterministic() -> 
     assert open_items.status_code == 200
     assert len(open_items.json()["items"]) == 2
     assert client.get(f"{prefix}/incidents", params={"cursor": "invalid"}).status_code == 422
+    assert client.get(
+        f"{prefix}/incidents", params={"cursor": "a" * 513}
+    ).status_code == 422

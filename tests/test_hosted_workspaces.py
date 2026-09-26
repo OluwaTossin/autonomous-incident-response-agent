@@ -203,6 +203,7 @@ def test_workspace_routes_fail_closed_and_keep_errors_distinct() -> None:
         json={"expected_version": 1, "unknown": True},
     ).status_code == 422
     assert client.get(prefix, params={"cursor": "not-a-cursor"}).status_code == 422
+    assert client.get(prefix, params={"cursor": "a" * 513}).status_code == 422
 
 
 def test_workspace_routes_preserve_authentication_boundary() -> None:

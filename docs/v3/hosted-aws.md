@@ -64,7 +64,8 @@ Proxy is deferred until connection/load measurements justify it.
 The RDS-managed master credential is migration-only. A one-off ECS migration task reads
 it, creates or rotates `aira_app`, and runs Alembic. Runtime tasks receive a separate URL
 for `aira_app`; that role remains a non-owner with `NOBYPASSRLS`. Runtime URLs require
-`sslmode=require`. Application tasks never receive the migration credential.
+`sslmode=verify-full` with the trusted RDS CA chain. Application tasks never receive the migration
+credential.
 
 Document and knowledge buckets are separate, private, versioned, KMS encrypted, TLS-only,
 and block public access. Operational CloudWatch context remains incident evidence and is

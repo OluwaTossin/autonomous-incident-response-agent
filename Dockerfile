@@ -1,5 +1,5 @@
 # Phase 9 — API + optional Gradio (/ui). Phase 11 — stub `.rag_index` in-image; ECS overlays real index via `docker/bake_index_context/` (see push_api_to_ecr.sh).
-FROM python:3.12-slim-bookworm
+FROM python:3.12-slim-bookworm@sha256:392307d22300de8b5986851a12d9176dfc0fc073e65bf6523ebd7dcbeb23564e
 
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 \
@@ -10,7 +10,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.11.6@sha256:b1e699368d24c57cda93c338a57a8c5a119009ba809305cc8e86986d4a006754 /uv /usr/local/bin/uv
 
 COPY pyproject.toml uv.lock README.md ./
 COPY app ./app

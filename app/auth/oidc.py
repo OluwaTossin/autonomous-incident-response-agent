@@ -7,12 +7,11 @@ import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
-from urllib.parse import urlparse
-
 import httpx
 import jwt
 
 from app.auth.errors import AuthenticationFailed, IdentityConfigurationError
+from app.security.outbound import UnsafeOutboundUrl, validate_public_https_url
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,9 +26,12 @@ class OidcVerifierConfig:
     http_timeout_seconds: float = 3.0
 
     def __post_init__(self) -> None:
-        issuer = self.issuer.rstrip("/")
-        if urlparse(issuer).scheme != "https":
-            raise IdentityConfigurationError("OIDC issuer must use HTTPS")
+        try:
+            issuer = validate_public_https_url(
+                self.issuer, setting_name="OIDC issuer"
+            )
+        except UnsafeOutboundUrl as exc:
+            raise IdentityConfigurationError(str(exc)) from exc
         if len(issuer) > 255:
             raise IdentityConfigurationError("OIDC issuer is too long")
         object.__setattr__(self, "issuer", issuer)
@@ -46,9 +48,13 @@ class OidcVerifierConfig:
             raise IdentityConfigurationError("OIDC cache and clock values must be positive")
         if self.http_timeout_seconds <= 0:
             raise IdentityConfigurationError("OIDC HTTP timeout must be positive")
-        url = self.jwks_url or f"{issuer}/.well-known/jwks.json"
-        if urlparse(url).scheme != "https":
-            raise IdentityConfigurationError("JWKS URL must use HTTPS")
+        try:
+            url = validate_public_https_url(
+                self.jwks_url or f"{issuer}/.well-known/jwks.json",
+                setting_name="JWKS URL",
+            )
+        except UnsafeOutboundUrl as exc:
+            raise IdentityConfigurationError(str(exc)) from exc
         object.__setattr__(self, "jwks_url", url)
 
 

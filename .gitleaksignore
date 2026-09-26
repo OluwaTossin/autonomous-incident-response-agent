@@ -1,0 +1,3 @@
+# Synthetic AWS access-key-shaped fixture used only to verify redaction.
+0ad424e519c343d766c37ef12c88d97489196a7b:tests/test_incident_context.py:aws-access-token:372
+0ad424e519c343d766c37ef12c88d97489196a7b:tests/test_incident_context.py:aws-access-token:381

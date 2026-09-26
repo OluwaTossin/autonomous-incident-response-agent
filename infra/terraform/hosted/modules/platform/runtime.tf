@@ -66,12 +66,25 @@ resource "aws_ecs_cluster" "this" {
   tags = merge(local.common_tags, { component = "runtime" })
 }
 
+locals {
+  execution_secret_arns = {
+    api             = [aws_secretsmanager_secret.database_runtime.arn, aws_secretsmanager_secret.llm_provider.arn]
+    worker          = [aws_secretsmanager_secret.database_runtime.arn, aws_secretsmanager_secret.llm_provider.arn, aws_secretsmanager_secret.worker_scope_grants.arn]
+    dispatcher      = [aws_secretsmanager_secret.database_runtime.arn, aws_secretsmanager_secret.worker_scope_grants.arn]
+    web             = [aws_secretsmanager_secret.web_database.arn, aws_secretsmanager_secret.web_session.arn]
+    migration       = [aws_db_instance.postgres.master_user_secret[0].secret_arn, aws_secretsmanager_secret.database_runtime.arn]
+    alert-ingestion = [aws_secretsmanager_secret.database_runtime.arn, aws_secretsmanager_secret.worker_scope_grants.arn]
+  }
+}
+
 resource "aws_iam_role" "execution" {
-  name               = "${local.name}-ecs-execution"
+  for_each           = local.execution_secret_arns
+  name               = "${local.name}-${each.key}-execution"
   assume_role_policy = jsonencode({ Version = "2012-10-17", Statement = [{ Effect = "Allow", Principal = { Service = "ecs-tasks.amazonaws.com" }, Action = "sts:AssumeRole" }] })
   tags               = merge(local.common_tags, { component = "runtime" })
 }
 data "aws_iam_policy_document" "execution" {
+  for_each = local.execution_secret_arns
   statement {
     sid       = "EcrAuthorization"
     actions   = ["ecr:GetAuthorizationToken"]
@@ -85,12 +98,12 @@ data "aws_iam_policy_document" "execution" {
   statement {
     sid       = "Logs"
     actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
-    resources = [for group in aws_cloudwatch_log_group.service : "${group.arn}:*"]
+    resources = ["${aws_cloudwatch_log_group.service[each.key].arn}:*"]
   }
   statement {
     sid       = "RuntimeSecrets"
     actions   = ["secretsmanager:GetSecretValue"]
-    resources = [aws_secretsmanager_secret.database_runtime.arn, aws_secretsmanager_secret.web_database.arn, aws_secretsmanager_secret.llm_provider.arn, aws_secretsmanager_secret.web_session.arn, aws_secretsmanager_secret.worker_scope_grants.arn, aws_db_instance.postgres.master_user_secret[0].secret_arn]
+    resources = each.value
   }
   statement {
     sid       = "DecryptRuntimeSecrets"
@@ -99,9 +112,10 @@ data "aws_iam_policy_document" "execution" {
   }
 }
 resource "aws_iam_role_policy" "execution" {
-  name   = "runtime-bootstrap"
-  role   = aws_iam_role.execution.id
-  policy = data.aws_iam_policy_document.execution.json
+  for_each = local.execution_secret_arns
+  name     = "runtime-bootstrap"
+  role     = aws_iam_role.execution[each.key].id
+  policy   = data.aws_iam_policy_document.execution[each.key].json
 }
 
 resource "aws_iam_role" "api" {
@@ -118,6 +132,21 @@ resource "aws_iam_role" "web" {
   name               = "${local.name}-web"
   assume_role_policy = jsonencode({ Version = "2012-10-17", Statement = [{ Effect = "Allow", Principal = { Service = "ecs-tasks.amazonaws.com" }, Action = "sts:AssumeRole" }] })
   tags               = merge(local.common_tags, { component = "web" })
+}
+resource "aws_iam_role" "dispatcher" {
+  name               = "${local.name}-dispatcher"
+  assume_role_policy = jsonencode({ Version = "2012-10-17", Statement = [{ Effect = "Allow", Principal = { Service = "ecs-tasks.amazonaws.com" }, Action = "sts:AssumeRole" }] })
+  tags               = merge(local.common_tags, { component = "dispatcher" })
+}
+resource "aws_iam_role" "alert_ingestion" {
+  name               = "${local.name}-alert-ingestion"
+  assume_role_policy = jsonencode({ Version = "2012-10-17", Statement = [{ Effect = "Allow", Principal = { Service = "ecs-tasks.amazonaws.com" }, Action = "sts:AssumeRole" }] })
+  tags               = merge(local.common_tags, { component = "alert-ingestion" })
+}
+resource "aws_iam_role" "migration" {
+  name               = "${local.name}-migration"
+  assume_role_policy = jsonencode({ Version = "2012-10-17", Statement = [{ Effect = "Allow", Principal = { Service = "ecs-tasks.amazonaws.com" }, Action = "sts:AssumeRole" }] })
+  tags               = merge(local.common_tags, { component = "migration" })
 }
 resource "aws_iam_role" "customer_assumer" {
   name = "${local.name}-customer-read"
@@ -230,6 +259,30 @@ resource "aws_iam_role_policy" "worker_data" {
   role   = aws_iam_role.worker.id
   policy = data.aws_iam_policy_document.worker_data.json
 }
+data "aws_iam_policy_document" "dispatcher_data" {
+  statement {
+    sid       = "PublishJobs"
+    actions   = ["sqs:SendMessage"]
+    resources = [aws_sqs_queue.jobs.arn]
+  }
+}
+resource "aws_iam_role_policy" "dispatcher_data" {
+  name   = "publish-jobs"
+  role   = aws_iam_role.dispatcher.id
+  policy = data.aws_iam_policy_document.dispatcher_data.json
+}
+data "aws_iam_policy_document" "alert_ingestion_data" {
+  statement {
+    sid       = "ConsumeAlerts"
+    actions   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:ChangeMessageVisibility", "sqs:GetQueueAttributes"]
+    resources = [aws_sqs_queue.alerts.arn]
+  }
+}
+resource "aws_iam_role_policy" "alert_ingestion_data" {
+  name   = "consume-alerts"
+  role   = aws_iam_role.alert_ingestion.id
+  policy = data.aws_iam_policy_document.alert_ingestion_data.json
+}
 
 locals {
   api_environment = [
@@ -267,6 +320,10 @@ locals {
     { name = "AIRA_WORKLOAD_SUBJECT", value = aws_iam_role.worker.arn },
   ])
   worker_secrets = concat(local.api_secrets, [{ name = "AIRA_WORKER_SCOPE_GRANTS", valueFrom = aws_secretsmanager_secret.worker_scope_grants.arn }])
+  bounded_worker_secrets = [
+    { name = "AIRA_DATABASE_URL", valueFrom = aws_secretsmanager_secret.database_runtime.arn },
+    { name = "AIRA_WORKER_SCOPE_GRANTS", valueFrom = aws_secretsmanager_secret.worker_scope_grants.arn },
+  ]
   web_environment = [
     { name = "AIRA_ENV", value = "production" },
     { name = "AIRA_BUILD_SHA", value = var.build_sha },
@@ -289,7 +346,7 @@ resource "aws_ecs_task_definition" "api" {
   network_mode             = "awsvpc"
   cpu                      = var.api_cpu
   memory                   = var.api_memory
-  execution_role_arn       = aws_iam_role.execution.arn
+  execution_role_arn       = aws_iam_role.execution["api"].arn
   task_role_arn            = aws_iam_role.api.arn
   runtime_platform {
     operating_system_family = "LINUX"
@@ -301,7 +358,7 @@ resource "aws_ecs_task_definition" "api" {
     readonlyRootFilesystem = true, user = "10001", portMappings = [{ containerPort = 8000, protocol = "tcp" }],
     environment            = local.api_environment, secrets = local.api_secrets,
     healthCheck            = { command = ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/healthz || exit 1"], interval = 30, timeout = 5, retries = 3, startPeriod = 30 },
-    linuxParameters        = { initProcessEnabled = true }, mountPoints = [], volumesFrom = [],
+    linuxParameters        = { initProcessEnabled = true, capabilities = { drop = ["ALL"] } }, mountPoints = [], volumesFrom = [],
     logConfiguration       = { logDriver = "awslogs", options = { "awslogs-group" = aws_cloudwatch_log_group.service["api"].name, "awslogs-region" = var.aws_region, "awslogs-stream-prefix" = "ecs" } }
   }])
   tags = merge(local.common_tags, { component = "api" })
@@ -312,7 +369,7 @@ resource "aws_ecs_task_definition" "worker" {
   network_mode             = "awsvpc"
   cpu                      = var.worker_cpu
   memory                   = var.worker_memory
-  execution_role_arn       = aws_iam_role.execution.arn
+  execution_role_arn       = aws_iam_role.execution["worker"].arn
   task_role_arn            = aws_iam_role.worker.arn
   runtime_platform {
     operating_system_family = "LINUX"
@@ -322,7 +379,7 @@ resource "aws_ecs_task_definition" "worker" {
     name             = "worker", image = "${aws_ecr_repository.service["worker"].repository_url}@${var.worker_image_digest}", essential = true,
     command          = ["python", "-m", "app.runtime.hosted", "worker"], readonlyRootFilesystem = true, user = "10001",
     environment      = local.worker_environment, secrets = local.worker_secrets,
-    linuxParameters  = { initProcessEnabled = true }, mountPoints = [{ sourceVolume = "cache", containerPath = "/tmp/aira-faiss-cache", readOnly = false }], volumesFrom = [],
+    linuxParameters  = { initProcessEnabled = true, capabilities = { drop = ["ALL"] } }, mountPoints = [{ sourceVolume = "cache", containerPath = "/tmp/aira-faiss-cache", readOnly = false }], volumesFrom = [],
     logConfiguration = { logDriver = "awslogs", options = { "awslogs-group" = aws_cloudwatch_log_group.service["worker"].name, "awslogs-region" = var.aws_region, "awslogs-stream-prefix" = "ecs" } }
   }])
   volume {
@@ -336,8 +393,8 @@ resource "aws_ecs_task_definition" "dispatcher" {
   network_mode             = "awsvpc"
   cpu                      = 256
   memory                   = 512
-  execution_role_arn       = aws_iam_role.execution.arn
-  task_role_arn            = aws_iam_role.worker.arn
+  execution_role_arn       = aws_iam_role.execution["dispatcher"].arn
+  task_role_arn            = aws_iam_role.dispatcher.arn
   runtime_platform {
     operating_system_family = "LINUX"
     cpu_architecture        = "X86_64"
@@ -345,8 +402,8 @@ resource "aws_ecs_task_definition" "dispatcher" {
   container_definitions = jsonencode([{
     name             = "dispatcher", image = "${aws_ecr_repository.service["worker"].repository_url}@${var.worker_image_digest}", essential = true,
     command          = ["python", "-m", "app.runtime.hosted", "dispatcher"], readonlyRootFilesystem = true, user = "10001",
-    environment      = local.worker_environment, secrets = local.worker_secrets,
-    linuxParameters  = { initProcessEnabled = true }, mountPoints = [], volumesFrom = [],
+    environment      = local.worker_environment, secrets = local.bounded_worker_secrets,
+    linuxParameters  = { initProcessEnabled = true, capabilities = { drop = ["ALL"] } }, mountPoints = [], volumesFrom = [],
     logConfiguration = { logDriver = "awslogs", options = { "awslogs-group" = aws_cloudwatch_log_group.service["dispatcher"].name, "awslogs-region" = var.aws_region, "awslogs-stream-prefix" = "ecs" } }
   }])
   tags = merge(local.common_tags, { component = "dispatcher" })
@@ -357,7 +414,7 @@ resource "aws_ecs_task_definition" "web" {
   network_mode             = "awsvpc"
   cpu                      = var.web_cpu
   memory                   = var.web_memory
-  execution_role_arn       = aws_iam_role.execution.arn
+  execution_role_arn       = aws_iam_role.execution["web"].arn
   task_role_arn            = aws_iam_role.web.arn
   runtime_platform {
     operating_system_family = "LINUX"
@@ -368,7 +425,7 @@ resource "aws_ecs_task_definition" "web" {
     readonlyRootFilesystem = true, user = "10001", portMappings = [{ containerPort = 3000, protocol = "tcp" }],
     environment            = local.web_environment, secrets = local.web_secrets,
     healthCheck            = { command = ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))\""], interval = 30, timeout = 5, retries = 3, startPeriod = 20 },
-    linuxParameters        = { initProcessEnabled = true }, mountPoints = [], volumesFrom = [],
+    linuxParameters        = { initProcessEnabled = true, capabilities = { drop = ["ALL"] } }, mountPoints = [], volumesFrom = [],
     logConfiguration       = { logDriver = "awslogs", options = { "awslogs-group" = aws_cloudwatch_log_group.service["web"].name, "awslogs-region" = var.aws_region, "awslogs-stream-prefix" = "ecs" } }
   }])
   tags = merge(local.common_tags, { component = "web" })
@@ -379,8 +436,8 @@ resource "aws_ecs_task_definition" "migration" {
   network_mode             = "awsvpc"
   cpu                      = 256
   memory                   = 512
-  execution_role_arn       = aws_iam_role.execution.arn
-  task_role_arn            = aws_iam_role.api.arn
+  execution_role_arn       = aws_iam_role.execution["migration"].arn
+  task_role_arn            = aws_iam_role.migration.arn
   runtime_platform {
     operating_system_family = "LINUX"
     cpu_architecture        = "X86_64"
@@ -392,7 +449,7 @@ resource "aws_ecs_task_definition" "migration" {
       { name = "AIRA_DB_MASTER_SECRET", valueFrom = aws_db_instance.postgres.master_user_secret[0].secret_arn },
       { name = "AIRA_DATABASE_URL", valueFrom = aws_secretsmanager_secret.database_runtime.arn },
     ],
-    environment      = [{ name = "AIRA_ENV", value = "production" }], mountPoints = [], volumesFrom = [],
+    environment      = [{ name = "AIRA_ENV", value = "production" }], linuxParameters = { initProcessEnabled = true, capabilities = { drop = ["ALL"] } }, mountPoints = [], volumesFrom = [],
     logConfiguration = { logDriver = "awslogs", options = { "awslogs-group" = aws_cloudwatch_log_group.service["migration"].name, "awslogs-region" = var.aws_region, "awslogs-stream-prefix" = "ecs" } }
   }])
   tags = merge(local.common_tags, { component = "migration" })
@@ -404,8 +461,8 @@ resource "aws_ecs_task_definition" "alert_ingestion" {
   network_mode             = "awsvpc"
   cpu                      = 256
   memory                   = 512
-  execution_role_arn       = aws_iam_role.execution.arn
-  task_role_arn            = aws_iam_role.worker.arn
+  execution_role_arn       = aws_iam_role.execution["alert-ingestion"].arn
+  task_role_arn            = aws_iam_role.alert_ingestion.arn
   runtime_platform {
     operating_system_family = "LINUX"
     cpu_architecture        = "X86_64"
@@ -413,8 +470,8 @@ resource "aws_ecs_task_definition" "alert_ingestion" {
   container_definitions = jsonencode([{
     name             = "alert-ingestion", image = "${aws_ecr_repository.service["worker"].repository_url}@${var.worker_image_digest}", essential = true,
     command          = ["python", "-m", "app.runtime.hosted", "alert-ingestion"], readonlyRootFilesystem = true, user = "10001",
-    environment      = local.worker_environment, secrets = local.worker_secrets,
-    linuxParameters  = { initProcessEnabled = true }, mountPoints = [], volumesFrom = [],
+    environment      = local.worker_environment, secrets = local.bounded_worker_secrets,
+    linuxParameters  = { initProcessEnabled = true, capabilities = { drop = ["ALL"] } }, mountPoints = [], volumesFrom = [],
     logConfiguration = { logDriver = "awslogs", options = { "awslogs-group" = aws_cloudwatch_log_group.service["alert-ingestion"].name, "awslogs-region" = var.aws_region, "awslogs-stream-prefix" = "ecs" } }
   }])
   tags = merge(local.common_tags, { component = "alert-ingestion" })

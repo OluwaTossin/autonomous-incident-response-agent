@@ -96,11 +96,20 @@ export class CognitoOidcProvider implements OidcProvider {
     const displayName = optionalClaim(payload, "name", 200) ||
       optionalClaim(payload, "cognito:username", 200) ||
       email;
-    await this.verifyAccessToken(tokens.accessToken);
+    const access = await this.verifyAccessTokenPayload(tokens.accessToken);
+    if (access.subject !== subject) {
+      throw new Error("Identity and access token subjects do not match");
+    }
     return { issuer: this.config.issuer, subject, email, displayName };
   }
 
   async verifyAccessToken(accessToken: string): Promise<Date> {
+    return (await this.verifyAccessTokenPayload(accessToken)).expiresAt;
+  }
+
+  private async verifyAccessTokenPayload(
+    accessToken: string,
+  ): Promise<{ expiresAt: Date; subject: string }> {
     const { payload } = await jwtVerify(accessToken, this.jwks, {
       issuer: this.config.issuer,
       algorithms: ["RS256"],
@@ -108,11 +117,14 @@ export class CognitoOidcProvider implements OidcProvider {
     if (
       payload.token_use !== "access" ||
       payload.client_id !== this.config.clientId ||
-      typeof payload.exp !== "number"
+      typeof payload.exp !== "number" ||
+      typeof payload.sub !== "string" ||
+      !payload.sub ||
+      payload.sub.length > 255
     ) {
       throw new Error("Access token validation failed");
     }
-    return new Date(payload.exp * 1000);
+    return { expiresAt: new Date(payload.exp * 1000), subject: payload.sub };
   }
 
   logoutUrl(): URL | null {

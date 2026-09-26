@@ -1,21 +1,26 @@
-FROM node:20-bookworm-slim AS dependencies
+FROM node:20-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS dependencies
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-FROM node:20-bookworm-slim AS build
+FROM node:20-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS build
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 
-FROM node:20-bookworm-slim AS runtime
+FROM node:20-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \
     HOSTNAME=0.0.0.0
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/local/lib/node_modules/npm \
+    && rm -f /usr/local/bin/npm /usr/local/bin/npx
 RUN useradd --system --uid 10001 --create-home aira
 COPY --from=build --chown=aira:aira /app/.next/standalone ./
 COPY --from=build --chown=aira:aira /app/.next/static ./.next/static

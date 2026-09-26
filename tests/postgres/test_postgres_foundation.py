@@ -39,6 +39,7 @@ from app.persistence.postgres.mappers import (
     workspace_to_record,
 )
 from app.persistence.postgres.models import (
+    Base,
     IncidentRecord,
     OrganizationRecord,
 )
@@ -153,7 +154,7 @@ def test_fresh_migration_contains_expected_schema(
             ).scalars()
         )
 
-    assert revision == "2f9c7a6d4e18"
+    assert revision == "9e4b7a2c6d10"
     assert {
         "users",
         "organizations",
@@ -387,6 +388,78 @@ def test_runtime_role_is_non_owner_without_rls_bypass(
     assert owned_tables == 0
     assert can_create is False
     assert can_update_migration_history is False
+
+
+def test_every_tenant_table_has_forced_rls_and_policy(
+    postgres_database: PostgresTestDatabase,
+) -> None:
+    tenant_tables = {
+        table.name
+        for table in Base.metadata.sorted_tables
+        if table.name == "organizations" or "organization_id" in table.columns
+    }
+    with postgres_database.migration_engine.connect() as connection:
+        protected = {
+            row.tablename: (row.enabled, row.forced, row.policy_count)
+            for row in connection.execute(
+                text(
+                    "SELECT c.relname AS tablename, c.relrowsecurity AS enabled, "
+                    "c.relforcerowsecurity AS forced, count(p.policyname) AS policy_count "
+                    "FROM pg_class c "
+                    "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                    "LEFT JOIN pg_policies p ON p.schemaname = n.nspname "
+                    "AND p.tablename = c.relname "
+                    "WHERE n.nspname = 'public' AND c.relkind = 'r' "
+                    "GROUP BY c.relname, c.relrowsecurity, c.relforcerowsecurity"
+                )
+            )
+        }
+
+    assert tenant_tables
+    assert tenant_tables <= protected.keys()
+    assert all(
+        protected[table][0] is True
+        and protected[table][1] is True
+        and protected[table][2] >= 1
+        for table in tenant_tables
+    )
+
+
+def test_runtime_ledgers_are_append_only(
+    postgres_database: PostgresTestDatabase,
+) -> None:
+    with postgres_database.runtime_engine.connect() as connection:
+        privileges = {
+            table: {
+                privilege: bool(
+                    connection.scalar(
+                        text(
+                            "SELECT has_table_privilege(current_user, :table, :privilege)"
+                        ),
+                        {"table": table, "privilege": privilege},
+                    )
+                )
+                for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE")
+            }
+            for table in ("audit_events", "usage_events")
+        }
+
+    assert privileges == {
+        "audit_events": {
+            "SELECT": True,
+            "INSERT": True,
+            "UPDATE": False,
+            "DELETE": False,
+            "TRUNCATE": False,
+        },
+        "usage_events": {
+            "SELECT": True,
+            "INSERT": True,
+            "UPDATE": False,
+            "DELETE": False,
+            "TRUNCATE": False,
+        },
+    }
 
 
 def test_unit_of_work_persists_repositories_and_authoritative_audit(

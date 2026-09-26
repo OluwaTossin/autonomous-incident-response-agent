@@ -86,5 +86,21 @@ describe("Cognito OIDC boundary", () => {
     await expect(provider.verifyCallbackTokens(tokens, "wrong-nonce")).rejects.toThrow(
       "validation failed",
     );
+    const mismatchedAccessToken = await new SignJWT({
+      token_use: "access",
+      client_id: config.clientId,
+    })
+      .setProtectedHeader({ alg: "RS256", kid: "key-1" })
+      .setIssuer(config.issuer)
+      .setSubject("different-subject")
+      .setIssuedAt(now)
+      .setExpirationTime(now + 300)
+      .sign(privateKey);
+    await expect(
+      provider.verifyCallbackTokens(
+        { ...tokens, accessToken: mismatchedAccessToken },
+        "nonce-1",
+      ),
+    ).rejects.toThrow("subjects do not match");
   });
 });

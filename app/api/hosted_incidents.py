@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import json
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
@@ -1207,10 +1208,19 @@ def _encode_cursor(created_at: datetime, identifier) -> str:
 
 def _decode_cursor(value: str) -> tuple[datetime, str]:
     try:
+        if len(value) > 512:
+            raise ValueError
         padded = value + "=" * (-len(value) % 4)
         raw = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
         return datetime.fromisoformat(raw["created_at"]), str(raw["id"])
-    except Exception as exc:
+    except (
+        ValueError,
+        TypeError,
+        KeyError,
+        UnicodeDecodeError,
+        binascii.Error,
+        json.JSONDecodeError,
+    ) as exc:
         raise ValueError("Invalid pagination cursor") from exc
 
 

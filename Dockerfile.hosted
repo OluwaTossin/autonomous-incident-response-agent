@@ -1,4 +1,4 @@
-FROM python:3.12-slim-bookworm
+FROM python:3.12-slim-bookworm@sha256:392307d22300de8b5986851a12d9176dfc0fc073e65bf6523ebd7dcbeb23564e
 
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 \
@@ -9,11 +9,12 @@ ENV PYTHONUNBUFFERED=1 \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.11.6@sha256:b1e699368d24c57cda93c338a57a8c5a119009ba809305cc8e86986d4a006754 /uv /usr/local/bin/uv
 COPY pyproject.toml uv.lock README.md alembic.ini ./
 COPY app ./app
 COPY migrations ./migrations
-RUN uv sync --frozen --no-dev --extra hosted
+RUN uv sync --frozen --no-dev --extra hosted \
+    && rm -f /usr/local/bin/uv /usr/local/bin/uvx
 RUN groupadd --system --gid 10001 aira \
     && useradd --system --uid 10001 --gid aira --create-home --home-dir /app aira \
     && chown -R aira:aira /app
