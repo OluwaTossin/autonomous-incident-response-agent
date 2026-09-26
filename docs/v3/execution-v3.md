@@ -769,13 +769,22 @@ live AWS mutation was performed.
 
 **Dependencies:** V3.22-V3.25.
 
+**Status:** Complete in `ea1dbc9` (`feat: add hosted CI/CD and deployment automation`).
+Credential-free pull-request CI and hosted release qualification, immutable build-once image
+promotion, GitHub OIDC-based development and production deployment workflows, protected production
+environment approval, Terraform destructive-change guards, migration-before-runtime-activation
+ordering, ECS stability and health checks, release manifests, rollback, and the V3.25 security gates
+are implemented. No Terraform apply, ECR push, ECS task execution, live AWS mutation, or production
+deployment was performed. GitHub Environments, OIDC roles, remote backends, and initial ECR
+repositories remain external prerequisites.
+
 **Checklist:**
 
-- [ ] Extend CI for database migrations, PostgreSQL/RLS integration tests, auth/RBAC, SQS workers, hosted frontend, and dual-composition builds.
-- [ ] Add security, dependency, container, and Terraform checks.
-- [ ] Build immutable API, worker, hosted frontend, and retained self-hosted artifacts.
-- [ ] Implement OIDC deployments with environment approvals, migration job, health checks, rollback, and provenance.
-- [ ] Prevent production deploy from unreviewed branches and protect secrets/environments.
+- [x] Extend CI for database migrations, PostgreSQL/RLS integration tests, auth/RBAC, SQS workers, hosted frontend, and dual-composition builds.
+- [x] Add security, dependency, container, and Terraform checks.
+- [x] Build immutable API, worker, hosted frontend, and retained self-hosted artifacts.
+- [x] Implement OIDC deployments with environment approvals, migration job, health checks, rollback, and provenance.
+- [x] Prevent production deploy from unreviewed branches and protect secrets/environments.
 
 **Files/modules:** `.github/workflows/`, Dockerfiles/build config, deployment scripts/docs, artifact/version metadata.
 
