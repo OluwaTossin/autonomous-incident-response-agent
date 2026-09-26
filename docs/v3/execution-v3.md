@@ -800,14 +800,21 @@ repositories remain external prerequisites.
 
 **Dependencies:** V3.1 and all hosted behavior intended for release.
 
+**Status:** Complete in `1a738a3` (`feat: add V2 to V3 migration and cutover compatibility`).
+The V2 compatibility matrix and regression coverage, tenant-scoped and restart-safe migration
+package workflow, verified source-document import, V3 knowledge rebuild requirements, cutover
+validation, and operator runbook are complete. Migration uses ordinary authorization and forced
+RLS boundaries without schema-owner bypass. Operational fallback to V2 remains straightforward
+only before V3-only writes; later fallback requires explicit data reconciliation.
+
 **Checklist:**
 
-- [ ] Define V2 compatibility matrix for CLI, synchronous API, Gradio, static Next.js, filesystem workspace, FAISS, Compose, and n8n.
-- [ ] Add automated self-hosted regression suite and representative E2E smoke.
-- [ ] Define optional import of V2 workspace documents/config/index metadata into one hosted workspace.
-- [ ] Rebuild hosted indexes from imported source documents rather than trusting old bundles blindly.
-- [ ] Document unsupported migration data and rollback/export.
-- [ ] Update V2 and V3 operator documentation without conflating modes.
+- [x] Define V2 compatibility matrix for CLI, synchronous API, Gradio, static Next.js, filesystem workspace, FAISS, Compose, and n8n.
+- [x] Add automated self-hosted regression suite and representative E2E smoke.
+- [x] Define optional import of V2 workspace documents/config/index metadata into one hosted workspace.
+- [x] Rebuild hosted indexes from imported source documents rather than trusting old bundles blindly.
+- [x] Document unsupported migration data and rollback/export.
+- [x] Update V2 and V3 operator documentation without conflating modes.
 
 **Files/modules:** Migration/import tooling, compatibility tests, Compose/build configs, V2/V3 docs, release notes.
 
