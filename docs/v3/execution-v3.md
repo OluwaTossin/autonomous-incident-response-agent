@@ -862,15 +862,25 @@ mutation occurred.
 
 **Dependencies:** V3.0-V3.28.
 
+**Status:** Complete at the code/readiness-evidence level in `5992bd1` (`feat: add production readiness and rehearsal evidence`).
+Release-bound production-readiness evidence and fail-closed go/no-go validation are implemented,
+with production prerequisite, recovery, capacity, egress, staging, migration/cutover, and disaster
+recovery procedures documented. Local/CI readiness, adversarial, migration, frontend, PostgreSQL,
+and Terraform validation passed. `CODE_READY=yes` and `REHEARSAL_READY=yes`, while
+`LIVE_VALIDATED=no`, `LIVE_VALIDATION_PENDING=yes`, and `GO_LIVE_APPROVED=no`. The current decision
+remains `NO_GO` until the exact committed release is built, deployed, and exercised in an approved
+staging/live environment. No AWS call, Terraform plan/apply, deployment, DNS change, restore, live
+load test, or customer migration occurred during V3.29.
+
 **Checklist:**
 
-- [ ] Run end-to-end CloudWatch alert -> context -> retrieval -> triage -> review -> permitted action scenarios.
-- [ ] Run load, soak, burst, queue backlog, retry/DLQ, provider outage, database failover, worker loss, and dependency timeout tests.
-- [ ] Rehearse backup restore, index rollback, incident response, key/secret rotation, connector disable, and deployment rollback.
-- [ ] Verify SLOs, dashboards, alarms, runbooks, support access, retention/deletion, quotas, and cost budgets.
-- [ ] Validate and, where measurements justify it, adjust final queue age, triage success, p95 time-to-triage, ingestion success, and worker failure thresholds without changing the internal-SLO/no-public-SLA decision.
-- [ ] Complete accessibility, browser, API compatibility, V2 regression, security, and isolation sign-off.
-- [ ] Record known limitations and release acceptance.
+- [x] Add release-bound evidence gates and staging procedures for end-to-end CloudWatch alert -> context -> retrieval -> triage -> review -> permitted-action scenarios; live execution remains pending.
+- [x] Add bounded load/capacity tooling and procedures for soak, burst, queue backlog, retry/DLQ, provider outage, database failure, worker loss, and dependency timeout validation; live measurements remain pending.
+- [x] Document backup restore, index rollback, incident response, key/secret rotation, connector disable, deployment rollback, and disaster-recovery rehearsal procedures; live rehearsal remains pending.
+- [x] Define verification evidence for SLOs, dashboards, alarms, runbooks, support access, retention/deletion, quotas, and cost budgets.
+- [x] Preserve internal engineering SLOs and record that final queue age, triage success, p95 time-to-triage, ingestion success, and worker failure thresholds require live measurements before adjustment.
+- [x] Complete local/CI accessibility, browser, API compatibility, V2 regression, security, PostgreSQL, Terraform, migration, and isolation validation.
+- [x] Record known limitations, release-bound acceptance criteria, and the explicit `NO_GO` decision pending live validation and operator approval.
 
 **Files/modules:** Validation plans/reports, load/failure tooling, operational runbooks, release checklist, final documentation.
 
