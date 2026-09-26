@@ -133,8 +133,10 @@ Dev sizing lowers capacity but does not remove encryption or isolation.
 
 V3.23 defines hosted structured logs, bounded metrics, OpenTelemetry boundaries,
 dashboards, alarms, and initial internal SLOs in `observability.md`, `slos.md`, and the
-hosted observability runbook. V3.25 owns broader hardening/scanning policy. V3.26 owns deployment
-automation. V3.29 owns restore, failover, load, egress, and production smoke rehearsals.
+hosted observability runbook. V3.25 owns broader hardening/scanning policy. V3.26 implements
+manifest-based build-once promotion, protected production approval, guarded Terraform plans,
+migration-before-activation, stability/smoke gates, and application rollback as documented in
+`cicd.md`. V3.29 owns live restore, failover, load, egress, and production smoke rehearsals.
 V4 remains the boundary for actual remediation execution.
 
 Terraform has not been applied by V3.22. No live AWS resource was created or changed.

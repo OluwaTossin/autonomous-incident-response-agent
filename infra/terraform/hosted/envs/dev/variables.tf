@@ -30,6 +30,7 @@ variable "build_sha" {
   type    = string
   default = "unknown"
 }
+variable "migration_revision" { type = string }
 variable "otel_exporter_otlp_endpoint" {
   type    = string
   default = ""

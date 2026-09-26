@@ -449,8 +449,11 @@ resource "aws_ecs_task_definition" "migration" {
       { name = "AIRA_DB_MASTER_SECRET", valueFrom = aws_db_instance.postgres.master_user_secret[0].secret_arn },
       { name = "AIRA_DATABASE_URL", valueFrom = aws_secretsmanager_secret.database_runtime.arn },
     ],
-    environment      = [{ name = "AIRA_ENV", value = "production" }], linuxParameters = { initProcessEnabled = true, capabilities = { drop = ["ALL"] } }, mountPoints = [], volumesFrom = [],
-    logConfiguration = { logDriver = "awslogs", options = { "awslogs-group" = aws_cloudwatch_log_group.service["migration"].name, "awslogs-region" = var.aws_region, "awslogs-stream-prefix" = "ecs" } }
+    environment = [
+      { name = "AIRA_ENV", value = "production" },
+      { name = "AIRA_EXPECTED_MIGRATION_REVISION", value = var.migration_revision },
+    ], linuxParameters = { initProcessEnabled = true, capabilities = { drop = ["ALL"] } }, mountPoints = [], volumesFrom = [],
+    logConfiguration   = { logDriver = "awslogs", options = { "awslogs-group" = aws_cloudwatch_log_group.service["migration"].name, "awslogs-region" = var.aws_region, "awslogs-stream-prefix" = "ecs" } }
   }])
   tags = merge(local.common_tags, { component = "migration" })
 }

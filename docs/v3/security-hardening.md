@@ -234,5 +234,8 @@ credential was rotated, and no Terraform apply occurred.
   incident response using synthetic data only.
 - V3.25 itself performs no live AWS mutation or Terraform apply.
 
-V3.26 makes these automated CI gates. V3.28 supplies the adversarial multi-tenant evidence. V3.29
-owns staging validation and the final go/no-go decision.
+V3.26 integrates these checks into credential-free PR CI and exact-image release qualification.
+Production promotion consumes a development-qualified manifest, requires the protected GitHub
+`production` Environment, and rejects critical Terraform destruction/replacement. V3.28 supplies
+the adversarial multi-tenant evidence. V3.29 owns staging validation and the final go/no-go
+decision.

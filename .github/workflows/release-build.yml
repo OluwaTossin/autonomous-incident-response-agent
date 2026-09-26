@@ -1,0 +1,166 @@
+name: Build Hosted Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: hosted-release-${{ github.sha }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validation:
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    needs: validation
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: development
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      API_REPOSITORY: ${{ vars.API_ECR_REPOSITORY }}
+      WORKER_REPOSITORY: ${{ vars.WORKER_ECR_REPOSITORY }}
+      WEB_REPOSITORY: ${{ vars.WEB_ECR_REPOSITORY }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c # v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2
+      - uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
+        with:
+          version: "0.11.6"
+          python-version: "3.12"
+      - run: uv sync --frozen --extra hosted
+      - name: Build each hosted artifact exactly once
+        env:
+          SOURCE_URL: https://github.com/${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          docker build \
+            --label "org.opencontainers.image.source=$SOURCE_URL" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "dev.aira.workflow-run=$GITHUB_RUN_ID" \
+            -f Dockerfile.hosted -t "aira-hosted:$GITHUB_SHA" .
+          docker build \
+            --label "org.opencontainers.image.source=$SOURCE_URL" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "dev.aira.workflow-run=$GITHUB_RUN_ID" \
+            -f web/Dockerfile -t "aira-hosted-web:$GITHUB_SHA" ./web
+      - name: Scan exact hosted Python image
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          image-ref: aira-hosted:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: json
+          output: release/trivy-hosted.json
+          version: v0.74.0
+      - name: Scan exact hosted web image
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          image-ref: aira-hosted-web:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: json
+          output: release/trivy-web.json
+          version: v0.74.0
+      - name: Generate hosted Python SBOM
+        uses: anchore/sbom-action@43a17d6e7add2b5535efe4dcae9952337c479a93 # v0.20.11
+        with:
+          image: aira-hosted:${{ github.sha }}
+          format: cyclonedx-json
+          output-file: release/sbom-hosted.cdx.json
+          upload-artifact: false
+      - name: Generate hosted web SBOM
+        uses: anchore/sbom-action@43a17d6e7add2b5535efe4dcae9952337c479a93 # v0.20.11
+        with:
+          image: aira-hosted-web:${{ github.sha }}
+          format: cyclonedx-json
+          output-file: release/sbom-web.cdx.json
+          upload-artifact: false
+      - name: Publish immutable SHA tags and capture digests
+        id: publish
+        run: |
+          set -euo pipefail
+          for repository in "$API_REPOSITORY" "$WORKER_REPOSITORY" "$WEB_REPOSITORY"; do
+            if aws ecr describe-images \
+              --repository-name "${repository#*/}" \
+              --image-ids "imageTag=$GITHUB_SHA" \
+              --region "$AWS_REGION" --no-cli-pager >/dev/null 2>&1; then
+              echo "::error::Immutable release tag already exists: $repository:$GITHUB_SHA"
+              exit 1
+            fi
+          done
+          docker tag "aira-hosted:$GITHUB_SHA" "$API_REPOSITORY:$GITHUB_SHA"
+          docker tag "aira-hosted:$GITHUB_SHA" "$WORKER_REPOSITORY:$GITHUB_SHA"
+          docker tag "aira-hosted-web:$GITHUB_SHA" "$WEB_REPOSITORY:$GITHUB_SHA"
+          docker push "$API_REPOSITORY:$GITHUB_SHA"
+          docker push "$WORKER_REPOSITORY:$GITHUB_SHA"
+          docker push "$WEB_REPOSITORY:$GITHUB_SHA"
+          api_digest="$(aws ecr describe-images --repository-name "${API_REPOSITORY#*/}" --image-ids "imageTag=$GITHUB_SHA" --query 'imageDetails[0].imageDigest' --output text --region "$AWS_REGION" --no-cli-pager)"
+          worker_digest="$(aws ecr describe-images --repository-name "${WORKER_REPOSITORY#*/}" --image-ids "imageTag=$GITHUB_SHA" --query 'imageDetails[0].imageDigest' --output text --region "$AWS_REGION" --no-cli-pager)"
+          web_digest="$(aws ecr describe-images --repository-name "${WEB_REPOSITORY#*/}" --image-ids "imageTag=$GITHUB_SHA" --query 'imageDetails[0].imageDigest' --output text --region "$AWS_REGION" --no-cli-pager)"
+          if [[ "$api_digest" != "$worker_digest" ]]; then
+            echo "::error::API and worker repositories did not preserve the once-built image digest."
+            exit 1
+          fi
+          echo "api_digest=$api_digest" >> "$GITHUB_OUTPUT"
+          echo "worker_digest=$worker_digest" >> "$GITHUB_OUTPUT"
+          echo "web_digest=$web_digest" >> "$GITHUB_OUTPUT"
+      - name: Create and validate release manifest
+        env:
+          API_DIGEST: ${{ steps.publish.outputs.api_digest }}
+          WORKER_DIGEST: ${{ steps.publish.outputs.worker_digest }}
+          WEB_DIGEST: ${{ steps.publish.outputs.web_digest }}
+        run: |
+          set -euo pipefail
+          migration_revision="$(uv run python -c 'from alembic.config import Config; from alembic.script import ScriptDirectory; heads=ScriptDirectory.from_config(Config("alembic.ini")).get_heads(); assert len(heads) == 1; print(heads[0])')"
+          python scripts/deploy/release_manifest.py create \
+            --git-sha "$GITHUB_SHA" \
+            --migration-revision "$migration_revision" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --source-repository "$GITHUB_REPOSITORY" \
+            --source-ref "$GITHUB_REF" \
+            --image "api=$API_REPOSITORY=$API_DIGEST" \
+            --image "worker=$WORKER_REPOSITORY=$WORKER_DIGEST" \
+            --image "web=$WEB_REPOSITORY=$WEB_DIGEST" \
+            --output release/release-manifest.json
+          python scripts/deploy/release_manifest.py validate release/release-manifest.json \
+            --expected-repository "$GITHUB_REPOSITORY"
+      - name: Upload immutable release evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: aira-release
+          path: release
+          retention-days: 30
+          if-no-files-found: error
+      - name: Release summary
+        env:
+          API_DIGEST: ${{ steps.publish.outputs.api_digest }}
+          WORKER_DIGEST: ${{ steps.publish.outputs.worker_digest }}
+          WEB_DIGEST: ${{ steps.publish.outputs.web_digest }}
+        run: |
+          {
+            echo "## Hosted release built"
+            echo "- Git SHA: \`$GITHUB_SHA\`"
+            echo "- API digest: \`$API_DIGEST\`"
+            echo "- Worker digest: \`$WORKER_DIGEST\`"
+            echo "- Web digest: \`$WEB_DIGEST\`"
+            echo "- Actor: \`$GITHUB_ACTOR\`"
+            echo "- Workflow run: \`$GITHUB_RUN_ID\`"
+          } >> "$GITHUB_STEP_SUMMARY"

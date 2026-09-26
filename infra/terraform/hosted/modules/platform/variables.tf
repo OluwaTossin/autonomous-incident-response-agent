@@ -48,6 +48,14 @@ variable "build_sha" {
   type        = string
   default     = "unknown"
 }
+variable "migration_revision" {
+  description = "Exact Alembic head embedded in the release manifest and migration image."
+  type        = string
+  validation {
+    condition     = can(regex("^[0-9a-f]{4,64}$", var.migration_revision))
+    error_message = "migration_revision must be a lowercase Alembic revision."
+  }
+}
 variable "otel_exporter_otlp_endpoint" {
   description = "Optional HTTPS OTLP trace endpoint; empty keeps tracing collector-free."
   type        = string

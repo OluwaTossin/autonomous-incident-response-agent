@@ -1,90 +1,172 @@
-# Optional Phase 14 — manual deploy to dev: ECR push + ECS force-new-deployment (no Terraform in CI).
-#
-# Run from branch **dev** only (Actions → Run workflow → select **dev**). Pushing code happens on **dev**;
-# **main** is updated via PR merge — see docs/contributing.md.
-#
-# Prerequisites (repository Settings → Secrets and variables):
-#   - Secret: AWS_DEPLOY_ROLE_ARN — IAM role for GitHub OIDC (trust: repo + workflow).
-#   - Variables: AWS_REGION, DEV_ECR_REPOSITORY_URL (e.g. 123.dkr.ecr.eu-west-1.amazonaws.com/aira-dev-api),
-#              DEV_ECS_CLUSTER_NAME, DEV_ECS_SERVICE_NAME
-#
-# IAM: allow ecr:GetAuthorizationToken; ecr:BatchCheckLayerAvailability, PutImage, InitiateLayerUpload,
-#      UploadLayerPart, CompleteLayerUpload; ecs:UpdateService, DescribeServices on the dev service.
-
-name: Deploy API (dev)
+name: Deploy Hosted Development
 
 on:
   workflow_dispatch:
+    inputs:
+      release_run_id:
+        description: Successful Build Hosted Release workflow run ID
+        required: true
+        type: string
+
+concurrency:
+  group: hosted-deployment-development
+  cancel-in-progress: false
 
 permissions:
-  id-token: write
   contents: read
+  actions: read
 
 jobs:
-  gate:
+  release:
     runs-on: ubuntu-latest
-    steps:
-      - name: Require branch dev
-        run: |
-          if [ "${GITHUB_REF}" != "refs/heads/dev" ]; then
-            echo "::error::Run this workflow from branch **dev** (Use workflow from branch → dev)."
-            exit 1
-          fi
-
-  # Job-level `if` cannot use `secrets.*`. Gate on vars only; verify OIDC secret in first step.
-  deploy:
-    needs: gate
-    if: vars.DEV_ECR_REPOSITORY_URL != ''
-    runs-on: ubuntu-latest
-    env:
-      AWS_REGION: ${{ vars.AWS_REGION }}
-      ECR_URL: ${{ vars.DEV_ECR_REPOSITORY_URL }}
-      ECS_CLUSTER: ${{ vars.DEV_ECS_CLUSTER_NAME }}
-      ECS_SERVICE: ${{ vars.DEV_ECS_SERVICE_NAME }}
+    environment: development
+    outputs:
+      git_sha: ${{ steps.manifest.outputs.git_sha }}
+      migration_revision: ${{ steps.manifest.outputs.migration_revision }}
+      api_digest: ${{ steps.manifest.outputs.api_digest }}
+      worker_digest: ${{ steps.manifest.outputs.worker_digest }}
+      web_digest: ${{ steps.manifest.outputs.web_digest }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-
-      - name: Require AWS_DEPLOY_ROLE_ARN secret
-        env:
-          ROLE: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-        run: |
-          if [ -z "${ROLE}" ]; then
-            echo "::error::Set repository secret **AWS_DEPLOY_ROLE_ARN** (OIDC role) to deploy."
-            exit 1
-          fi
-
-      - name: Configure AWS (OIDC)
-        uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c # v4
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
-        with:
-          version: "0.11.6"
-
-      - name: Sync
-        run: uv sync --frozen --extra dev --extra hosted
-
-      - name: Login to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2
-
-      - name: Build & push
+          ref: main
+          fetch-depth: 0
+      - name: Verify release workflow identity
         env:
-          IMAGE_TAG: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_RUN_ID: ${{ inputs.release_run_id }}
         run: |
           set -euo pipefail
-          docker build --platform linux/amd64 -f Dockerfile -t "aira-api:dev" .
-          docker tag "aira-api:dev" "${ECR_URL}:${IMAGE_TAG}"
-          docker push "${ECR_URL}:${IMAGE_TAG}"
-          docker tag "aira-api:dev" "${ECR_URL}:latest"
-          docker push "${ECR_URL}:latest"
-
-      - name: ECS rollout
+          [[ "$RELEASE_RUN_ID" =~ ^[0-9]+$ ]]
+          run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID")"
+          [[ "$(jq -r '.path' <<<"$run")" == ".github/workflows/release-build.yml" ]]
+          [[ "$(jq -r '.conclusion' <<<"$run")" == "success" ]]
+          [[ "$(jq -r '.head_branch' <<<"$run")" == "main" ]]
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: aira-release
+          path: release
+          run-id: ${{ inputs.release_run_id }}
+          github-token: ${{ github.token }}
+      - name: Validate immutable release manifest
+        id: manifest
         run: |
-          aws ecs update-service \
-            --cluster "$ECS_CLUSTER" \
-            --service "$ECS_SERVICE" \
-            --force-new-deployment \
-            --region "$AWS_REGION" \
-            --no-cli-pager
+          set -euo pipefail
+          python scripts/deploy/release_manifest.py outputs release/release-manifest.json \
+            --expected-repository "$GITHUB_REPOSITORY" \
+            --expected-image "api=${{ vars.API_ECR_REPOSITORY }}" \
+            --expected-image "worker=${{ vars.WORKER_ECR_REPOSITORY }}" \
+            --expected-image "web=${{ vars.WEB_ECR_REPOSITORY }}"
+          git merge-base --is-ancestor "$(python -c 'import json; print(json.load(open("release/release-manifest.json"))["git_sha"])')" origin/main
+
+  deploy:
+    needs: release
+    runs-on: ubuntu-latest
+    environment: development
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      TF_DIR: infra/terraform/hosted/envs/dev
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_STATE_LOCK_TABLE: ${{ vars.TF_STATE_LOCK_TABLE }}
+      TF_STATE_KEY: ${{ vars.TF_STATE_KEY }}
+      TF_VAR_route53_zone_id: ${{ vars.ROUTE53_ZONE_ID }}
+      TF_VAR_web_hostname: ${{ vars.WEB_HOSTNAME }}
+      TF_VAR_api_hostname: ${{ vars.API_HOSTNAME }}
+      TF_VAR_cognito_domain_prefix: ${{ vars.COGNITO_DOMAIN_PREFIX }}
+      TF_VAR_api_image_digest: ${{ needs.release.outputs.api_digest }}
+      TF_VAR_worker_image_digest: ${{ needs.release.outputs.worker_digest }}
+      TF_VAR_web_image_digest: ${{ needs.release.outputs.web_digest }}
+      TF_VAR_build_sha: ${{ needs.release.outputs.git_sha }}
+      TF_VAR_migration_revision: ${{ needs.release.outputs.migration_revision }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.release.outputs.git_sha }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: aira-release
+          path: release
+          run-id: ${{ inputs.release_run_id }}
+          github-token: ${{ github.token }}
+      - uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c # v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: "1.9.4"
+          terraform_wrapper: false
+      - name: Initialize exact remote backend
+        run: |
+          set -euo pipefail
+          account_id="$(aws sts get-caller-identity --query Account --output text --no-cli-pager)"
+          echo "TF_VAR_aws_account_id=$account_id" >> "$GITHUB_ENV"
+          terraform -chdir="$TF_DIR" init -input=false -lockfile=readonly \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="key=$TF_STATE_KEY" \
+            -backend-config="region=$AWS_REGION" \
+            -backend-config="dynamodb_table=$TF_STATE_LOCK_TABLE" \
+            -backend-config="encrypt=true"
+      - name: Apply reviewed runtime-disabled infrastructure plan
+        env:
+          TF_VAR_enable_runtime_services: "false"
+        run: |
+          set -euo pipefail
+          terraform -chdir="$TF_DIR" plan -input=false -out=/tmp/development-runtime-off.tfplan
+          terraform -chdir="$TF_DIR" show -json /tmp/development-runtime-off.tfplan > /tmp/development-runtime-off.json
+          python scripts/deploy/terraform_plan_guard.py /tmp/development-runtime-off.json --summary "$GITHUB_STEP_SUMMARY"
+          terraform -chdir="$TF_DIR" apply -input=false -auto-approve /tmp/development-runtime-off.tfplan
+      - name: Verify secrets before migration or activation
+        run: bash scripts/deploy/check_runtime_secrets.sh development
+      - name: Run exact release migration and stop on failure
+        run: bash scripts/deploy/run_migration_task.sh development "$GITHUB_RUN_ID"
+      - name: Activate runtime only after migration success
+        env:
+          TF_VAR_enable_runtime_services: "true"
+        run: |
+          set -euo pipefail
+          terraform -chdir="$TF_DIR" plan -input=false -out=/tmp/development-activate.tfplan
+          terraform -chdir="$TF_DIR" show -json /tmp/development-activate.tfplan > /tmp/development-activate.json
+          python scripts/deploy/terraform_plan_guard.py /tmp/development-activate.json --summary "$GITHUB_STEP_SUMMARY"
+          terraform -chdir="$TF_DIR" apply -input=false -auto-approve /tmp/development-activate.tfplan
+      - name: ECS stability and smoke gates
+        run: bash scripts/deploy/wait_and_smoke.sh development
+      - name: Create qualified development release
+        run: |
+          set -euo pipefail
+          serial="$(terraform -chdir="$TF_DIR" state pull | jq -r '.serial')"
+          python scripts/deploy/release_manifest.py qualify release/release-manifest.json \
+            --environment development \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --terraform-state-serial "$serial" \
+            --expected-repository "$GITHUB_REPOSITORY" \
+            --output release/development-release.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: aira-development-release
+          path: release/development-release.json
+          retention-days: 30
+          if-no-files-found: error
+      - name: Deployment summary
+        if: success()
+        run: |
+          {
+            echo "## Development deployment succeeded"
+            echo "- Git SHA: \`${{ needs.release.outputs.git_sha }}\`"
+            echo "- API/worker digest: \`${{ needs.release.outputs.api_digest }}\`"
+            echo "- Web digest: \`${{ needs.release.outputs.web_digest }}\`"
+            echo "- Migration revision: \`${{ needs.release.outputs.migration_revision }}\`"
+            echo "- Terraform: runtime-disabled infrastructure and post-migration activation applied"
+            echo "- ECS and smoke gates: passed"
+            echo "- Actor: \`$GITHUB_ACTOR\`"
+            echo "- Workflow run: \`$GITHUB_RUN_ID\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Failure summary
+        if: failure()
+        run: |
+          echo "Deployment failed closed. Inspect this run's failed step, Terraform output, ECS events, and migration CloudWatch logs. Run ID: $GITHUB_RUN_ID" >> "$GITHUB_STEP_SUMMARY"

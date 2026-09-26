@@ -9,11 +9,15 @@ from urllib.parse import quote
 import psycopg
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from psycopg import sql
 from sqlalchemy.engine import make_url
 
 
 def main() -> None:
+    config = Config("alembic.ini")
+    expected_revision = _required("AIRA_EXPECTED_MIGRATION_REVISION")
+    _verify_image_head(config, expected_revision)
     master = json.loads(_required("AIRA_DB_MASTER_SECRET"))
     runtime_url = make_url(_required("AIRA_DATABASE_URL"))
     if runtime_url.username != "aira_app" or not runtime_url.password:
@@ -52,7 +56,18 @@ def main() -> None:
         f"@{master['host']}:{master['port']}/{database}?sslmode=require"
     )
     os.environ["AIRA_DATABASE_MIGRATION_URL"] = migration_url
-    command.upgrade(Config("alembic.ini"), "head")
+    command.current(config, verbose=True)
+    command.upgrade(config, "head")
+    command.current(config, check_heads=True, verbose=True)
+
+
+def _verify_image_head(config: Config, expected_revision: str) -> None:
+    heads = ScriptDirectory.from_config(config).get_heads()
+    if heads != [expected_revision]:
+        raise RuntimeError(
+            "Migration image head does not match the release manifest: "
+            f"expected {expected_revision}, found {heads}"
+        )
 
 
 def _required(name: str) -> str:

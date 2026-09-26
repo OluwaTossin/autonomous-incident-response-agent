@@ -15,6 +15,7 @@ module "platform" {
   force_destroy_nonproduction         = true
   enable_runtime_services             = var.enable_runtime_services
   build_sha                           = var.build_sha
+  migration_revision                  = var.migration_revision
   otel_exporter_otlp_endpoint         = var.otel_exporter_otlp_endpoint
   alarm_action_arns                   = var.alarm_action_arns
   quota_defaults                      = var.quota_defaults

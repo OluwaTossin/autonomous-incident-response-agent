@@ -1,0 +1,271 @@
+name: Promote Hosted Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      development_run_id:
+        description: Successful Deploy Hosted Development workflow run ID
+        required: true
+        type: string
+
+concurrency:
+  group: hosted-deployment-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      git_sha: ${{ steps.manifest.outputs.git_sha }}
+      migration_revision: ${{ steps.manifest.outputs.migration_revision }}
+      api_repository: ${{ steps.manifest.outputs.api_repository }}
+      api_digest: ${{ steps.manifest.outputs.api_digest }}
+      worker_repository: ${{ steps.manifest.outputs.worker_repository }}
+      worker_digest: ${{ steps.manifest.outputs.worker_digest }}
+      web_repository: ${{ steps.manifest.outputs.web_repository }}
+      web_digest: ${{ steps.manifest.outputs.web_digest }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Verify development qualification workflow identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEVELOPMENT_RUN_ID: ${{ inputs.development_run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$DEVELOPMENT_RUN_ID" =~ ^[0-9]+$ ]]
+          run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$DEVELOPMENT_RUN_ID")"
+          [[ "$(jq -r '.path' <<<"$run")" == ".github/workflows/deploy-dev.yml" ]]
+          [[ "$(jq -r '.conclusion' <<<"$run")" == "success" ]]
+          [[ "$(jq -r '.head_branch' <<<"$run")" == "main" ]]
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: aira-development-release
+          path: release
+          run-id: ${{ inputs.development_run_id }}
+          github-token: ${{ github.token }}
+      - name: Validate development-qualified immutable release
+        id: manifest
+        run: |
+          set -euo pipefail
+          python scripts/deploy/release_manifest.py outputs release/development-release.json \
+            --expected-repository "$GITHUB_REPOSITORY" \
+            --expected-image "api=${{ vars.DEV_API_ECR_REPOSITORY }}" \
+            --expected-image "worker=${{ vars.DEV_WORKER_ECR_REPOSITORY }}" \
+            --expected-image "web=${{ vars.DEV_WEB_ECR_REPOSITORY }}" \
+            --require-qualification development
+          git merge-base --is-ancestor "$(python -c 'import json; print(json.load(open("release/development-release.json"))["git_sha"])')" origin/main
+
+  plan:
+    needs: release
+    runs-on: ubuntu-latest
+    environment: production-plan
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      TF_DIR: infra/terraform/hosted/envs/prod
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_STATE_LOCK_TABLE: ${{ vars.TF_STATE_LOCK_TABLE }}
+      TF_STATE_KEY: ${{ vars.TF_STATE_KEY }}
+      TF_VAR_route53_zone_id: ${{ vars.ROUTE53_ZONE_ID }}
+      TF_VAR_web_hostname: ${{ vars.WEB_HOSTNAME }}
+      TF_VAR_api_hostname: ${{ vars.API_HOSTNAME }}
+      TF_VAR_cognito_domain_prefix: ${{ vars.COGNITO_DOMAIN_PREFIX }}
+      TF_VAR_api_image_digest: ${{ needs.release.outputs.api_digest }}
+      TF_VAR_worker_image_digest: ${{ needs.release.outputs.worker_digest }}
+      TF_VAR_web_image_digest: ${{ needs.release.outputs.web_digest }}
+      TF_VAR_build_sha: ${{ needs.release.outputs.git_sha }}
+      TF_VAR_migration_revision: ${{ needs.release.outputs.migration_revision }}
+      TF_VAR_enable_runtime_services: "false"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.release.outputs.git_sha }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: aira-development-release
+          path: release
+          run-id: ${{ inputs.development_run_id }}
+          github-token: ${{ github.token }}
+      - uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c # v4
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: "1.9.4"
+          terraform_wrapper: false
+      - name: Create reviewed production plan
+        run: |
+          set -euo pipefail
+          account_id="$(aws sts get-caller-identity --query Account --output text --no-cli-pager)"
+          export TF_VAR_aws_account_id="$account_id"
+          terraform -chdir="$TF_DIR" init -input=false -lockfile=readonly \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="key=$TF_STATE_KEY" \
+            -backend-config="region=$AWS_REGION" \
+            -backend-config="dynamodb_table=$TF_STATE_LOCK_TABLE" \
+            -backend-config="encrypt=true"
+          terraform -chdir="$TF_DIR" plan -input=false -out="$GITHUB_WORKSPACE/release/production-runtime-off.tfplan"
+          terraform -chdir="$TF_DIR" show -json "$GITHUB_WORKSPACE/release/production-runtime-off.tfplan" > release/production-runtime-off.json
+          terraform -chdir="$TF_DIR" show -no-color "$GITHUB_WORKSPACE/release/production-runtime-off.tfplan" > release/production-runtime-off.txt
+          python scripts/deploy/terraform_plan_guard.py release/production-runtime-off.json --summary "$GITHUB_STEP_SUMMARY"
+          sha256sum release/production-runtime-off.tfplan > release/production-runtime-off.tfplan.sha256
+          rm release/production-runtime-off.json
+      - name: Upload short-lived reviewed plan
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: aira-production-plan
+          path: release
+          retention-days: 3
+          if-no-files-found: error
+
+  deploy:
+    needs: [release, plan]
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      TF_DIR: infra/terraform/hosted/envs/prod
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_STATE_LOCK_TABLE: ${{ vars.TF_STATE_LOCK_TABLE }}
+      TF_STATE_KEY: ${{ vars.TF_STATE_KEY }}
+      TF_VAR_route53_zone_id: ${{ vars.ROUTE53_ZONE_ID }}
+      TF_VAR_web_hostname: ${{ vars.WEB_HOSTNAME }}
+      TF_VAR_api_hostname: ${{ vars.API_HOSTNAME }}
+      TF_VAR_cognito_domain_prefix: ${{ vars.COGNITO_DOMAIN_PREFIX }}
+      TF_VAR_api_image_digest: ${{ needs.release.outputs.api_digest }}
+      TF_VAR_worker_image_digest: ${{ needs.release.outputs.worker_digest }}
+      TF_VAR_web_image_digest: ${{ needs.release.outputs.web_digest }}
+      TF_VAR_build_sha: ${{ needs.release.outputs.git_sha }}
+      TF_VAR_migration_revision: ${{ needs.release.outputs.migration_revision }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.release.outputs.git_sha }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: aira-production-plan
+          path: release
+      - name: Verify reviewed plan integrity
+        run: sha256sum --check release/production-runtime-off.tfplan.sha256
+      - uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c # v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: "1.9.4"
+          terraform_wrapper: false
+      - name: Apply exact reviewed runtime-disabled plan
+        run: |
+          set -euo pipefail
+          account_id="$(aws sts get-caller-identity --query Account --output text --no-cli-pager)"
+          echo "TF_VAR_aws_account_id=$account_id" >> "$GITHUB_ENV"
+          terraform -chdir="$TF_DIR" init -input=false -lockfile=readonly \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="key=$TF_STATE_KEY" \
+            -backend-config="region=$AWS_REGION" \
+            -backend-config="dynamodb_table=$TF_STATE_LOCK_TABLE" \
+            -backend-config="encrypt=true"
+          terraform -chdir="$TF_DIR" apply -input=false -auto-approve "$GITHUB_WORKSPACE/release/production-runtime-off.tfplan"
+      - name: Promote exact development digests without rebuilding
+        env:
+          SOURCE_API: ${{ needs.release.outputs.api_repository }}
+          SOURCE_WORKER: ${{ needs.release.outputs.worker_repository }}
+          SOURCE_WEB: ${{ needs.release.outputs.web_repository }}
+          API_DIGEST: ${{ needs.release.outputs.api_digest }}
+          WORKER_DIGEST: ${{ needs.release.outputs.worker_digest }}
+          WEB_DIGEST: ${{ needs.release.outputs.web_digest }}
+          TARGET_API: ${{ vars.API_ECR_REPOSITORY }}
+          TARGET_WORKER: ${{ vars.WORKER_ECR_REPOSITORY }}
+          TARGET_WEB: ${{ vars.WEB_ECR_REPOSITORY }}
+        run: |
+          set -euo pipefail
+          source_registry="${SOURCE_API%%/*}"
+          target_registry="${TARGET_API%%/*}"
+          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$source_registry"
+          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$target_registry"
+          for service in API WORKER WEB; do
+            source_var="SOURCE_$service"
+            target_var="TARGET_$service"
+            digest_var="${service}_DIGEST"
+            source="${!source_var}"
+            target="${!target_var}"
+            digest="${!digest_var}"
+            existing="$(aws ecr describe-images --repository-name "${target#*/}" --image-ids "imageTag=${{ needs.release.outputs.git_sha }}" --query 'imageDetails[0].imageDigest' --output text --region "$AWS_REGION" --no-cli-pager 2>/dev/null || true)"
+            if [[ -n "$existing" && "$existing" != "None" ]]; then
+              [[ "$existing" == "$digest" ]]
+              echo "Exact immutable image already promoted: $target@$digest"
+              continue
+            fi
+            docker pull "$source@$digest"
+            docker tag "$source@$digest" "$target:${{ needs.release.outputs.git_sha }}"
+            docker push "$target:${{ needs.release.outputs.git_sha }}"
+            promoted="$(aws ecr describe-images --repository-name "${target#*/}" --image-ids "imageTag=${{ needs.release.outputs.git_sha }}" --query 'imageDetails[0].imageDigest' --output text --region "$AWS_REGION" --no-cli-pager)"
+            [[ "$promoted" == "$digest" ]]
+          done
+      - name: Verify secrets before migration or activation
+        run: bash scripts/deploy/check_runtime_secrets.sh production
+      - name: Run exact release migration and stop on failure
+        run: bash scripts/deploy/run_migration_task.sh production "$GITHUB_RUN_ID"
+      - name: Activate runtime only after migration success
+        env:
+          TF_VAR_enable_runtime_services: "true"
+        run: |
+          set -euo pipefail
+          terraform -chdir="$TF_DIR" plan -input=false -out=/tmp/production-activate.tfplan
+          terraform -chdir="$TF_DIR" show -json /tmp/production-activate.tfplan > /tmp/production-activate.json
+          python scripts/deploy/terraform_plan_guard.py /tmp/production-activate.json --summary "$GITHUB_STEP_SUMMARY"
+          terraform -chdir="$TF_DIR" apply -input=false -auto-approve /tmp/production-activate.tfplan
+      - name: ECS stability and smoke gates
+        run: bash scripts/deploy/wait_and_smoke.sh production
+      - name: Record production deployment provenance
+        run: |
+          set -euo pipefail
+          serial="$(terraform -chdir="$TF_DIR" state pull | jq -r '.serial')"
+          python scripts/deploy/release_manifest.py qualify release/development-release.json \
+            --environment production \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --terraform-state-serial "$serial" \
+            --expected-repository "$GITHUB_REPOSITORY" \
+            --output release/production-release.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: aira-production-release
+          path: release/production-release.json
+          retention-days: 90
+          if-no-files-found: error
+      - name: Deployment summary
+        if: success()
+        run: |
+          {
+            echo "## Production promotion succeeded"
+            echo "- Git SHA: \`${{ needs.release.outputs.git_sha }}\`"
+            echo "- API/worker digest: \`${{ needs.release.outputs.api_digest }}\`"
+            echo "- Web digest: \`${{ needs.release.outputs.web_digest }}\`"
+            echo "- Migration revision: \`${{ needs.release.outputs.migration_revision }}\`"
+            echo "- Terraform: exact reviewed runtime-disabled plan and post-migration activation applied"
+            echo "- ECS and smoke gates: passed"
+            echo "- Actor: \`$GITHUB_ACTOR\`"
+            echo "- Workflow run: \`$GITHUB_RUN_ID\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Failure summary
+        if: failure()
+        run: |
+          echo "Production promotion failed closed. Inspect the reviewed plan, failed step, ECS events, and migration CloudWatch logs. Run ID: $GITHUB_RUN_ID" >> "$GITHUB_STEP_SUMMARY"

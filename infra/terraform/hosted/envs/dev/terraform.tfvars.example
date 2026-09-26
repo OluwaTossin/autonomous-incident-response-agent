@@ -9,5 +9,6 @@ web_image_digest      = "sha256:000000000000000000000000000000000000000000000000
 allowed_eventbridge_source_accounts = []
 enable_runtime_services             = false
 build_sha                           = "0000000000000000000000000000000000000000"
+migration_revision                  = "9e4b7a2c6d10"
 otel_exporter_otlp_endpoint         = ""
 alarm_action_arns                   = []

@@ -1,28 +1,24 @@
-# Phase 14 — lint, tests, Terraform validate, Docker image build, optional eval smoke (OpenAI secret).
-#
-# Branching: routine work on **dev**; merge to **main** via PR only (protect `main` in GitHub).
-
 name: CI
 
 on:
+  workflow_call:
   push:
-    branches:
-      - dev
-      - main
+    branches: [dev, main]
   pull_request:
-    branches:
-      - dev
-      - main
+    branches: [dev, main]
 
-# On main, do not cancel in-progress runs: merge + duplicate webhooks can start two
-# runs for the same ref and cancel the first mid-job (red X on the default branch).
-# On dev / PRs, cancel superseded runs so rapid pushes do not pile up.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
+
+env:
+  UV_VERSION: "0.11.6"
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "20"
+  TERRAFORM_VERSION: "1.9.4"
 
 jobs:
   lint:
@@ -31,73 +27,63 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
         with:
-          version: "0.11.6"
-      - name: Sync (dev tools)
-        run: uv sync --frozen --extra dev --extra hosted
-      - name: Ruff
-        run: uv run ruff check app tests scripts/ci
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: uv sync --frozen --extra dev --extra hosted
+      - run: uv run ruff check app tests scripts
 
-  terraform:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
-        with:
-          terraform_version: "1.9.4"
-          terraform_wrapper: false
-      - name: Format check
-        run: terraform fmt -check -recursive infra/terraform
-      - name: Init (no backend)
-        working-directory: infra/terraform/envs/dev
-        run: |
-          rm -rf .terraform
-          terraform init -backend=false -input=false -lockfile=readonly
-      - name: Validate (dev)
-        working-directory: infra/terraform/envs/dev
-        run: terraform validate
-      - name: Init hosted roots (no backend)
-        run: |
-          for root in hosted/envs/dev hosted/envs/prod hosted/customer-eventbridge; do
-            terraform -chdir="infra/terraform/${root}" init -backend=false -input=false -lockfile=readonly
-          done
-      - name: Validate hosted roots
-        run: |
-          terraform -chdir=infra/terraform/hosted/envs/dev validate
-          terraform -chdir=infra/terraform/hosted/envs/prod validate
-          terraform -chdir=infra/terraform/hosted/customer-eventbridge validate
-
-  test:
-    needs: lint
+  backend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
         with:
-          version: "0.11.6"
-      - name: Sync
-        run: uv sync --frozen --extra dev --extra hosted
-      - name: Pytest (unit + integration)
-        run: uv run pytest tests/unit tests/integration -q
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: uv sync --frozen --extra dev --extra hosted --extra ui
+      - name: Backend and self-hosted regression tests
+        run: uv run pytest -q --ignore=tests/postgres
         env:
           ENABLE_GRADIO_UI: "0"
 
-  frontend:
+  postgres:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
+    services:
+      postgres:
+        image: postgres:16.4-alpine
+        env:
+          POSTGRES_DB: aira_ci
+          POSTGRES_USER: aira_migrator
+          POSTGRES_PASSWORD: ci-migration-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aira_migrator -d aira_ci"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
         with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: npm ci
-      - name: Build (static export)
-        run: npm run build
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: uv sync --frozen --extra dev --extra hosted
+      - name: Create isolated runtime role
+        run: |
+          set -euo pipefail
+          docker exec "${{ job.services.postgres.id }}" psql \
+            --username aira_migrator --dbname aira_ci --set=ON_ERROR_STOP=1 \
+            --command "CREATE ROLE aira_app LOGIN PASSWORD 'ci-runtime-password' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS"
+      - name: PostgreSQL migrations, repositories, and forced RLS
         env:
-          NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:8000
+          AIRA_TEST_MIGRATION_DATABASE_URL: postgresql+psycopg://aira_migrator:ci-migration-password@127.0.0.1:5432/aira_ci
+          AIRA_TEST_DATABASE_URL: postgresql+psycopg://aira_app:ci-runtime-password@127.0.0.1:5432/aira_ci
+          AIRA_DATABASE_MIGRATION_URL: postgresql+psycopg://aira_migrator:ci-migration-password@127.0.0.1:5432/aira_ci
+        run: |
+          set -euo pipefail
+          uv run pytest tests/postgres -q
+          uv run alembic check
 
   hosted-web:
     runs-on: ubuntu-latest
@@ -108,52 +94,112 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "20"
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npm test
+      - run: npm run typecheck
+      - run: npm run lint
       - run: npm run build
 
-  docker:
-    needs: [test, terraform]
+  v2-frontend:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          version: "0.11.6"
-      - name: Sync (Dockerfile runs stub index script during image build)
-        run: uv sync --frozen --extra dev --extra hosted
-      - name: Docker build
-        run: docker build -f Dockerfile -t aira-api:ci .
-      - name: Docker build frontend (static nginx)
-        run: docker build -f frontend/Dockerfile --build-arg NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:18080 -t aira-ui:ci ./frontend
-      - name: Docker build hosted API/worker image
-        run: docker build -f Dockerfile.hosted -t aira-hosted:ci .
-      - name: Docker build hosted web image
-        run: docker build -f web/Dockerfile -t aira-hosted-web:ci ./web
-
-  # Job-level `if` cannot use `secrets.*` (GitHub rejects it). Optional OpenAI steps run in shell.
-  eval-smoke:
-    needs: test
-    if: github.event.repository.fork == false
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
-        with:
-          version: "0.11.6"
-      - name: Sync
-        run: uv sync --frozen --extra dev --extra hosted
-      - name: RAG build + triage-eval (skipped if no OPENAI_API_KEY secret)
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - name: Build retained V2 static frontend
+        run: npm run build
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          TRIAGE_AUDIT_DISABLE: "1"
+          NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:8000
+
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+      - run: terraform fmt -check -recursive infra/terraform
+      - name: Initialize hosted roots without remote backends
         run: |
-          if [ -z "${OPENAI_API_KEY}" ]; then
-            echo "Skipping eval-smoke: add repository secret OPENAI_API_KEY to run live LLM checks."
-            exit 0
-          fi
-          uv run rag-build
-          uv run triage-eval --limit 3
+          set -euo pipefail
+          for root in hosted/envs/dev hosted/envs/prod hosted/customer-eventbridge; do
+            terraform -chdir="infra/terraform/$root" init -backend=false -input=false -lockfile=readonly
+            terraform -chdir="infra/terraform/$root" validate
+          done
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: mkdir -p security-reports
+      - name: Python dependency audit
+        run: |
+          set -euo pipefail
+          uv export --frozen --no-dev --extra hosted --no-emit-project --format requirements-txt --output-file security-reports/requirements.txt
+          uvx pip-audit==2.10.1 --disable-pip --no-deps --format json --output security-reports/pip-audit.json -r security-reports/requirements.txt
+      - name: Node production dependency audits
+        run: |
+          set -euo pipefail
+          npm --prefix web audit --omit=dev --audit-level=high --json > security-reports/web-npm-audit.json
+          npm --prefix frontend audit --omit=dev --audit-level=high --json > security-reports/frontend-npm-audit.json
+      - name: Bandit reviewed report and high-severity gate
+        run: |
+          set -euo pipefail
+          uvx bandit==1.9.4 -r app -f json -o security-reports/bandit.json --exit-zero
+          uvx bandit==1.9.4 -q -lll -r app
+      - name: Checkov reviewed IaC report
+        run: uvx checkov==3.3.19 -d infra/terraform/hosted --framework terraform --output json --output-file-path security-reports/checkov.json --soft-fail
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc # v2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITLEAKS_ENABLE_COMMENTS: "false"
+      - name: Source dependency and secret gate
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          version: v0.74.0
+      - name: Upload reviewed security reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: security-reports-${{ github.run_id }}
+          path: security-reports
+          retention-days: 14
+          if-no-files-found: warn
+
+  containers:
+    needs: [backend, postgres, terraform]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - run: docker build -f Dockerfile.hosted -t aira-hosted:ci .
+      - run: docker build -f web/Dockerfile -t aira-hosted-web:ci ./web
+      - run: docker build -f Dockerfile -t aira-v2-api:ci .
+      - run: docker build -f frontend/Dockerfile --build-arg NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000 -t aira-v2-web:ci ./frontend

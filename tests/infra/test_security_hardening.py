@@ -59,6 +59,8 @@ def test_supply_chain_inputs_are_immutable() -> None:
 
     for workflow in (ROOT / ".github" / "workflows").glob("*.yml"):
         for match in re.findall(r"uses:\s+([^\s#]+)", _text(workflow)):
+            if match.startswith("./"):
+                continue
             reference = match.rsplit("@", 1)[-1]
             assert re.fullmatch(r"[0-9a-f]{40}", reference)
 

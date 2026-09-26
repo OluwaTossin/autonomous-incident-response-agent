@@ -1,0 +1,156 @@
+name: Roll Back Hosted Application
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options: [development, production]
+      deployment_run_id:
+        description: Previous successful deployment workflow run ID
+        required: true
+        type: string
+      confirm_schema_compatible:
+        description: Confirm the current database schema is compatible with this application release
+        required: true
+        type: boolean
+
+concurrency:
+  group: hosted-deployment-${{ inputs.environment }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  release:
+    if: inputs.confirm_schema_compatible
+    runs-on: ubuntu-latest
+    outputs:
+      git_sha: ${{ steps.manifest.outputs.git_sha }}
+      migration_revision: ${{ steps.manifest.outputs.migration_revision }}
+      api_digest: ${{ steps.manifest.outputs.api_digest }}
+      worker_digest: ${{ steps.manifest.outputs.worker_digest }}
+      web_digest: ${{ steps.manifest.outputs.web_digest }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+      - name: Verify prior deployment workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_RUN_ID: ${{ inputs.deployment_run_id }}
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOYMENT_RUN_ID" =~ ^[0-9]+$ ]]
+          run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$DEPLOYMENT_RUN_ID")"
+          if [[ "$TARGET_ENVIRONMENT" == "production" ]]; then
+            expected_path=".github/workflows/deploy-production.yml"
+          else
+            expected_path=".github/workflows/deploy-dev.yml"
+          fi
+          [[ "$(jq -r '.path' <<<"$run")" == "$expected_path" ]]
+          [[ "$(jq -r '.conclusion' <<<"$run")" == "success" ]]
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: aira-${{ inputs.environment }}-release
+          path: release
+          run-id: ${{ inputs.deployment_run_id }}
+          github-token: ${{ github.token }}
+      - name: Validate previous immutable deployment
+        id: manifest
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+          python scripts/deploy/release_manifest.py outputs "release/${TARGET_ENVIRONMENT}-release.json" \
+            --expected-repository "$GITHUB_REPOSITORY" \
+            --require-qualification "$TARGET_ENVIRONMENT"
+
+  rollback:
+    needs: release
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_STATE_LOCK_TABLE: ${{ vars.TF_STATE_LOCK_TABLE }}
+      TF_STATE_KEY: ${{ vars.TF_STATE_KEY }}
+      TF_VAR_route53_zone_id: ${{ vars.ROUTE53_ZONE_ID }}
+      TF_VAR_web_hostname: ${{ vars.WEB_HOSTNAME }}
+      TF_VAR_api_hostname: ${{ vars.API_HOSTNAME }}
+      TF_VAR_cognito_domain_prefix: ${{ vars.COGNITO_DOMAIN_PREFIX }}
+      TF_VAR_api_image_digest: ${{ needs.release.outputs.api_digest }}
+      TF_VAR_worker_image_digest: ${{ needs.release.outputs.worker_digest }}
+      TF_VAR_web_image_digest: ${{ needs.release.outputs.web_digest }}
+      TF_VAR_build_sha: ${{ needs.release.outputs.git_sha }}
+      TF_VAR_migration_revision: ${{ needs.release.outputs.migration_revision }}
+      TF_VAR_enable_runtime_services: "true"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.release.outputs.git_sha }}
+      - uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c # v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: "1.9.4"
+          terraform_wrapper: false
+      - name: Verify images exist, then apply application-only rollback plan
+        env:
+          API_REPOSITORY: ${{ vars.API_ECR_REPOSITORY }}
+          WORKER_REPOSITORY: ${{ vars.WORKER_ECR_REPOSITORY }}
+          WEB_REPOSITORY: ${{ vars.WEB_ECR_REPOSITORY }}
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+          if [[ "$TARGET_ENVIRONMENT" == "production" ]]; then
+            tf_dir="infra/terraform/hosted/envs/prod"
+          else
+            tf_dir="infra/terraform/hosted/envs/dev"
+          fi
+          for pair in \
+            "$API_REPOSITORY=${{ needs.release.outputs.api_digest }}" \
+            "$WORKER_REPOSITORY=${{ needs.release.outputs.worker_digest }}" \
+            "$WEB_REPOSITORY=${{ needs.release.outputs.web_digest }}"; do
+            repository="${pair%%=*}"
+            digest="${pair#*=}"
+            aws ecr describe-images --repository-name "${repository#*/}" \
+              --image-ids "imageDigest=$digest" --region "$AWS_REGION" --no-cli-pager >/dev/null
+          done
+          account_id="$(aws sts get-caller-identity --query Account --output text --no-cli-pager)"
+          export TF_VAR_aws_account_id="$account_id"
+          terraform -chdir="$tf_dir" init -input=false -lockfile=readonly \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="key=$TF_STATE_KEY" \
+            -backend-config="region=$AWS_REGION" \
+            -backend-config="dynamodb_table=$TF_STATE_LOCK_TABLE" \
+            -backend-config="encrypt=true"
+          terraform -chdir="$tf_dir" plan -input=false -out=/tmp/rollback.tfplan
+          terraform -chdir="$tf_dir" show -json /tmp/rollback.tfplan > /tmp/rollback.json
+          python scripts/deploy/terraform_plan_guard.py /tmp/rollback.json --summary "$GITHUB_STEP_SUMMARY"
+          terraform -chdir="$tf_dir" apply -input=false -auto-approve /tmp/rollback.tfplan
+          bash scripts/deploy/wait_and_smoke.sh "$TARGET_ENVIRONMENT"
+      - name: Rollback summary
+        if: success()
+        run: |
+          {
+            echo "## Application rollback succeeded"
+            echo "- Environment: \`${{ inputs.environment }}\`"
+            echo "- Git SHA: \`${{ needs.release.outputs.git_sha }}\`"
+            echo "- API/worker digest: \`${{ needs.release.outputs.api_digest }}\`"
+            echo "- Web digest: \`${{ needs.release.outputs.web_digest }}\`"
+            echo "- Terraform, ECS, and smoke gates: passed"
+            echo "- Actor: \`$GITHUB_ACTOR\`"
+            echo "- Workflow run: \`$GITHUB_RUN_ID\`"
+          } >> "$GITHUB_STEP_SUMMARY"
