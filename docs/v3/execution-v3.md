@@ -676,16 +676,22 @@ live AWS mutation was performed. Live deployment validation remains deferred.
 
 **Dependencies:** V3.11, V3.12, V3.17-V3.22.
 
+**Status:** Complete in `89b2fde` (`feat: add hosted observability and SLOs`).
+Structured logging, correlation, bounded metrics, tracing, dashboards, alarms, runbooks,
+and internal engineering SLO definitions are complete. Terraform fmt/validate passed. A
+Terraform plan was not generated because the configured S3 backends require
+initialization. No Terraform apply or live AWS mutation was performed.
+
 **Checklist:**
 
-- [ ] Define structured log and trace schemas carrying organization, workspace, actor, incident, and triage-run IDs.
-- [ ] Propagate correlation through HTTP and SQS envelopes.
-- [ ] Add distributed tracing and redact payloads/secrets.
-- [ ] Keep authoritative audit in PostgreSQL.
-- [ ] Use only bounded metric dimensions: environment, operation, status, severity, plan, connector type.
-- [ ] Define internal engineering SLOs rather than a public commercial SLA, beginning with 99.9% production API availability.
-- [ ] Add queue age, triage success rate, p95 time-to-triage, ingestion success, and worker failure rate indicators.
-- [ ] Add dashboards, alarms, queue/DLQ, worker, database, integration, and action signals supporting those SLOs.
+- [x] Define structured log and trace schemas carrying organization, workspace, actor, incident, and triage-run IDs.
+- [x] Propagate correlation through HTTP and SQS envelopes.
+- [x] Add distributed tracing and redact payloads/secrets.
+- [x] Keep authoritative audit in PostgreSQL.
+- [x] Use only bounded metric dimensions: environment, operation, status, severity, plan, connector type.
+- [x] Define internal engineering SLOs rather than a public commercial SLA, beginning with 99.9% production API availability.
+- [x] Add queue age, triage success rate, p95 time-to-triage, ingestion success, and worker failure rate indicators.
+- [x] Add dashboards, alarms, queue/DLQ, worker, database, integration, and action signals supporting those SLOs.
 
 **Files/modules:** Telemetry middleware/context, worker/integration instrumentation, audit repository, Terraform monitoring, dashboards/runbooks, tests.
 
