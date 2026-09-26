@@ -830,14 +830,23 @@ only before V3-only writes; later fallback requires explicit data reconciliation
 
 **Dependencies:** V3.3-V3.27.
 
+**Status:** Complete in `872eecd` (`test: add adversarial tenant isolation coverage`).
+Adversarial multi-tenant isolation and authorization suites cover cross-organization/workspace,
+stale membership/grant, service-account, async transport, migration, quota, BFF, runtime-role RLS
+bypass, pooled-connection reuse, composite-FK, and denied-mutation side-effect attacks. Two Medium
+isolation defects were found and fixed: pagination cursors are now HMAC-signed and tenant/resource
+scoped, and FAISS cache keys and locks are tenant scoped. No unresolved Critical/High isolation
+finding remains; the suites are release-blocking in CI. No live target was attacked and no AWS
+mutation occurred.
+
 **Checklist:**
 
-- [ ] Build a multi-organization fixture with overlapping identifiers and content.
-- [ ] Test API object references, list/search, RLS, jobs, S3 presigned flows, FAISS cache, integrations, actions, usage, logs, and exports.
-- [ ] Test pooled connections, worker retries, stale sessions, revoked memberships, and support tooling.
-- [ ] Add property/fuzz tests for identifier substitution and authorization bypass.
-- [ ] Run concurrency and failure injection for cache, queue, database, and storage boundaries.
-- [ ] Make isolation suite release-blocking.
+- [x] Build a multi-organization fixture with overlapping identifiers and content.
+- [x] Test API object references, list/search, RLS, jobs, S3 presigned flows, FAISS cache, integrations, actions, usage, logs, and exports.
+- [x] Test pooled connections, worker retries, stale sessions, revoked memberships, and support tooling.
+- [x] Add deterministic generated matrices and adversarial identifier-substitution tests without adding a property-testing dependency.
+- [x] Run targeted concurrency and failure-path tests for cache, queue, database, quota, and storage boundaries.
+- [x] Make isolation suite release-blocking.
 
 **Files/modules:** Dedicated isolation test suite, fixtures, test infrastructure, CI job, security evidence report.
 
