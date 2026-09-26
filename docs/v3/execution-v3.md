@@ -644,18 +644,23 @@ connector mappings, and confusing preparation with execution.
 
 **Dependencies:** Runtime requirements from V3.3-V3.21 and approved infrastructure ADRs.
 
+**Status:** Complete in `0152734` (`feat: add hosted AWS infrastructure and runtime wiring`).
+V3.22 infrastructure/runtime code complete. Terraform fmt/validate passed. Plan was not
+generated because the configured S3 backends require initialization. No Terraform apply or
+live AWS mutation was performed. Live deployment validation remains deferred.
+
 **Checklist:**
 
-- [ ] Add public ALB subnets and private application/data subnets with deliberate routing.
-- [ ] Add ACM HTTPS listener and HTTP redirect; define DNS ownership.
-- [ ] Place separate hosted frontend, API, and worker ECS services in private subnets without public IPs, with exposure only through required HTTPS ALB routes.
-- [ ] Add RDS PostgreSQL, subnet group, encryption, backups, deletion protection, monitoring, and pooling/proxy decision.
-- [ ] Add encrypted SQS/DLQ, S3 document/index buckets, KMS keys, Secrets Manager, and least-privilege IAM.
-- [ ] Add controlled NAT internet egress for external LLM access.
-- [ ] Add VPC endpoints selectively for AWS-native services where measured cost, security, or availability justifies them.
-- [ ] Decide dev/prod NAT gateway redundancy using the accepted availability target and measured cost; record the result as an implementation decision.
-- [ ] Add autoscaling, deployment health, alarms, outputs, and environment separation.
-- [ ] Keep Terraform plan/apply approval and remote-state controls.
+- [x] Add public ALB subnets and private application/data subnets with deliberate routing.
+- [x] Add ACM HTTPS listener and HTTP redirect; define DNS ownership.
+- [x] Place separate hosted frontend, API, and worker ECS services in private subnets without public IPs, with exposure only through required HTTPS ALB routes.
+- [x] Add RDS PostgreSQL, subnet group, encryption, backups, deletion protection, monitoring, and pooling/proxy decision.
+- [x] Add encrypted SQS/DLQ, S3 document/index buckets, KMS keys, Secrets Manager, and least-privilege IAM.
+- [x] Add controlled NAT internet egress for external LLM access.
+- [x] Add VPC endpoints selectively for AWS-native services where measured cost, security, or availability justifies them.
+- [x] Decide dev/prod NAT gateway redundancy using the accepted availability target and measured cost; record the result as an implementation decision.
+- [x] Add autoscaling, deployment health, alarms, outputs, and environment separation.
+- [x] Keep Terraform plan/apply approval and remote-state controls.
 
 **Files/modules:** Extend/version `infra/terraform/modules/` and `envs/dev|prod`; deployment docs/scripts/workflows.
 
