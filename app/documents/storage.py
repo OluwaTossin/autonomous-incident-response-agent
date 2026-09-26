@@ -59,3 +59,17 @@ class DocumentObjectStorage(Protocol):
 
     def delete(self, object_key: str) -> None: ...
 
+
+class MigrationDocumentObjectStorage(Protocol):
+    """Server-side immutable write boundary used only by migration tooling."""
+
+    def put_immutable(
+        self,
+        object_key: str,
+        content: bytes,
+        *,
+        media_type: str,
+        checksum_sha256: str,
+    ) -> StoredObjectMetadata: ...
+
+    def stat(self, object_key: str) -> StoredObjectMetadata: ...

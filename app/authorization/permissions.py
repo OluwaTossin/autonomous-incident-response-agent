@@ -45,6 +45,7 @@ class Permission(StrEnum):
     AUDIT_READ = "audit.read"
     SERVICE_ACCOUNT_READ = "service_account.read"
     SERVICE_ACCOUNT_MANAGE = "service_account.manage"
+    MIGRATION_IMPORT = "migration.import"
 
 
 _VIEWER = frozenset(
@@ -116,6 +117,7 @@ WORKSPACE_SCOPED_PERMISSIONS = frozenset(
         Permission.EXECUTION_INTENT_PREPARE,
         Permission.EXECUTION_INTENT_CANCEL,
         Permission.USAGE_READ,
+        Permission.MIGRATION_IMPORT,
     }
 )
 
@@ -134,6 +136,7 @@ SERVICE_ACCOUNT_GRANTABLE_PERMISSIONS = frozenset(
         Permission.INTEGRATION_READ,
         Permission.ACTION_READ,
         Permission.ACTION_PROPOSE,
+        Permission.MIGRATION_IMPORT,
     }
 )
 

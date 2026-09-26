@@ -30,6 +30,8 @@ class S3Client(Protocol):
 
     def delete_object(self, **kwargs: Any) -> Mapping[str, Any]: ...
 
+    def put_object(self, **kwargs: Any) -> Mapping[str, Any]: ...
+
 
 @dataclass(frozen=True, slots=True)
 class S3DocumentStorageConfig:
@@ -190,3 +192,32 @@ class S3DocumentStorage:
             self._client.delete_object(Bucket=self._config.bucket, Key=object_key)
         except Exception as exc:
             raise DocumentStorageError("Could not delete document object") from exc
+
+    def put_immutable(
+        self,
+        object_key: str,
+        content: bytes,
+        *,
+        media_type: str,
+        checksum_sha256: str,
+    ) -> StoredObjectMetadata:
+        """Write a verified migration object without exposing a browser upload URL."""
+        checksum_base64 = base64.b64encode(bytes.fromhex(checksum_sha256)).decode(
+            "ascii"
+        )
+        try:
+            self._client.put_object(
+                Bucket=self._config.bucket,
+                Key=object_key,
+                Body=content,
+                ContentLength=len(content),
+                ContentType=media_type,
+                IfNoneMatch="*",
+                ChecksumAlgorithm="SHA256",
+                ChecksumSHA256=checksum_base64,
+                ServerSideEncryption="aws:kms",
+                SSEKMSKeyId=self._config.kms_key_id,
+            )
+        except Exception as exc:
+            raise DocumentStorageError("Could not store migration document") from exc
+        return self.stat(object_key)

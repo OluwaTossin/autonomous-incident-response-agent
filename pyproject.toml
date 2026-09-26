@@ -42,6 +42,7 @@ rag-query = "app.rag.cli:main_query"
 triage = "app.agent.cli:main"
 triage-eval = "app.eval.cli:main"
 serve-api = "app.api.server:main"
+aira-migrate = "app.migration.cli:main"
 
 [build-system]
 requires = ["hatchling"]

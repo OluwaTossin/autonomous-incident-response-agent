@@ -42,6 +42,8 @@ ALLOWED_DIMENSIONS = frozenset(
         "Risk",
         "Connector",
         "QuotaType",
+        "SourceVersion",
+        "RecordType",
     }
 )
 _NAME = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
@@ -154,6 +156,36 @@ class LifecycleMetricObserver:
         self._sink.counter(f"{operation}_total", **dimensions)
         self._sink.histogram(
             f"{operation}_duration_ms", max(0, duration_ms), **dimensions
+        )
+
+
+class MigrationMetricObserver:
+    """Migration metrics with bounded source/result dimensions and no tenant IDs."""
+
+    def __init__(self, sink: MetricSink) -> None:
+        self._sink = sink
+
+    def record_run(
+        self, source_version: str, operation: str, result: str, duration_ms: int
+    ) -> None:
+        dimensions = {
+            "SourceVersion": source_version,
+            "Operation": operation,
+            "Result": result,
+        }
+        self._sink.counter("migration_runs_total", **dimensions)
+        self._sink.histogram(
+            "migration_duration_ms", max(0, duration_ms), **dimensions
+        )
+
+    def record_record(
+        self, source_version: str, record_type: str, result: str
+    ) -> None:
+        self._sink.counter(
+            "migration_records_total",
+            SourceVersion=source_version,
+            RecordType=record_type,
+            Result=result,
         )
 
 

@@ -23,6 +23,7 @@ class FakeClient:
             "ChecksumSHA256": base64.b64encode(bytes.fromhex(CHECKSUM)).decode(),
         }
         self.deleted = []
+        self.puts = []
 
     def generate_presigned_url(
         self, ClientMethod, Params, ExpiresIn, HttpMethod=None
@@ -37,6 +38,10 @@ class FakeClient:
 
     def delete_object(self, **kwargs):
         self.deleted.append(kwargs)
+        return {}
+
+    def put_object(self, **kwargs):
+        self.puts.append(kwargs)
         return {}
 
 
@@ -99,6 +104,24 @@ def test_download_stat_and_delete_are_scoped_to_configured_bucket() -> None:
         {"Bucket": "private-documents", "Key": "documents/o/w/d/v/source"}
     ]
     assert (download.expires_at - NOW).total_seconds() == 120
+
+
+def test_migration_put_is_immutable_checksummed_and_kms_encrypted() -> None:
+    client = FakeClient()
+    metadata = _storage(client).put_immutable(
+        "documents/o/w/d/v/source",
+        b"x" * 42,
+        media_type="text/markdown",
+        checksum_sha256=CHECKSUM,
+    )
+    request = client.puts[0]
+    assert request["Bucket"] == "private-documents"
+    assert request["IfNoneMatch"] == "*"
+    assert request["ChecksumSHA256"] == base64.b64encode(
+        bytes.fromhex(CHECKSUM)
+    ).decode()
+    assert request["ServerSideEncryption"] == "aws:kms"
+    assert metadata.checksum_sha256 == CHECKSUM
 
 
 def test_missing_and_malformed_provider_metadata_fail_closed() -> None:
